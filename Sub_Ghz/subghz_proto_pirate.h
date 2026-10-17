@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "subghz_key_encoder.h"   /* SubGhzKeyParams, SubGhzRawPair */
 
 #ifdef __cplusplus
@@ -88,6 +89,7 @@ SubGhzProtoPirateId subghz_proto_pirate_find_by_name(const char *name);
 
 /** Return true if the protocol is implemented in this dispatcher. */
 bool subghz_proto_pirate_is_supported(const char *name);
+bool subghz_proto_pirate_parse_serial_line(const char *line, uint32_t *serial);
 
 /**
  * Encode a keyfob signal into raw timing pairs.
@@ -109,6 +111,59 @@ uint32_t subghz_proto_pirate_encode(const SubGhzKeyParams *params,
  */
 uint32_t subghz_proto_pirate_required_pairs(const SubGhzKeyParams *params,
                                              uint8_t                repetitions);
+
+typedef struct {
+    uint32_t capture_hash;
+    uint32_t counter;
+} subghz_proto_pirate_counter_state_t;
+
+static inline uint32_t subghz_proto_pirate_counter_capture_hash(
+    const char *path, uint8_t protocol, uint64_t key_signature)
+{
+    if (path == NULL)
+        return 0;
+    if (path[0] == '0' && path[1] == ':')
+        path += 2;
+    uint32_t hash = 2166136261u;
+    while (*path != '\0')
+    {
+        hash ^= (uint8_t)*path++;
+        hash *= 16777619u;
+    }
+    hash ^= protocol;
+    hash *= 16777619u;
+    for (uint8_t i = 0; i < 8u; i++)
+    {
+        hash ^= (uint8_t)(key_signature >> (i * 8u));
+        hash *= 16777619u;
+    }
+    if (hash == 0)
+        hash = 1u;
+    return hash;
+}
+
+static inline uint32_t subghz_proto_pirate_counter_get(
+    subghz_proto_pirate_counter_state_t *state, const char *path,
+    uint8_t protocol, uint32_t initial_counter, uint64_t key_signature)
+{
+    const uint32_t capture_hash =
+        subghz_proto_pirate_counter_capture_hash(path, protocol, key_signature);
+    if (state == NULL)
+        return initial_counter;
+    if (state->capture_hash != capture_hash)
+    {
+        state->capture_hash = capture_hash;
+        state->counter = initial_counter;
+    }
+    return state->counter;
+}
+
+static inline void subghz_proto_pirate_counter_advance(
+    subghz_proto_pirate_counter_state_t *state, uint32_t mask)
+{
+    if (state != NULL)
+        state->counter = (state->counter + 1u) & mask;
+}
 
 #ifdef __cplusplus
 }

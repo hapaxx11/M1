@@ -16,6 +16,7 @@
 #include "subghz_vag_encoder.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "m1_aut64.h"
@@ -31,9 +32,40 @@ static const uint32_t VAG_TEA_KEY[4] = {
 
 uint8_t subghz_vag_button_byte(uint8_t btn)
 {
-    /* M1 normalizes buttons to 1/2/4 (unlock/lock/boot); the wire byte
-     * carries them in the high nibble. */
+    /* ProtoPirate files may carry either normalized M1 buttons or the
+     * decrypted high-nibble byte used on the wire. */
+    if (btn == 0x10u) btn = 1u;
+    else if (btn == 0x20u) btn = 2u;
+    else if (btn == 0x40u) btn = 4u;
     return (uint8_t)((btn & 0x0Fu) << 4);
+}
+
+uint8_t subghz_vag_effective_type(uint8_t type, uint8_t type_byte)
+{
+    return (type == 1u && type_byte == 0x00u) ? 2u : type;
+}
+
+uint16_t subghz_vag_parse_key2(const char *bytes)
+{
+    if (bytes == NULL)
+        return 0;
+
+    uint16_t value = 0;
+    const char *p = bytes;
+    while (*p != '\0')
+    {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == '\0' || *p == '\r' || *p == '\n')
+            break;
+        char *end = NULL;
+        const unsigned long byte = strtoul(p, &end, 16);
+        if (end == p)
+            break;
+        value = (uint16_t)((value << 8) | (uint16_t)(byte & 0xFFu));
+        p = end;
+    }
+    return value;
 }
 
 uint8_t subghz_vag_dispatch_byte(uint8_t btn_byte, uint8_t type)
@@ -84,10 +116,7 @@ bool subghz_vag_encrypt_frame(uint32_t serial, uint32_t cnt, uint8_t btn,
     if (key1_out == NULL || key2_out == NULL)
         return false;
 
-    /* Passat conversion: type-1 captures with type byte 0x00 go out as
-     * type 2 (reference behaviour). */
-    if (type == 1u && type_byte == 0x00u)
-        type = 2u;
+    type = subghz_vag_effective_type(type, type_byte);
 
     const uint8_t btn_byte = subghz_vag_button_byte(btn);
     const uint8_t dispatch = subghz_vag_dispatch_byte(btn_byte, type);

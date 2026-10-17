@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "unity.h"
 #include "subghz_proto_pirate.h"
 #include "subghz_kia_v6_encoder.h"
@@ -460,7 +461,7 @@ void test_kia_v6_encode_matches_upload_builder(void)
      * builder's waveform for the same frame (field mapping through
      * params -> frame -> upload -> pairs). */
     uint8_t frame[18];
-    subghz_kia_v6_encrypt_frame(0x34u, serial, 2u, cnt,
+    subghz_kia_v6_encrypt_frame(0x34u, serial, 2u, cnt + 1u,
                                 m1_kia_v6_keys_builtin, frame);
     static subghz_upload_entry_t up[KIA_V6_ENC_UPLOAD_SIZE];
     const uint32_t n =
@@ -490,6 +491,169 @@ void test_kia_v6_encode_matches_upload_builder(void)
         TEST_ASSERT_EQUAL_UINT32(merged[2 * i + 1] & 0x7FFFFFFFu,
                                  pairs[i].low_us);
     }
+}
+
+void test_kia_v6_explicit_serial_and_packed_serial(void)
+{
+    const uint64_t packed_key = ((uint64_t)0x112233u << 32) | 0x1234u;
+    SubGhzKeyParams packed = make_params("Kia V6", packed_key, 144);
+    packed.btn = 2u;
+    packed.cnt = 0x1234u;
+    packed.cnt_present = true;
+    packed.extra[0] = 0x34u;
+
+    SubGhzKeyParams imported = packed;
+    imported.serial = 0xA1B2C3u;
+    imported.serial_present = true;
+
+    SubGhzRawPair packed_pairs[1000], imported_pairs[1000];
+    const uint32_t packed_count =
+        subghz_proto_pirate_encode(&packed, packed_pairs, 1000u, 1u);
+    const uint32_t imported_count =
+        subghz_proto_pirate_encode(&imported, imported_pairs, 1000u, 1u);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, packed_count);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, imported_count);
+    TEST_ASSERT_TRUE(packed_count != imported_count ||
+                     memcmp(packed_pairs, imported_pairs,
+                            (packed_count < imported_count ? packed_count :
+                             imported_count) * sizeof(*packed_pairs)) != 0);
+}
+
+void test_vag_upstream_buttons_normalize_and_replay_counter_advances(void)
+{
+    const uint32_t serial = 0x12345678u;
+    const uint32_t source_counter = 0x005634u;
+    const uint64_t type2_key = 0xC0AABBCCDDEEFF00ULL;
+    SubGhzRawPair first[800], second[800], repeated[1600];
+    SubGhzKeyParams params = make_params("VAG", type2_key, 96u);
+    params.btn = 0x10u;
+    params.cnt = source_counter;
+    params.cnt_present = true;
+    params.extra[8] = (uint8_t)(serial >> 24);
+    params.extra[9] = (uint8_t)(serial >> 16);
+    params.extra[10] = (uint8_t)(serial >> 8);
+    params.extra[11] = (uint8_t)serial;
+    params.extra[12] = 2u;
+    params.extra[13] = VAG_ENC_KEY_AUTO;
+
+    const uint32_t first_count =
+        subghz_proto_pirate_encode(&params, first, 800u, 1u);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, first_count);
+    TEST_ASSERT_EQUAL_HEX8(0x10u, subghz_vag_button_byte(0x10u));
+
+    params.btn = 1u;
+    TEST_ASSERT_EQUAL_UINT32(
+        first_count, subghz_proto_pirate_encode(&params, second, 800u, 1u));
+    TEST_ASSERT_EQUAL_MEMORY(first, second, first_count * sizeof(*first));
+
+    params.btn = 0x10u;
+    TEST_ASSERT_EQUAL_UINT32(
+        first_count * 2u,
+        subghz_proto_pirate_encode(&params, repeated, 1600u, 2u));
+    TEST_ASSERT_EQUAL_MEMORY(repeated, &repeated[first_count],
+                             first_count * sizeof(*repeated));
+
+    params.cnt = source_counter + 1u;
+    const uint32_t next_count =
+        subghz_proto_pirate_encode(&params, second, 800u, 1u);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, next_count);
+    TEST_ASSERT_TRUE(first_count != next_count ||
+                     memcmp(first, second,
+                            (first_count < next_count ? first_count :
+                             next_count) * sizeof(*first)) != 0);
+}
+
+void test_vag_passat_builds_type2_waveform(void)
+{
+    const uint32_t serial = 0x12345678u;
+    SubGhzKeyParams passat = make_params("VAG", 0x00AABBCCDDEEFF00ULL, 96u);
+    passat.btn = 1u;
+    passat.cnt = 0x1234u;
+    passat.cnt_present = true;
+    passat.extra[8] = (uint8_t)(serial >> 24);
+    passat.extra[9] = (uint8_t)(serial >> 16);
+    passat.extra[10] = (uint8_t)(serial >> 8);
+    passat.extra[11] = (uint8_t)serial;
+    passat.extra[12] = 1u;
+    passat.extra[13] = VAG_ENC_KEY_AUTO;
+
+    SubGhzKeyParams type2 = passat;
+    type2.key_value = passat.key_value;
+    type2.extra[12] = 2u;
+
+    SubGhzRawPair passat_pairs[800], type2_pairs[800];
+    const uint32_t count =
+        subghz_proto_pirate_encode(&passat, passat_pairs, 800u, 1u);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, count);
+    TEST_ASSERT_EQUAL_UINT32(
+        count, subghz_proto_pirate_encode(&type2, type2_pairs, 800u, 1u));
+    TEST_ASSERT_EQUAL_MEMORY(passat_pairs, type2_pairs,
+                             count * sizeof(*passat_pairs));
+    TEST_ASSERT_EQUAL_UINT8(2u, subghz_vag_effective_type(1u, 0x00u));
+}
+
+void test_proto_pirate_counter_state_is_per_path_and_advances_once(void)
+{
+    subghz_proto_pirate_counter_state_t state = {0};
+    TEST_ASSERT_EQUAL_UINT32(
+        12u, subghz_proto_pirate_counter_get(
+                 &state, "0:/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 12u,
+                 0xAABBCCDDu));
+    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFu);
+    TEST_ASSERT_EQUAL_UINT32(
+        13u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 90u,
+                 0xAABBCCDDu));
+    TEST_ASSERT_EQUAL_UINT32(
+        90u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/b.sub", SubGhzProtoPirate_VAG, 90u,
+                 0xAABBCCDDu));
+    TEST_ASSERT_EQUAL_UINT32(
+        20u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 20u,
+                 0x11223344u));
+}
+
+void test_imported_kia_v6_serial_field_overrides_packed_key_serial(void)
+{
+    FILE *file = tmpfile();
+    TEST_ASSERT_NOT_NULL(file);
+    TEST_ASSERT_GREATER_THAN_INT(0, fputs("Serial: 10597059\n", file));
+    rewind(file);
+    char line[32];
+    TEST_ASSERT_NOT_NULL(fgets(line, sizeof(line), file));
+    fclose(file);
+
+    SubGhzKeyParams m1 = make_params(
+        "Kia V6", ((uint64_t)0x112233u << 32) | 0x1234u, 144u);
+    m1.btn = 2u;
+    m1.cnt = 0x1234u;
+    m1.cnt_present = true;
+    m1.extra[0] = 0x34u;
+    SubGhzKeyParams imported = m1;
+    TEST_ASSERT_TRUE(subghz_proto_pirate_parse_serial_line(line,
+                                                          &imported.serial));
+    imported.serial_present = true;
+
+    SubGhzRawPair m1_pairs[1000], imported_pairs[1000];
+    const uint32_t m1_count =
+        subghz_proto_pirate_encode(&m1, m1_pairs, 1000u, 1u);
+    const uint32_t imported_count =
+        subghz_proto_pirate_encode(&imported, imported_pairs, 1000u, 1u);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, m1_count);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, imported_count);
+    TEST_ASSERT_TRUE(m1_count != imported_count ||
+                     memcmp(m1_pairs, imported_pairs,
+                            (m1_count < imported_count ? m1_count :
+                             imported_count) * sizeof(*m1_pairs)) != 0);
+}
+
+void test_vag_key2_parser_accepts_short_and_upstream_byte_lists(void)
+{
+    TEST_ASSERT_EQUAL_HEX16(0x4E2Au, subghz_vag_parse_key2("4E 2A"));
+    TEST_ASSERT_EQUAL_HEX16(
+        0x4E2Au, subghz_vag_parse_key2("00 00 00 00 00 00 4E 2A"));
+    TEST_ASSERT_EQUAL_HEX16(0u, subghz_vag_parse_key2(NULL));
 }
 
 /* ===================================================================
@@ -579,8 +743,14 @@ int main(void)
     RUN_TEST(test_fiat_v1_encode_nonzero);
 
     RUN_TEST(test_kia_v6_encode_matches_upload_builder);
+    RUN_TEST(test_kia_v6_explicit_serial_and_packed_serial);
     RUN_TEST(test_kia_v6_required_pairs);
     RUN_TEST(test_vag_encode_matches_upload_builder);
+    RUN_TEST(test_vag_upstream_buttons_normalize_and_replay_counter_advances);
+    RUN_TEST(test_vag_passat_builds_type2_waveform);
+    RUN_TEST(test_proto_pirate_counter_state_is_per_path_and_advances_once);
+    RUN_TEST(test_imported_kia_v6_serial_field_overrides_packed_key_serial);
+    RUN_TEST(test_vag_key2_parser_accepts_short_and_upstream_byte_lists);
 
     RUN_TEST(test_ford_v0_encode_nonzero);
     RUN_TEST(test_mazda_v0_encode_nonzero);

@@ -259,6 +259,25 @@ bool flipper_subghz_save_m1native_key_with_key2(
     const char *protocol, uint32_t bit_count, uint64_t key,
     uint32_t key_2, uint8_t key_2_len, uint32_t te);
 
+typedef struct {
+    uint32_t frequency;
+    const char *preset;
+    const char *protocol;
+    uint32_t bit_count;
+    uint64_t key;
+    uint32_t key_2;
+    uint8_t key_2_len;
+    uint32_t te;
+    uint32_t serial;
+    uint32_t button;
+    uint32_t counter;
+    uint8_t type;
+    uint8_t fx;
+} flipper_subghz_key_capture_t;
+
+bool flipper_subghz_save_key_capture(const char *path, bool m1_native,
+                                      const flipper_subghz_key_capture_t *capture);
+
 /* Map Flipper preset name to M1 modulation type */
 uint8_t flipper_subghz_preset_to_modulation(const char *preset);
 

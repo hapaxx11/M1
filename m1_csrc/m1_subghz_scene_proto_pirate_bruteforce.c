@@ -427,7 +427,8 @@ static bool pp_bf_psa_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
 
     uint8_t buffer[10];
     subghz_psa_encode_buffer36(ctx->psa.serial, ctx->psa_tx_cnt,
-                               ctx->psa.button, preserve01, buffer);
+                               ctx->psa.button, preserve01,
+                               ctx->psa.candidate, ctx->psa.phase, buffer);
 
     subghz_upload_entry_t *upload = malloc(
         PSA_ENC_UPLOAD_CAPACITY * sizeof(subghz_upload_entry_t));
@@ -598,7 +599,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 static void scene_on_exit(SubGhzApp *app)
 {
     subghz_scene_set_tick_period(app, 0);
-    if (app->resume_from_child)
+    if (subghz_read_raw_consume_resume(&app->resume_from_child))
         return;  /* handing off to Read Raw for TX; keep the context */
     pp_bf_stop_worker();
     pp_bf_ctx_free();

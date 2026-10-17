@@ -40,6 +40,8 @@ extern "C" {
  */
 uint8_t subghz_vag_button_byte(uint8_t btn);
 uint8_t subghz_vag_dispatch_byte(uint8_t btn_byte, uint8_t type);
+uint8_t subghz_vag_effective_type(uint8_t type, uint8_t type_byte);
+uint16_t subghz_vag_parse_key2(const char *bytes);
 
 /**
  * @brief  Build the encrypted VAG frame for TX (reference

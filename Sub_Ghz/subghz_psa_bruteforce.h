@@ -69,6 +69,7 @@ typedef struct subghz_psa_bf_result {
     uint32_t seed;     /**< seed (same value as serial in the reference) */
     uint32_t counter;  /**< 28-bit rolling counter */
     uint32_t candidate;/**< candidate value that produced the hit */
+    subghz_psa_bf_phase_t phase; /**< Search phase that produced the hit */
     uint16_t crc;      /**< frame CRC byte from the decrypted block */
     uint8_t  button;   /**< 4-bit button id */
     uint8_t  type;     /**< always 0x36 on success */

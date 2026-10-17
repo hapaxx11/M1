@@ -86,41 +86,23 @@ static void scene_on_enter(SubGhzApp *app)
     const uint8_t k2_len = subghz_capture_key2_len(e->info.protocol,
                                                    e->info.serial_number);
     const uint32_t k2 = subghz_capture_key2_value(&e->info);
-
-    bool saved;
-    if (e->info.protocol == (uint16_t)VAG && fmt != 1)
-        saved = flipper_subghz_save_vag(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    e->info.bit_len, e->info.key,
-                    (uint16_t)(e->info.key2 & 0xFFFFu), e->info.te,
-                    e->info.serial_number, e->info.button_id,
-                    e->info.rolling_code,
-                    (uint8_t)((e->info.key2 >> 16) & 0xFFu));
-    else if (e->info.protocol == (uint16_t)KIA_V6 && fmt != 1)
-        saved = flipper_subghz_save_kia_v6(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    e->info.bit_len, e->info.key, e->info.te,
-                    e->info.button_id, (uint8_t)(e->info.key2 & 0xFFu));
-    else if (fmt == 1 && k2_len > 0)
-        saved = flipper_subghz_save_m1native_key_with_key2(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    protocol_text[e->info.protocol],
-                    e->info.bit_len, e->info.key, k2, k2_len, e->info.te);
-    else if (fmt == 1)
-        saved = flipper_subghz_save_m1native_key(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    protocol_text[e->info.protocol],
-                    e->info.bit_len, e->info.key, e->info.te);
-    else if (k2_len > 0)
-        saved = flipper_subghz_save_key_with_key2(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    protocol_text[e->info.protocol],
-                    e->info.bit_len, e->info.key, k2, k2_len, e->info.te);
-    else
-        saved = flipper_subghz_save_key(app->file_path,
-                    e->frequency, "FuriHalSubGhzPresetOok650Async",
-                    protocol_text[e->info.protocol],
-                    e->info.bit_len, e->info.key, e->info.te);
+    flipper_subghz_key_capture_t capture = {
+        .frequency = e->frequency,
+        .preset = "FuriHalSubGhzPresetOok650Async",
+        .protocol = protocol_text[e->info.protocol],
+        .bit_count = e->info.bit_len,
+        .key = e->info.key,
+        .key_2 = k2,
+        .key_2_len = k2_len,
+        .te = e->info.te,
+        .serial = e->info.serial_number,
+        .button = e->info.button_id,
+        .counter = e->info.rolling_code,
+        .type = (uint8_t)((e->info.key2 >> 16) & 0xFFu),
+        .fx = (uint8_t)(e->info.key2 & 0xFFu),
+    };
+    bool saved = flipper_subghz_save_key_capture(
+        app->file_path, fmt == 1, &capture);
 
     if (saved)
     {

@@ -8,9 +8,7 @@
  * Ports the encoder side of the ProtoPirate reference
  * (RocketGod-git/ProtoPirate, protocols/psa.c + psa_crypto.c):
  *  - Type 0x36: re-encrypts a fresh frame with the TEA working key derived
- *    from the recovered serial (the phase-1 key-derivation schedule with
- *    candidate 0x23000000|serial — valid because the brute-force hit
- *    condition proves the winning candidate's low 24 bits ARE the serial).
+ * using the phase and candidate recovered by the brute-force search.
  *  - Type 0x23: inverse of the direct-XOR decode network, with the nibble
  *    search that makes the checksum self-consistent.
  *  - Upload builder: 325-entry waveform (80 preamble pairs @250µs, a
@@ -28,6 +26,7 @@
 #include <stdbool.h>
 
 #include "subghz_upload_entry.h"
+#include "subghz_psa_bruteforce.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,10 +46,14 @@ typedef subghz_upload_entry_t psa_upload_entry_t;
  * @param  button      4-bit button id.
  * @param  preserve01  Original capture's wire bytes 0..1 (carries the 0xA
  *                     marker nibble), or NULL to derive them.
+ * @param  candidate   Candidate value recovered by the search.
+ * @param  phase       Search phase that recovered the key.
  * @param  buffer      Output: 10 wire bytes (Key1 = [0..7], Key2 = [8..9]).
  */
 void subghz_psa_encode_buffer36(uint32_t serial, uint32_t counter,
                                 uint8_t button, const uint8_t preserve01[2],
+                                uint32_t candidate,
+                                subghz_psa_bf_phase_t phase,
                                 uint8_t buffer[10]);
 
 /**

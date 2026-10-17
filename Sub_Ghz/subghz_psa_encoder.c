@@ -27,6 +27,8 @@
 
 void subghz_psa_encode_buffer36(uint32_t serial, uint32_t counter,
                                 uint8_t button, const uint8_t preserve01[2],
+                                uint32_t candidate,
+                                subghz_psa_bf_phase_t phase,
                                 uint8_t buffer[10])
 {
     memset(buffer, 0, 10);
@@ -35,25 +37,41 @@ void subghz_psa_encode_buffer36(uint32_t serial, uint32_t counter,
                   ((counter >> 24) & 0xFu);
     uint32_t v1 = ((counter & 0xFFFFFFu) << 8);
 
-    const uint8_t crc = subghz_psa_bf_tea_crc(v0, v1);
-    v1 = (v1 & 0xFFFFFF00u) | crc;
-
-    /* Working key: phase-1 derivation with candidate 0x23000000|serial — the
-     * brute-force hit condition proves this is the keying candidate. */
-    const uint32_t bf_counter = PSA_BF1_START | (serial & 0xFFFFFFu);
-
-    subghz_psa_tea_schedule_t bf1_sched;
-    subghz_psa_tea_build_schedule(subghz_psa_bf1_key_schedule, &bf1_sched);
-
     uint32_t working_key[4];
-    working_key[2] = 0x0E0F5C41u;  /* PSA_CRYPTO_BF1_CONST_U4 */
-    working_key[3] = bf_counter;
-    subghz_psa_tea_encrypt_scheduled(&working_key[2], &working_key[3],
-                                     &bf1_sched);
-    working_key[0] = (bf_counter << 8) | 0x0Eu;
-    working_key[1] = 0x0F5C4123u;  /* PSA_CRYPTO_BF1_CONST_U5 */
-    subghz_psa_tea_encrypt_scheduled(&working_key[0], &working_key[1],
-                                     &bf1_sched);
+    if (phase == PSA_BF_PHASE_1)
+    {
+        const uint8_t crc = subghz_psa_bf_tea_crc(v0, v1);
+        v1 = (v1 & 0xFFFFFF00u) | crc;
+
+        subghz_psa_tea_schedule_t bf1_sched;
+        subghz_psa_tea_build_schedule(subghz_psa_bf1_key_schedule,
+                                      &bf1_sched);
+        working_key[2] = 0x0E0F5C41u;
+        working_key[3] = candidate;
+        subghz_psa_tea_encrypt_scheduled(&working_key[2], &working_key[3],
+                                         &bf1_sched);
+        working_key[0] = (candidate << 8) | 0x0Eu;
+        working_key[1] = 0x0F5C4123u;
+        subghz_psa_tea_encrypt_scheduled(&working_key[0], &working_key[1],
+                                         &bf1_sched);
+    }
+    else if (phase == PSA_BF_PHASE_2)
+    {
+        const uint8_t crc_input[6] = {
+            (uint8_t)(v0 >> 24), (uint8_t)(v0 >> 8),
+            (uint8_t)(v0 >> 16), (uint8_t)v0,
+            (uint8_t)(v1 >> 24), (uint8_t)(v1 >> 16),
+        };
+        const uint16_t crc = subghz_psa_bf_crc16(crc_input,
+                                                  sizeof(crc_input));
+        v1 = (v1 & 0xFFFF0000u) | crc;
+        for (uint8_t i = 0; i < 4u; i++)
+            working_key[i] = subghz_psa_bf2_key_schedule[i] ^ candidate;
+    }
+    else
+    {
+        return;
+    }
 
     subghz_psa_tea_encrypt(&v0, &v1, working_key);
 

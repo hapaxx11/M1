@@ -29,6 +29,8 @@
 #include "subghz_weather_parse.h"
 #include "subghz_weather_history.h"
 #include "subghz_key_encoder.h"
+#include "subghz_proto_pirate.h"
+#include "subghz_raw_pairs_writer.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_raw_capture_alloc.h"
 #include "subghz_secplus_v1_encoder.h"
@@ -1566,6 +1568,12 @@ static const char *stristr(const char *haystack, const char *needle)
  * returned to scene callers via out_tmp_path.
  */
 #define FLIPPER_SUB_TMP_SGH   "/SUBGHZ/_flipper_tmp.sgh"
+static subghz_proto_pirate_counter_state_t s_proto_pirate_counter;
+
+static bool subghz_write_replay_data_line(void *context, const char *line)
+{
+	return f_puts(line, (FIL *)context) >= 0;
+}
 
 /*
  * Per-prepare button-override slot consumed by the Flipper-format converter
@@ -2029,6 +2037,8 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	bool has_data = false;
 	bool in_raw_continuation = false;
 	float freq_mhz;
+	bool advance_proto_pirate_counter = false;
+	uint32_t proto_pirate_counter_mask = 0;
 
 	/* Parser state for cross-buffer RAW_Data line handling.
 	 * When a long RAW_Data line exceeds the buffer, f_gets can split a
@@ -2050,7 +2060,9 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	/* Optional ProtoPirate VAG TX fields: serial / rolling counter / frame
 	 * type / AUT64 key index / original Key2 tail. */
 	uint32_t key_serial = 0;
+	bool key_serial_present = false;
 	uint32_t key_cnt = 0;
+	bool key_cnt_present = false;
 	uint32_t key_type = 0;
 	uint32_t key_keyidx = 0xFFu;
 	uint32_t key2_tail = 0;
@@ -2290,13 +2302,15 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		}
 		else if (strncmp(line_buf, "Serial:", 7) == 0)
 		{
-			/* ProtoPirate serial field (VAG TX). */
-			key_serial = (uint32_t)strtoul(line_buf + 7, NULL, 10);
+			/* ProtoPirate serial field (Kia V6 / VAG TX). */
+			key_serial_present =
+			    subghz_proto_pirate_parse_serial_line(line_buf, &key_serial);
 		}
 		else if (strncmp(line_buf, "Cnt:", 4) == 0)
 		{
 			/* ProtoPirate rolling-counter field (VAG TX). */
 			key_cnt = (uint32_t)strtoul(line_buf + 4, NULL, 10);
+			key_cnt_present = true;
 		}
 		else if (strncmp(line_buf, "Type:", 5) == 0)
 		{
@@ -2311,13 +2325,8 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		else if (strncmp(line_buf, "Key2:", 5) == 0)
 		{
 			/* ProtoPirate VAG second key word (no underscore — distinct
-			 * from the PSA/Renault "Key_2:" field), 2 hex bytes. */
-			char *end = NULL;
-			const unsigned long hi = strtoul(line_buf + 5, &end, 16);
-			unsigned long lo = 0;
-			if (end != NULL && *end != '\0')
-				lo = strtoul(end, NULL, 16);
-			key2_tail = (uint32_t)(((hi & 0xFFu) << 8) | (lo & 0xFFu));
+			 * from the PSA/Renault "Key_2:" field). */
+			key2_tail = subghz_vag_parse_key2(line_buf + 5);
 		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
@@ -2395,8 +2404,11 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		key_params.key_value = key_value;
 		key_params.bit_count = key_bit_count;
 		key_params.te        = key_te;
+		key_params.serial    = key_serial;
+		key_params.serial_present = key_serial_present;
 		key_params.btn       = key_btn;
 		key_params.cnt       = key_cnt;
+		key_params.cnt_present = key_cnt_present;
 		key_params.extra[0]  = (uint8_t)(key_fx & 0xFFu);
 		/* VAG: serial (BE), frame type, AUT64 key index, original Key2. */
 		key_params.extra[8]  = (uint8_t)(key_serial >> 24);
@@ -2407,6 +2419,22 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		key_params.extra[13] = (uint8_t)(key_keyidx & 0xFFu);
 		key_params.extra[14] = (uint8_t)(key2_tail >> 8);
 		key_params.extra[15] = (uint8_t)(key2_tail & 0xFFu);
+
+		const SubGhzProtoPirateId pirate_id =
+		    subghz_proto_pirate_find_by_name(key_params.protocol);
+		if (pirate_id == SubGhzProtoPirate_KiaV6 ||
+		    pirate_id == SubGhzProtoPirate_VAG)
+		{
+			uint32_t initial_counter = key_cnt;
+			if (pirate_id == SubGhzProtoPirate_KiaV6 &&
+			    !key_cnt_present)
+				initial_counter = (uint32_t)key_value;
+			key_params.cnt = subghz_proto_pirate_counter_get(
+			    &s_proto_pirate_counter, sub_path, (uint8_t)pirate_id,
+			    initial_counter,
+			    key_value ^ ((uint64_t)key_serial << 32) ^ key_cnt);
+			key_params.cnt_present = true;
+		}
 
 		uint32_t npairs = 0;
 		SubGhzRawPair *pairs = NULL;
@@ -2423,7 +2451,6 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 				return SUBGHZ_KEY_ERR_UNSUPPORTED;
 			}
-			pairs_per_rep = max_pairs / 3;
 			pairs = (SubGhzRawPair *)pvPortMalloc(max_pairs * sizeof(SubGhzRawPair));
 			if (!pairs)
 			{
@@ -2433,6 +2460,15 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				return 1;
 			}
 			npairs = subghz_key_encode_custom(&key_params, pairs, max_pairs, 3);
+			pairs_per_rep = npairs > 0 ? (npairs + 2u) / 3u : 0;
+
+			if (npairs > 0 && (pirate_id == SubGhzProtoPirate_KiaV6 ||
+			                   pirate_id == SubGhzProtoPirate_VAG))
+			{
+				advance_proto_pirate_counter = true;
+				proto_pirate_counter_mask =
+				    (pirate_id == SubGhzProtoPirate_VAG) ? 0xFFFFFFu : 0xFFFFFFFFu;
+			}
 		}
 		else
 		{
@@ -2546,72 +2582,15 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		 * the caller's repeat count and the TE value. */
 		if (npairs > 0)
 		{
-			const size_t out_buf_cap = FLIPPER_SUB_OUT_MAX;
-			int pos = snprintf(out_buf, out_buf_cap, "%s",
-			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
-			if (pos < 0)
+			if (!subghz_raw_pairs_write_data(
+			        pairs, npairs, pairs_per_rep, out_buf, FLIPPER_SUB_OUT_MAX,
+			        subghz_write_replay_data_line, &f_sgh))
 			{
-				pos = 0;
-				out_buf[0] = '\0';
-			}
-			else if ((size_t)pos >= out_buf_cap)
-			{
-				pos = (int)(out_buf_cap - 1);
-			}
-
-			for (uint32_t pi = 0; pi < npairs; pi++)
-			{
-				char pair_buf[32];
-				int pair_len = snprintf(pair_buf, sizeof(pair_buf),
-				                        " %lu %lu",
-				                        (unsigned long)pairs[pi].high_us,
-				                        (unsigned long)pairs[pi].low_us);
-
-				if (pair_len < 0)
-					continue;
-
-				/* Flush before appending if the next pair would exceed out_buf. */
-				if (((size_t)pos + (size_t)pair_len + 3) > out_buf_cap)
-				{
-					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
-					f_puts(out_buf, &f_sgh);
-					pos = snprintf(out_buf, out_buf_cap, "%s",
-					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
-					if (pos < 0)
-					{
-						pos = 0;
-						out_buf[0] = '\0';
-					}
-					else if ((size_t)pos >= out_buf_cap)
-					{
-						pos = (int)(out_buf_cap - 1);
-					}
-				}
-
-				pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "%s", pair_buf);
-
-				/* Start a new Data: line at repetition boundaries
-				 * (after each sync gap = last pair of each rep). */
-				bool is_rep_end = ((pi + 1) % pairs_per_rep) == 0;
-				if (is_rep_end)
-				{
-					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
-					f_puts(out_buf, &f_sgh);
-					if (pi + 1 < npairs)
-					{
-						pos = snprintf(out_buf, out_buf_cap, "%s",
-						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
-						if (pos < 0)
-						{
-							pos = 0;
-							out_buf[0] = '\0';
-						}
-						else if ((size_t)pos >= out_buf_cap)
-						{
-							pos = (int)(out_buf_cap - 1);
-						}
-					}
-				}
+				vPortFree(pairs);
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
+				return 1;
 			}
 			has_data = true;
 		}
@@ -2652,6 +2631,11 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	 * FSK radio config and retunes to the target frequency. */
 	if (modulation == MODULATION_FSK && subghz_replay_band != SUB_GHZ_BAND_CUSTOM)
 		subghz_replay_band = SUB_GHZ_BAND_CUSTOM;
+
+	if (advance_proto_pirate_counter)
+		subghz_proto_pirate_counter_advance(&s_proto_pirate_counter,
+		                                    proto_pirate_counter_mask);
+	return 0;
 
 	/* ── 5. Set up datfile_info → temp .sgh ── */
 	strncpy((char *)datfile_info.dat_filename, FLIPPER_SUB_TMP_SGH,

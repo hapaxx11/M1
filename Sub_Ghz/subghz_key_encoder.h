@@ -32,8 +32,10 @@ typedef struct {
     /* Extended fields used by protocol-specific encoders (ProtoPirate, etc.).
      * Callers that do not need them can leave them zero-initialized. */
     uint32_t serial;          /**< Device serial number */
+    bool     serial_present;  /**< Distinguishes an explicit Serial: from packed Key */
     uint32_t btn;             /**< Button code */
     uint32_t cnt;             /**< Rolling counter / tail / epoch */
+    bool     cnt_present;     /**< Distinguishes an explicit counter from packed Key */
     uint8_t  extra[16];       /**< Opaque protocol payload bytes (raw packet, key, etc.) */
 } SubGhzKeyParams;
 

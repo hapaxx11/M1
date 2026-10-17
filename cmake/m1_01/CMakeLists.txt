@@ -393,6 +393,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_kia_v6_encoder.c
     ../../Sub_Ghz/subghz_vag_encoder.c
     ../../Sub_Ghz/subghz_proto_pirate_timing.c
+    ../../Sub_Ghz/subghz_raw_pairs_writer.c
     ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/subghz_weather_parse.c
     ../../Sub_Ghz/subghz_weather_history.c

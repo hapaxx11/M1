@@ -309,8 +309,11 @@ bool subghz_psa_bf_run_range(subghz_bruteforce_job_t *job, uint64_t key1,
             if (job->status == SUBGHZ_BRUTEFORCE_JOB_FOUND)
             {
                 if (out != NULL)
+                {
                     subghz_psa_bf_extract_result(dec_v0, dec_v1, candidate,
                                                  out);
+                    out->phase = phase;
+                }
                 return true;
             }
             return false;  /* cancelled or exhausted */

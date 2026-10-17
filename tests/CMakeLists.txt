@@ -3536,6 +3536,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_proto_pirate COMMAND test_subghz_proto_pirate)
 
+# ---------- subghz_raw_pairs_writer (Flipper replay pair serialization) ----------
+add_executable(test_subghz_raw_pairs_writer
+    test_subghz_raw_pairs_writer.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_pairs_writer.c
+)
+target_include_directories(test_subghz_raw_pairs_writer PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_pairs_writer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_pairs_writer PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_pairs_writer COMMAND test_subghz_raw_pairs_writer)
+
 # IR UX Polish — source-level regression checks
 add_executable(test_ir_ux_polish
     test_ir_ux_polish.c

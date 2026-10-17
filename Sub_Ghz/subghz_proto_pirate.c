@@ -2582,6 +2582,14 @@ bool subghz_proto_pirate_is_supported(const char *name)
     return subghz_proto_pirate_find_by_name(name) != SubGhzProtoPirate_Unknown;
 }
 
+bool subghz_proto_pirate_parse_serial_line(const char *line, uint32_t *serial)
+{
+    if (line == NULL || serial == NULL || strncmp(line, "Serial:", 7u) != 0)
+        return false;
+    *serial = (uint32_t)strtoul(line + 7u, NULL, 10);
+    return true;
+}
+
 typedef uint32_t (*ProtoPirateEncodeFn)(const SubGhzKeyParams *params,
                                          SubGhzRawPair *out,
                                          uint32_t max_pairs,
@@ -2703,15 +2711,18 @@ static uint32_t encode_kia_v6(const SubGhzKeyParams *params,
     if (!m1_kia_v6_keys_builtin_available)
         return 0;
 
-    const uint32_t serial = (uint32_t)(params->key_value >> 32);
-    const uint32_t cnt = params->cnt
+    const uint32_t serial = params->serial_present
+                                ? params->serial
+                                : (uint32_t)(params->key_value >> 32);
+    const uint32_t cnt = params->cnt_present
                              ? params->cnt
                              : (uint32_t)(params->key_value & 0xFFFFFFFFu);
+    const uint32_t tx_cnt = cnt + 1u;
     const uint8_t btn = (uint8_t)(params->btn & 0x0Fu);
     const uint8_t fx = params->extra[0];
 
     uint8_t frame[18];
-    subghz_kia_v6_encrypt_frame(fx, serial, btn, cnt, m1_kia_v6_keys_builtin,
+    subghz_kia_v6_encrypt_frame(fx, serial, btn, tx_cnt, m1_kia_v6_keys_builtin,
                                 frame);
 
     /* Heap: 1928 entries × 8 B ≈ 15.4 KB, too large for the caller's stack. */
@@ -2765,24 +2776,28 @@ static uint32_t encode_vag(const SubGhzKeyParams *params,
 
     /* Reference behaviour: the rolling counter advances on every TX. */
     const uint32_t cnt = (params->cnt + 1u) & 0xFFFFFFu;
+    const uint8_t effective_type = subghz_vag_effective_type(
+        type, (uint8_t)(params->key_value >> 56));
 
     uint64_t key1 = 0;
     uint16_t key2 = 0;
-    if (!subghz_vag_encrypt_frame(serial, cnt, (uint8_t)(params->btn & 0xFu),
-                                  type, type_byte, key_idx,
+    if (!subghz_vag_encrypt_frame(serial, cnt, (uint8_t)params->btn,
+                                  effective_type, type_byte, key_idx,
                                   params->key_value, orig_key2,
                                   m1_vag_aut64_keys_builtin,
                                   m1_vag_aut64_keys_builtin_available,
                                   &key1, &key2))
         return 0;
 
-    const uint32_t cap = (type == 3u || type == 4u) ? VAG_ENC_UPLOAD_T34
-                                                    : VAG_ENC_UPLOAD_T12;
+    const uint32_t cap = (effective_type == 3u || effective_type == 4u)
+                             ? VAG_ENC_UPLOAD_T34
+                             : VAG_ENC_UPLOAD_T12;
     subghz_upload_entry_t *up = malloc(cap * sizeof(*up));
     if (up == NULL)
         return 0;
 
-    const uint32_t n = subghz_vag_build_upload(up, cap, type, key1, key2);
+    const uint32_t n =
+        subghz_vag_build_upload(up, cap, effective_type, key1, key2);
     if (n == 0)
     {
         free(up);

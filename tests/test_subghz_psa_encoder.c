@@ -39,7 +39,9 @@ void test_encode36_bruteforce_recovers_fields(void)
     const uint8_t  button = 0x5u;
 
     uint8_t buffer[10];
-    subghz_psa_encode_buffer36(serial, counter, button, PRESERVE01, buffer);
+    const uint32_t candidate = PSA_BF1_START | (serial & 0xFFFFFFu);
+    subghz_psa_encode_buffer36(serial, counter, button, PRESERVE01, candidate,
+                               PSA_BF_PHASE_1, buffer);
 
     /* Marker nibble preserved for decoder acceptance. */
     TEST_ASSERT_EQUAL_UINT8(0x12, buffer[0]);
@@ -51,7 +53,7 @@ void test_encode36_bruteforce_recovers_fields(void)
     const uint16_t key2 = (uint16_t)(((uint16_t)buffer[8] << 8) | buffer[9]);
 
     /* The phase-1 candidate that must win is 0x23000000|serial. */
-    const uint32_t cand = PSA_BF1_START | (serial & 0xFFFFFFu);
+    const uint32_t cand = candidate;
 
     subghz_bruteforce_job_t job;
     subghz_bruteforce_job_init(&job);
@@ -73,10 +75,62 @@ void test_encode36_bruteforce_recovers_fields(void)
 void test_encode36_counter_advance_produces_distinct_frames(void)
 {
     uint8_t a[10], b[10];
-    subghz_psa_encode_buffer36(0x051309u, 100u, 1u, PRESERVE01, a);
-    subghz_psa_encode_buffer36(0x051309u, 101u, 1u, PRESERVE01, b);
+    const uint32_t candidate = PSA_BF1_START | 0x051309u;
+    subghz_psa_encode_buffer36(0x051309u, 100u, 1u, PRESERVE01, candidate,
+                               PSA_BF_PHASE_1, a);
+    subghz_psa_encode_buffer36(0x051309u, 101u, 1u, PRESERVE01, candidate,
+                               PSA_BF_PHASE_1, b);
     /* Identical except counter → ciphertext must differ. */
     TEST_ASSERT_TRUE(memcmp(a, b, 10) != 0);
+}
+
+void test_encode36_phase2_recovery_reencodes_with_phase2_key(void)
+{
+    const uint32_t serial = 0x051309u;
+    const uint32_t candidate = PSA_BF2_START | serial;
+    const uint32_t counter = 0x086F0123u;
+    uint8_t frame[10];
+    subghz_psa_encode_buffer36(serial, counter, 1u, PRESERVE01, candidate,
+                               PSA_BF_PHASE_2, frame);
+
+    uint64_t key1 = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        key1 = (key1 << 8) | frame[i];
+    const uint16_t key2 =
+        (uint16_t)(((uint16_t)frame[8] << 8) | frame[9]);
+
+    subghz_bruteforce_job_t job;
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 1u));
+    subghz_psa_bf_result_t recovered;
+    memset(&recovered, 0, sizeof(recovered));
+    TEST_ASSERT_TRUE(subghz_psa_bf_run_range(
+        &job, key1, key2, PSA_BF_PHASE_2, candidate, candidate + 1u,
+        &recovered));
+    TEST_ASSERT_EQUAL(PSA_BF_PHASE_2, recovered.phase);
+    TEST_ASSERT_EQUAL_HEX32(candidate, recovered.candidate);
+    TEST_ASSERT_EQUAL_HEX32(serial, recovered.serial);
+    TEST_ASSERT_EQUAL_HEX32(counter & 0x0FFFFF00u,
+                            recovered.counter & 0x0FFFFF00u);
+
+    uint8_t tx_frame[10];
+    subghz_psa_encode_buffer36(recovered.serial, recovered.counter + 1u,
+                               recovered.button, PRESERVE01,
+                               recovered.candidate, recovered.phase, tx_frame);
+    key1 = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        key1 = (key1 << 8) | tx_frame[i];
+    const uint16_t tx_key2 =
+        (uint16_t)(((uint16_t)tx_frame[8] << 8) | tx_frame[9]);
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 1u));
+    TEST_ASSERT_TRUE(subghz_psa_bf_run_range(
+        &job, key1, tx_key2, PSA_BF_PHASE_2, candidate, candidate + 1u,
+        &recovered));
+    TEST_ASSERT_EQUAL(PSA_BF_PHASE_2, recovered.phase);
+    TEST_ASSERT_EQUAL_HEX32(candidate, recovered.candidate);
+    TEST_ASSERT_EQUAL_HEX32((counter + 1u) & 0x0FFFFF00u,
+                            recovered.counter & 0x0FFFFF00u);
 }
 
 /*============================================================================*/
@@ -180,6 +234,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_encode36_bruteforce_recovers_fields);
     RUN_TEST(test_encode36_counter_advance_produces_distinct_frames);
+    RUN_TEST(test_encode36_phase2_recovery_reencodes_with_phase2_key);
     RUN_TEST(test_encode23_decodes_to_original_fields);
     RUN_TEST(test_encode23_without_key2_uses_default_and_decodes);
     RUN_TEST(test_upload_shape_and_timings);
