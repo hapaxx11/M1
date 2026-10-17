@@ -2,7 +2,9 @@
 
 # M1 Build Tool
 
-The M1 firmware can be built with STM32CubeIDE or Visual Studio Code.
+The recommended firmware build uses CMake and Ninja; see
+[`DEVELOPMENT.md`](../DEVELOPMENT.md) for the current setup and commands. This page
+also documents alternate IDE workflows and legacy SRecord utilities.
 
 ## Installation  
 
@@ -10,14 +12,15 @@ Clone the repository. Install the required software and extensions:
 
 * For STM32CubeIDE users:
 
-- The code has been built with STM32CubeIDE 1.17.0.
-Download: https://www.st.com/en/development-tools/stm32cubeide.html (STM32CubeIDE 1.17.0, GNU Tools for STM32 12.3.rel1),
+- STM32CubeIDE 2.1.0 with GNU Tools for STM32 14.3 is the recommended IDE/toolchain pairing.
+  STM32CubeIDE 1.17.0 is an older alternative.
+Download: https://www.st.com/en/development-tools/stm32cubeide.html,
 and https://www.st.com/en/development-tools/stm32cubeprog.html.
 
 * For Visual Studio Code users:
 
-- The code has been built with arm-none-eabi-gcc 14.2.Rel1.
-Download: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads (14.2.Rel1)
+- Use ARM GCC 14.2 or newer; 14.3 is recommended.
+Download: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
 
 * For Linux users:
 
@@ -57,7 +60,7 @@ ninja --version
 ```bash
 make
 ```
-Output: `./artifacts/` (MonstaTek_M1_v0800.elf, .bin, .hex)
+Output: `./artifacts/` (versioned ELF, BIN, HEX, and CRC-extended BIN files)
 
 * For Visual Studio Code users:
 - Select build type from PROJECT STATUS - Configure (gcc-14_2_build-release, gcc-14_2_build-debug).

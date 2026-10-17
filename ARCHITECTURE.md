@@ -13,21 +13,23 @@ The M1 firmware is organized into the following main components:
 | `Battery/` | Battery monitoring |
 | `NFC/` | NFC (13.56 MHz) support |
 | `lfrfid/` | LF RFID (125 kHz) support — 26 protocol decoders |
-| `Sub_Ghz/` | Sub-GHz radio support — 100 protocol decoders, protocol registry |
+| `Sub_Ghz/` | Sub-GHz radio support — 130 protocol decoders, protocol registry |
 | `Infrared/` | IR transmit/receive |
 | `Esp_spi_at/` | ESP32 SPI AT command interface (host-side SPI master) |
 | `Esp32_serial_flasher/` | ESP32 firmware flashing support (UART bootloader) |
 
-> **ESP32-C6 firmware** is sourced from
-> [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1)
-> (custom SPI AT build for M1).  See
-> [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for details.
+> **Recommended ESP32-C6 firmware** is the native CD3 brain
+> ([`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain)), which
+> uses binary `M1_RPC`. The older CD3-AT firmware
+> ([`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1))
+> remains an alternative. See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md)
+> for compatibility details.
 | `USB/` | USB CDC and MSC classes |
 | `Drivers/` | STM32 HAL, CMSIS, u8g2, and other drivers |
 | `FatFs/` | FAT file system for storage |
 | `Middlewares/` | FreeRTOS |
 | `lib/furi/` | Furi compatibility layer (FuriString, FURI_LOG, furi_assert/check) |
-| `ir_database/` | Pre-built IR remote files (Flipper `.ir` format) for SD card — 1,412 files |
+| `ir_database/` | Pre-built IR remote files (Flipper `.ir` format) for SD card — 1,435 files |
 | `subghz_database/` | Curated Sub-GHz signal files (Flipper `.sub` format) for SD card — 313 files |
 | `subghz_playlist/` | Sub-GHz playlist files (`.txt` format) for SD card |
 | `cad/step/` | Enclosure 3D CAD models (STEP format) |
@@ -44,14 +46,13 @@ The M1 firmware is organized into the following main components:
 
 ## GitHub Infrastructure
 
-Hapax is the only M1 firmware fork with a GitHub-first development model.  All
-build, test, release, and documentation workflows are fully automated through
-GitHub services:
+Hapax uses a GitHub-first development model. Build, test, release, and
+documentation workflows are automated through GitHub services:
 
 | Service | Purpose | Configuration |
 |---------|---------|---------------|
-| **GitHub Actions** — `ci.yml` | Build check on pull requests to `main` | `.github/workflows/ci.yml` |
-| **GitHub Actions** — `build-release.yml` | Auto-create GitHub Release with firmware artifacts on merge to `main` | `.github/workflows/build-release.yml` |
+| **GitHub Actions** — `ci.yml` | Build check on matching firmware-input pull requests to `main` | `.github/workflows/ci.yml` |
+| **GitHub Actions** — `build-release.yml` | Auto-create GitHub Release when firmware-input changes reach `main` | `.github/workflows/build-release.yml` |
 | **GitHub Actions** — `tests.yml` | Host-side unit tests (Unity + ASan/UBSan) on push/pull request events for matching paths | `.github/workflows/tests.yml` |
 | **GitHub Actions** — `static-analysis.yml` | Cppcheck + MISRA analysis (on-demand) | `.github/workflows/static-analysis.yml` |
 | **GitHub Actions** — `docs.yml` | Auto-deploy Doxygen API docs to GitHub Pages | `.github/workflows/docs.yml` |

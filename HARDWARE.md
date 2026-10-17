@@ -28,7 +28,7 @@ See that directory's README for the file inventory and revision date.
 
 | Peripheral | Interface | Notes |
 |------------|-----------|-------|
-| ESP32 WiFi/BT module | SPI AT | Runtime only; UART used for flashing |
+| ESP32 WiFi/BT module | SPI | CD3 uses binary `M1_RPC`; CD3-AT uses SPI AT. UART is used for flashing. |
 | Si4463 Sub-GHz | SPI | Antenna switch GPIO lines |
 | 125 kHz LF-RFID subsystem | GPIO/SPI | Separate NFC board; read + emulate |
 | 13.56 MHz NFC/HF-RFID | SPI | IC identity unconfirmed from available sheets |
