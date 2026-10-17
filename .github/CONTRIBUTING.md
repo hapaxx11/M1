@@ -4,20 +4,20 @@
 
 Thank you for your interest in contributing to our M1 project! This document provides guidelines and processes for contributing to the project.
 
-Hapax is the **only M1 firmware fork built around a GitHub-first workflow**.  All
-development — code, builds, releases, testing, and documentation — happens on
-GitHub.  There are no private build servers, no Discord-only binary drops, and no
-manual compilation steps required to get a release.  When you contribute, your
-changes flow through the same CI/CD pipeline that produces every release:
+Hapax uses a GitHub-first workflow for development, builds, releases, testing,
+and documentation. There are no private build servers or manual compilation
+steps required to produce a release. Contributions use the same CI/CD pipeline:
 
-- **Pull requests** are automatically built and tested by GitHub Actions.
-- **Merges to `main`** trigger an auto-release with versioned firmware artifacts
-  published to [GitHub Releases](https://github.com/hapaxx11/M1/releases).
+- **Pull requests** that change firmware inputs are built by GitHub Actions;
+  matching source and test changes run the host-side test workflow.
+- **Firmware-input changes merged to `main`** trigger an auto-release with
+  versioned firmware artifacts published to
+  [GitHub Releases](https://github.com/hapaxx11/M1/releases).
 - The **[Web Updater](https://hapaxx11.github.io/M1/)** on GitHub Pages lets
   anyone flash the latest release from a browser — no toolchain needed.
 
-This means your contribution is available to every M1 user within minutes of
-merging, with zero manual intervention.
+Firmware contributions are published automatically after a qualifying merge.
+Documentation-only changes do not trigger a firmware build or release.
 
 ## Table of Contents
 - [Code of Conduct](#code-of-conduct)
@@ -197,9 +197,9 @@ Before writing new code, review these project-specific standards:
 ## Additional Resources
 
 - [STM32 HAL Documentation](https://www.st.com/en/embedded-software/stm32cube-mcu-mpu-packages.html)
-- [M1 Documentation](documentation/)
+- [M1 Documentation](../documentation/)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
-- [License](LICENSE)
+- [License](../COPYING.txt)
 - [Security Policy](SECURITY.md)
 
 ## Questions?

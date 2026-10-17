@@ -37,8 +37,8 @@ python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin \
 
 Replace `<VERSION>` with the version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
 The `--hapax-revision` flag is **mandatory** — without it, the dual-boot bank screen
-will not show the Hapax revision or build date. CI auto-increments the revision on each
-merge.
+will not show the Hapax revision or build date. CI auto-increments the revision for
+firmware releases; docs-only and other excluded changes do not create a release.
 
 See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord setup.
 
@@ -380,16 +380,14 @@ Conventional Commits format used in this repository.
 
 ## CI/CD
 
-Hapax is the **only M1 firmware fork with a GitHub-first CI/CD pipeline**.  Other
-forks rely on manual local builds and ad-hoc binary distribution.  Hapax treats
-GitHub Actions as the authoritative build system:
+Hapax uses GitHub Actions as its authoritative CI/CD system:
 
-- Pull requests targeting `main` trigger the **firmware build check** (`ci.yml`),
-  while the **unit test run** (`tests.yml`) executes when its own workflow
-  triggers and path filters match.
-- Merges/pushes to `main` trigger **release builds** that auto-create a GitHub
-  Release with firmware artifacts (`build-release.yml`) — no manual compilation
-  or upload required.
+- Pull requests targeting `main` run the **firmware build check** (`ci.yml`)
+  when firmware-input path filters match. The **unit test run** (`tests.yml`)
+  has its own source/test path filters.
+- Firmware-input changes pushed or merged to `main` trigger a **release build**
+  and GitHub Release with firmware artifacts (`build-release.yml`); docs-only
+  and other excluded changes do not.
 - **Doxygen API documentation** is auto-deployed to GitHub Pages (`docs.yml`)
   when its workflow runs for matching changes.
 - **Static analysis** (cppcheck, MISRA-C) is available on-demand via

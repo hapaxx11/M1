@@ -34,7 +34,8 @@ Directory Structure
   ├── LED/                     LED lighting remotes (from IRDB)
   └── Streaming/               Streaming device remotes (from IRDB)
 
-Total: 1,412 IR files (116 M1 originals + 1,296 from Flipper-IRDB)
+Total: 1,435 IR files. Top-level category files are M1 originals; nested brand
+directories contain Flipper-IRDB files. See SOURCES.md for attribution.
 
 Sources
 -------

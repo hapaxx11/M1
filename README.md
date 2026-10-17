@@ -53,7 +53,7 @@ project discussion, and related project resources:
 
 | Feature | Monstatek Stock (v0.8.1.0) | Hapax |
 |---------|---------------------------|-------|
-| Sub-GHz protocols | ~20 | **105** |
+| Sub-GHz protocols | ~20 | **130** |
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
@@ -66,12 +66,12 @@ project discussion, and related project resources:
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
 | WiFi sniffers, attacks, recon & net scan (ESP32 required) | ✗ | ✓ (27 tools) |
 | BLE sniffers, wardrive, spam & detectors (ESP32 required) | ✗ | ✓ (20 tools) |
-| IR remote database | Separate download (`INFRARED/db/`, IR Database v1) | **1,412** files included |
+| IR remote database | Separate download (`INFRARED/db/`, IR Database v1) | **1,435** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
 | Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
 | Browser SD card population (no reader needed) | ✗ | ✓ (Hapax original) |
-| CI/CD auto-releases | ✗ | ✓ (GitHub Actions, every merge to main) |
+| CI/CD auto-releases | ✗ | ✓ (GitHub Actions, firmware-input changes merged to main) |
 | Automated unit tests | ✗ | ✓ (GitHub Actions, Unity + ASan/UBSan) |
 | Static analysis (cppcheck) | ✗ | ✓ (GitHub Actions, on-demand) |
 | Auto-deployed API docs | ✗ | ✓ (Doxygen → GitHub Pages) |
@@ -85,7 +85,7 @@ project discussion, and related project resources:
 - Furi compatibility layer for near-direct protocol porting from Flipper
 
 ### Sub-GHz Enhancements
-- **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
+- **130 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
 - **Restaurant Pager app** — receive Princeton/SMC5326 restaurant pages; edit TD157/TD165/TD174 plus experimental L8R/L8S layouts; replay one pager or explicitly confirmed batches; save named stations by category; and configure pager limits and TX repeats. Uses the onboard SI4463.
 - **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
@@ -223,9 +223,9 @@ project discussion, and related project resources:
 
 ### IR Remote Database
 
-The [`ir_database/`](ir_database/) directory contains **1,412** infrared remote files for popular devices.
+The [`ir_database/`](ir_database/) directory contains **1,435** infrared remote files for popular devices.
 
-**Categories:** TV (413), AC (238), Audio — receivers, soundbars & speakers (292), Fan (155), Projector (122), LED lighting (167), Streaming devices (25).
+**Categories:** TV (421), AC (238), Audio — receivers, soundbars & speakers (294), Fan (158), Projector (127), LED lighting (169), Streaming devices (25), Blu-ray (2), Monitor (1).
 
 Top-level files per category are M1-curated "universal" remotes (tested on hardware). Brand subdirectories contain model-specific files imported from the [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB) community database (CC0 license). See [`ir_database/SOURCES.md`](ir_database/SOURCES.md) for full attribution.
 
@@ -313,7 +313,7 @@ Hapax runs automated quality checks through GitHub Actions:
 |------|-------------|-------|------|
 | **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
 | **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
-| **Unity + ASan/UBSan** | `tests.yml` | 177 test files, 5,000+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
+| **Unity + ASan/UBSan** | `tests.yml` | 202 C test files, 3,600+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
 | **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
 ## Flashing
@@ -377,24 +377,25 @@ Connect to the GPIO header (pins 1-18):
 
 1. **Connect ST-Link** to GPIO pins
 2. **Connect USB** for power and serial console
-3. **Open serial terminal** (PuTTY/Tera Term) at **9600 baud** - keep open for logs
-4. **Build firmware:**
+3. **Open a serial terminal** at **115200 baud** to view logs
+4. **Build firmware** from the repository root:
    ```bash
-   ./build
+   ./build.sh
    ```
+   The script places firmware artifacts in `artifacts/`.
 5. **Flash with STM32CubeProgrammer:**
-    - Click **"Connect"**
-    - Click **"Open File"** → Select `distribution/M1_v*.hex`
-    - Click **"Program"**
+   - Click **"Connect"**
+   - Click **"Open File"** → Select `artifacts/M1_Hapax_v*.hex`
+   - Click **"Program"**
 6. **Reset via ST-Link:**
    - Click **"Reset"** button in STM32CubeProgrammer
-   - **OR** use CLI command `reboot` in serial terminal
+   - **OR** reset the device using its reset control
 
 **Pro tip:** Keep the serial terminal open during testing to see debug messages in real-time.
 
 If the device does not boot after programming:
 - Use **Under Reset + Hardware reset** connect mode in STM32CubeProgrammer.
-- If PC reads near `0xFFFFFFFE`, the mapped boot vector is invalid (often from flashing an image that does not match post-build CRC metadata). Rebuild with `./build clean` and reflash `distribution/M1_v*.hex`.
+- If PC reads near `0xFFFFFFFE`, the mapped boot vector is invalid (often from flashing an image that does not match post-build CRC metadata). Rebuild with `./build.sh` and reflash the matching HEX from `artifacts/`.
 
 ## Entering DFU Mode (Hardware Strap)
 
