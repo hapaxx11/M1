@@ -17,6 +17,7 @@
 #include "subghz_proto_pirate.h"
 #include "subghz_kia_v6_encoder.h"
 #include "subghz_protopirate_keys_builtin.h"
+#include "subghz_vag_encoder.h"
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -491,6 +492,68 @@ void test_kia_v6_encode_matches_upload_builder(void)
     }
 }
 
+/* ===================================================================
+ * VAG (type 2 = TEA, keystore-free path) — params → encode → pairs must
+ * equal the merged-pair form of the upload builder's waveform.
+ * =================================================================== */
+
+void test_vag_encode_matches_upload_builder(void)
+{
+    const uint32_t serial = 0x12345678u;
+    const uint32_t cnt = 0x005634u;
+    const uint64_t orig_key1 = 0xC0AABBCCDDEEFF00ULL;
+
+    SubGhzKeyParams params = make_params("VAG", orig_key1, 96);
+    params.btn = 1;                       /* unlock */
+    params.cnt = cnt;
+    params.extra[8]  = (uint8_t)(serial >> 24);
+    params.extra[9]  = (uint8_t)(serial >> 16);
+    params.extra[10] = (uint8_t)(serial >> 8);
+    params.extra[11] = (uint8_t)serial;
+    params.extra[12] = 2u;                /* type 2 (TEA) */
+    params.extra[13] = 0xFFu;             /* key auto (unused for type 2) */
+
+    SubGhzRawPair pairs[400];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, pairs, 400, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    /* Counter auto-advances per encode (reference behaviour). */
+    uint64_t key1 = 0;
+    uint16_t key2 = 0;
+    TEST_ASSERT_TRUE(subghz_vag_encrypt_frame(
+        serial, (cnt + 1u) & 0xFFFFFFu, 1u, 2u, 0xC0u, 0xFFu,
+        orig_key1, 0, NULL, false, &key1, &key2));
+
+    static subghz_upload_entry_t up[VAG_ENC_UPLOAD_T12];
+    const uint32_t n =
+        subghz_vag_build_upload(up, VAG_ENC_UPLOAD_T12, 2u, key1, key2);
+    TEST_ASSERT_EQUAL_UINT32(VAG_ENC_UPLOAD_T12, n);
+
+    /* Rebuild merged durations from the upload and compare with pairs. */
+    uint32_t merged[VAG_ENC_UPLOAD_T12];
+    uint32_t nm = 0;
+    for (uint32_t i = 0; i < n; i++)
+    {
+        if (nm > 0 && (merged[nm - 1] & 0x80000000u) ==
+                          (up[i].level ? 0x80000000u : 0u))
+            merged[nm - 1] += up[i].duration;
+        else
+            merged[nm++] = up[i].duration |
+                           (up[i].level ? 0x80000000u : 0u);
+    }
+    TEST_ASSERT_EQUAL_UINT32(0u, nm % 2u);
+    TEST_ASSERT_EQUAL_UINT32(nm / 2u, npairs);
+    for (uint32_t i = 0; i < npairs; i++)
+    {
+        TEST_ASSERT_TRUE(merged[2 * i] & 0x80000000u);
+        TEST_ASSERT_FALSE(merged[2 * i + 1] & 0x80000000u);
+        TEST_ASSERT_EQUAL_UINT32(merged[2 * i] & 0x7FFFFFFFu,
+                                 pairs[i].high_us);
+        TEST_ASSERT_EQUAL_UINT32(merged[2 * i + 1] & 0x7FFFFFFFu,
+                                 pairs[i].low_us);
+    }
+}
+
 int main(void)
 {    UNITY_BEGIN();
 
@@ -517,6 +580,7 @@ int main(void)
 
     RUN_TEST(test_kia_v6_encode_matches_upload_builder);
     RUN_TEST(test_kia_v6_required_pairs);
+    RUN_TEST(test_vag_encode_matches_upload_builder);
 
     RUN_TEST(test_ford_v0_encode_nonzero);
     RUN_TEST(test_mazda_v0_encode_nonzero);

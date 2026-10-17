@@ -15,5 +15,6 @@ typedef struct {
 
 bool m1_aut64_unpack(m1_aut64_key_t *key, const uint8_t packed[16]);
 void m1_aut64_decrypt(const m1_aut64_key_t *key, uint8_t block[8]);
+void m1_aut64_encrypt(const m1_aut64_key_t *key, uint8_t block[8]);
 
 #endif

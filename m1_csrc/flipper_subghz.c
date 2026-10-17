@@ -1018,6 +1018,95 @@ bool flipper_subghz_save_psa_recovered(const char *path,
 
 /*============================================================================*/
 /**
+ * @brief  Save a VAG capture with the ProtoPirate field set needed to
+ *         re-encrypt frames for TX (Sub_Ghz/subghz_vag_encoder.c): Key (the
+ *         logical Key1, whose top byte is the manufacturer tag), `Key2:`
+ *         (note: not `Key_2:` — upstream VAG uses the no-underscore name),
+ *         plus Serial/Btn/Cnt/Type.
+ */
+bool flipper_subghz_save_vag(const char *path,
+                              uint32_t    frequency,
+                              const char *preset,
+                              uint32_t    bit_count,
+                              uint64_t    key1,
+                              uint16_t    key2,
+                              uint32_t    te,
+                              uint32_t    serial,
+                              uint8_t     button,
+                              uint32_t    counter,
+                              uint8_t     type)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char buf[40];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != ' ')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Protocol", "VAG");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(buf, sizeof(buf),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key1 >> 56) & 0xFF),
+		         (unsigned int)((key1 >> 48) & 0xFF),
+		         (unsigned int)((key1 >> 40) & 0xFF),
+		         (unsigned int)((key1 >> 32) & 0xFF),
+		         (unsigned int)((key1 >> 24) & 0xFF),
+		         (unsigned int)((key1 >> 16) & 0xFF),
+		         (unsigned int)((key1 >>  8) & 0xFF),
+		         (unsigned int)( key1        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", buf);
+	}
+
+	if (result)
+	{
+		snprintf(buf, sizeof(buf), "%02X %02X",
+		         (unsigned int)((key2 >> 8) & 0xFF),
+		         (unsigned int)( key2       & 0xFF));
+		result = ff_write_kv_str(&ff, "Key2", buf);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Serial", serial);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Btn", button);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Cnt", counter);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Type", type);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
  * @brief  Save a Kia V6 capture with the fields needed to re-encrypt frames
  *         for TX (subghz_kia_v6_encoder.c): Key (serial<<32|counter per the
  *         decoder layout) plus Btn and Fx.

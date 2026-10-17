@@ -1623,6 +1623,30 @@ void test_save_kia_v6_writes_tx_fields(void)
 	remove(path);
 }
 
+void test_save_vag_writes_tx_fields(void)
+{
+	const char *path = "/tmp/test_vag.sub";
+	bool ok = flipper_subghz_save_vag(
+	    path, 434420000, "FuriHalSubGhzPresetOok650Async",
+	    96, 0xC0AABBCCDDEEFF00ULL, 0x4E2Au, 300,
+	    0x12345678u, 2u, 0x005634u, 1u);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[640];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: VAG"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 96"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: C0 AA BB CC DD EE FF 00"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key2: 4E 2A"));   /* upstream name */
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 300"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 22068"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Type: 1"));
+
+	remove(path);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1743,6 +1767,9 @@ int main(void)
 
 	/* Kia V6 capture save with TX fields */
 	RUN_TEST(test_save_kia_v6_writes_tx_fields);
+
+	/* VAG capture save with TX fields */
+	RUN_TEST(test_save_vag_writes_tx_fields);
 
 	return UNITY_END();
 }

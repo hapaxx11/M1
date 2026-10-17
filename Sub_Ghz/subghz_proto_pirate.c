@@ -24,6 +24,7 @@
 #include "subghz_manchester_encoder.h"
 #include "subghz_keeloq.h"
 #include "subghz_kia_v6_encoder.h"
+#include "subghz_vag_encoder.h"
 #include "subghz_protopirate_keys_builtin.h"
 #include "subghz_blocks_math.h"
 #include <string.h>
@@ -59,6 +60,7 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
 
     /* --- Keystore-gated (AES) --- */
     [SubGhzProtoPirate_KiaV6]       = { SubGhzProtoPirate_KiaV6,       "Kia V6",        200,  400, 144, true  },
+    [SubGhzProtoPirate_VAG]         = { SubGhzProtoPirate_VAG,         "VAG",           300,  600, 96, true  },
 };
 
 const uint8_t subghz_proto_pirate_catalog_count =
@@ -2612,6 +2614,80 @@ static uint32_t encode_kia_v7_wrapper(const SubGhzKeyParams *params,
 #define KIA_V6_MAX_PAIRS_PER_BURST  (KIA_V6_ENC_UPLOAD_SIZE / 2u)
 
 /**
+ * Merge an upload (level, duration) stream into (high, low) pairs and emit
+ * @p repetitions bursts.  The merged stream must strictly alternate and start
+ * with a mark (true for all ProtoPirate uploads built by this module).
+ */
+static uint32_t upload_to_pairs(const subghz_upload_entry_t *up, uint32_t n,
+                                SubGhzRawPair *out, uint32_t max_pairs,
+                                uint8_t reps)
+{
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++)
+    {
+        bool pending_valid = false;
+        bool pending_level = false;
+        uint32_t pending_dur = 0;
+        bool pair_open = false;
+
+        for (uint32_t i = 0; i < n; i++)
+        {
+            if (!pending_valid)
+            {
+                pending_valid = true;
+                pending_level = up[i].level;
+                pending_dur = up[i].duration;
+                continue;
+            }
+            if (up[i].level == pending_level)
+            {
+                pending_dur += up[i].duration;
+                continue;
+            }
+
+            if (pending_level)
+            {
+                if (idx >= max_pairs)
+                    return 0;
+                out[idx].high_us = pending_dur;
+                pair_open = true;
+            }
+            else
+            {
+                if (!pair_open)   /* cannot start a pair on a space */
+                    return 0;
+                out[idx].low_us = pending_dur;
+                idx++;
+                pair_open = false;
+            }
+            pending_level = up[i].level;
+            pending_dur = up[i].duration;
+        }
+
+        /* Trailing run: ProtoPirate bursts end on a low separator/gap. */
+        if (pending_valid)
+        {
+            if (pending_level)
+            {
+                if (idx >= max_pairs)
+                    return 0;
+                out[idx].high_us = pending_dur;
+                out[idx].low_us = 0;
+                idx++;
+            }
+            else
+            {
+                if (!pair_open)
+                    return 0;
+                out[idx].low_us = pending_dur;
+                idx++;
+            }
+        }
+    }
+    return idx;
+}
+
+/**
  * Kia V6 encoder: AES-128-encrypted rolling code.
  *
  * Field sources (saved captures): serial = key_value >> 32 (decoder layout),
@@ -2652,84 +2728,68 @@ static uint32_t encode_kia_v6(const SubGhzKeyParams *params,
         return 0;
     }
 
-    /* Merge same-level runs and emit (high, low) pairs.  The merged stream
-     * strictly alternates, starts with a mark and ends with the low
-     * separator, so pairs always open high and close low. */
-    uint32_t idx = 0;
-    for (uint8_t r = 0; r < reps; r++)
+    const uint32_t idx = upload_to_pairs(up, n, out, max_pairs, reps);
+    free(up);
+    return idx;
+}
+
+/*============================================================================*/
+/* VAG (AUT64/TEA, injected keystore)                                           */
+/*============================================================================*/
+
+/** Merged pairs per VAG burst, worst case: 635 entries (types 1/2) → 318. */
+#define VAG_MAX_PAIRS_PER_BURST  ((VAG_ENC_UPLOAD_T12 + 1u) / 2u)
+
+/**
+ * VAG encoder: AUT64 (types 1/3/4, keystore-gated) or fixed-schedule TEA
+ * (type 2).  Field sources: Key value = logical Key1 (its top byte is the
+ * manufacturer tag), Serial from extra[8..11], Cnt from params->cnt
+ * (auto-incremented per encode, reference behaviour), Btn from params->btn,
+ * Type from extra[12], KeyIdx from extra[13] (0xFF = auto-detect), original
+ * Key2 tail from extra[14..15].
+ */
+static uint32_t encode_vag(const SubGhzKeyParams *params,
+                            SubGhzRawPair *out,
+                            uint32_t max_pairs,
+                            uint8_t reps)
+{
+    const uint32_t serial = ((uint32_t)params->extra[8] << 24) |
+                            ((uint32_t)params->extra[9] << 16) |
+                            ((uint32_t)params->extra[10] << 8) |
+                            params->extra[11];
+    const uint8_t type = params->extra[12];
+    const uint8_t key_idx = params->extra[13];
+    const uint16_t orig_key2 = (uint16_t)(((uint16_t)params->extra[14] << 8) |
+                                          params->extra[15]);
+    const uint8_t type_byte = (uint8_t)(params->key_value >> 56);
+
+    /* Reference behaviour: the rolling counter advances on every TX. */
+    const uint32_t cnt = (params->cnt + 1u) & 0xFFFFFFu;
+
+    uint64_t key1 = 0;
+    uint16_t key2 = 0;
+    if (!subghz_vag_encrypt_frame(serial, cnt, (uint8_t)(params->btn & 0xFu),
+                                  type, type_byte, key_idx,
+                                  params->key_value, orig_key2,
+                                  m1_vag_aut64_keys_builtin,
+                                  m1_vag_aut64_keys_builtin_available,
+                                  &key1, &key2))
+        return 0;
+
+    const uint32_t cap = (type == 3u || type == 4u) ? VAG_ENC_UPLOAD_T34
+                                                    : VAG_ENC_UPLOAD_T12;
+    subghz_upload_entry_t *up = malloc(cap * sizeof(*up));
+    if (up == NULL)
+        return 0;
+
+    const uint32_t n = subghz_vag_build_upload(up, cap, type, key1, key2);
+    if (n == 0)
     {
-        bool pending_valid = false;
-        bool pending_level = false;
-        uint32_t pending_dur = 0;
-        bool pair_open = false;
-
-        for (uint32_t i = 0; i < n; i++)
-        {
-            if (!pending_valid)
-            {
-                pending_valid = true;
-                pending_level = up[i].level;
-                pending_dur = up[i].duration;
-                continue;
-            }
-            if (up[i].level == pending_level)
-            {
-                pending_dur += up[i].duration;
-                continue;
-            }
-
-            if (pending_level)
-            {
-                if (idx >= max_pairs)
-                {
-                    free(up);
-                    return 0;
-                }
-                out[idx].high_us = pending_dur;
-                pair_open = true;
-            }
-            else
-            {
-                if (!pair_open)   /* cannot start a pair on a space */
-                {
-                    free(up);
-                    return 0;
-                }
-                out[idx].low_us = pending_dur;
-                idx++;
-                pair_open = false;
-            }
-            pending_level = up[i].level;
-            pending_dur = up[i].duration;
-        }
-
-        /* Trailing run: the burst ends on the low separator. */
-        if (pending_valid)
-        {
-            if (pending_level)
-            {
-                if (idx >= max_pairs)
-                {
-                    free(up);
-                    return 0;
-                }
-                out[idx].high_us = pending_dur;
-                out[idx].low_us = 0;
-                idx++;
-            }
-            else
-            {
-                if (!pair_open)
-                {
-                    free(up);
-                    return 0;
-                }
-                out[idx].low_us = pending_dur;
-                idx++;
-            }
-        }
+        free(up);
+        return 0;
     }
 
+    const uint32_t idx = upload_to_pairs(up, n, out, max_pairs, reps);
     free(up);
     return idx;
 }
@@ -2758,6 +2818,7 @@ static const ProtoPirateEncodeFn encode_table[SubGhzProtoPirate_Count] = {
     [SubGhzProtoPirate_KiaV5]       = encode_kia_v5,
     [SubGhzProtoPirate_FiatV1]      = encode_fiat_v1,
     [SubGhzProtoPirate_KiaV6]       = encode_kia_v6,
+    [SubGhzProtoPirate_VAG]         = encode_vag,
 };
 
 static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
@@ -2820,6 +2881,8 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
         return (1 + FIAT_V1_WIRE_BITS + 1) * reps;
     case SubGhzProtoPirate_KiaV6:
         return KIA_V6_MAX_PAIRS_PER_BURST * reps;
+    case SubGhzProtoPirate_VAG:
+        return VAG_MAX_PAIRS_PER_BURST * reps;
     default:
         return 0;
     }

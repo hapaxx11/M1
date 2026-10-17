@@ -2047,6 +2047,13 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	 * Fx byte.  Zero when the file omits them. */
 	uint32_t key_btn = 0;
 	uint32_t key_fx = 0;
+	/* Optional ProtoPirate VAG TX fields: serial / rolling counter / frame
+	 * type / AUT64 key index / original Key2 tail. */
+	uint32_t key_serial = 0;
+	uint32_t key_cnt = 0;
+	uint32_t key_type = 0;
+	uint32_t key_keyidx = 0xFFu;
+	uint32_t key2_tail = 0;
 	/* Optional `CounterMode:` field on KeeLoq-family
 	 * .sub files.  Defaults to INCREMENT for files that omit the
 	 * field (matches the parse behaviour in flipper_subghz_load). */
@@ -2281,6 +2288,37 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			/* ProtoPirate Fx field (Kia V6 TX). */
 			key_fx = (uint32_t)strtoul(line_buf + 3, NULL, 10);
 		}
+		else if (strncmp(line_buf, "Serial:", 7) == 0)
+		{
+			/* ProtoPirate serial field (VAG TX). */
+			key_serial = (uint32_t)strtoul(line_buf + 7, NULL, 10);
+		}
+		else if (strncmp(line_buf, "Cnt:", 4) == 0)
+		{
+			/* ProtoPirate rolling-counter field (VAG TX). */
+			key_cnt = (uint32_t)strtoul(line_buf + 4, NULL, 10);
+		}
+		else if (strncmp(line_buf, "Type:", 5) == 0)
+		{
+			/* ProtoPirate frame-type field (VAG TX). */
+			key_type = (uint32_t)strtoul(line_buf + 5, NULL, 10);
+		}
+		else if (strncmp(line_buf, "KeyIdx:", 7) == 0)
+		{
+			/* ProtoPirate AUT64 key index (VAG TX). */
+			key_keyidx = (uint32_t)strtoul(line_buf + 7, NULL, 10);
+		}
+		else if (strncmp(line_buf, "Key2:", 5) == 0)
+		{
+			/* ProtoPirate VAG second key word (no underscore — distinct
+			 * from the PSA/Renault "Key_2:" field), 2 hex bytes. */
+			char *end = NULL;
+			const unsigned long hi = strtoul(line_buf + 5, &end, 16);
+			unsigned long lo = 0;
+			if (end != NULL && *end != '\0')
+				lo = strtoul(end, NULL, 16);
+			key2_tail = (uint32_t)(((hi & 0xFFu) << 8) | (lo & 0xFFu));
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -2358,7 +2396,17 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		key_params.bit_count = key_bit_count;
 		key_params.te        = key_te;
 		key_params.btn       = key_btn;
+		key_params.cnt       = key_cnt;
 		key_params.extra[0]  = (uint8_t)(key_fx & 0xFFu);
+		/* VAG: serial (BE), frame type, AUT64 key index, original Key2. */
+		key_params.extra[8]  = (uint8_t)(key_serial >> 24);
+		key_params.extra[9]  = (uint8_t)(key_serial >> 16);
+		key_params.extra[10] = (uint8_t)(key_serial >> 8);
+		key_params.extra[11] = (uint8_t)(key_serial);
+		key_params.extra[12] = (uint8_t)(key_type & 0xFFu);
+		key_params.extra[13] = (uint8_t)(key_keyidx & 0xFFu);
+		key_params.extra[14] = (uint8_t)(key2_tail >> 8);
+		key_params.extra[15] = (uint8_t)(key2_tail & 0xFFu);
 
 		uint32_t npairs = 0;
 		SubGhzRawPair *pairs = NULL;

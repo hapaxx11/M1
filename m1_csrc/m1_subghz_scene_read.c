@@ -148,7 +148,15 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
     const uint32_t k2 = subghz_capture_key2_value(&entry->info);
 
     bool saved;
-    if (entry->info.protocol == (uint16_t)KIA_V6 && fmt != 1)
+    if (entry->info.protocol == (uint16_t)VAG && fmt != 1)
+        saved = flipper_subghz_save_vag(path,
+            entry->frequency, "FuriHalSubGhzPresetOok650Async",
+            entry->info.bit_len, entry->info.key,
+            (uint16_t)(entry->info.key2 & 0xFFFFu), entry->info.te,
+            entry->info.serial_number, entry->info.button_id,
+            entry->info.rolling_code,
+            (uint8_t)((entry->info.key2 >> 16) & 0xFFu));
+    else if (entry->info.protocol == (uint16_t)KIA_V6 && fmt != 1)
         saved = flipper_subghz_save_kia_v6(path,
             entry->frequency, "FuriHalSubGhzPresetOok650Async",
             entry->info.bit_len, entry->info.key, entry->info.te,

@@ -57,8 +57,9 @@ typedef enum {
     SubGhzProtoPirate_KiaV5,
     SubGhzProtoPirate_FiatV1,
 
-    /* --- Keystore-gated (AES) --- */
+    /* --- Keystore-gated (AES / AUT64) --- */
     SubGhzProtoPirate_KiaV6,
+    SubGhzProtoPirate_VAG,
 
     SubGhzProtoPirate_Count,
     SubGhzProtoPirate_Unknown = -1,

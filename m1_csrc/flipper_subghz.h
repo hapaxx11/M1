@@ -217,6 +217,24 @@ bool flipper_subghz_save_kia_v6(const char *path,
                                  uint8_t     fx);
 
 /*
+ * Save a VAG capture with the ProtoPirate field set needed to re-encrypt
+ * frames for TX (Sub_Ghz/subghz_vag_encoder.c): Key (logical Key1; its top
+ * byte is the manufacturer tag), `Key2:` (note: no underscore — the upstream
+ * VAG field name), plus Serial/Btn/Cnt/Type.
+ */
+bool flipper_subghz_save_vag(const char *path,
+                              uint32_t    frequency,
+                              const char *preset,
+                              uint32_t    bit_count,
+                              uint64_t    key1,
+                              uint16_t    key2,
+                              uint32_t    te,
+                              uint32_t    serial,
+                              uint8_t     button,
+                              uint32_t    counter,
+                              uint8_t     type);
+
+/*
  * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from
