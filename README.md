@@ -86,14 +86,14 @@ project discussion, and related project resources:
 
 ### Sub-GHz Enhancements
 - **130 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
-- **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
 - **Restaurant Pager app** — receive Princeton/SMC5326 restaurant pages; edit TD157/TD165/TD174 plus experimental L8R/L8S layouts; replay one pager or explicitly confirmed batches; save named stations by category; and configure pager limits and TX repeats. Uses the onboard SI4463.
+- **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
+- **Weather Station** — non-blocking receiver with automatic OOK/FSK scanning, sensor history and readings, and frequency configuration; decodes Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
 - **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
 - **Frequency Scanner** — sweep and find active frequencies above threshold
 - **Signal Identifier (RF Rosetta)** — passive signal identification: fingerprints captured signals by physical characteristics (band, modulation, timing, repetition) and scores against a protocol database with security metadata; works on both sub-GHz and 2.4 GHz domains (BLE/WiFi/802.15.4 via ESP32-C6)
-- **Weather Station** — non-blocking receiver with automatic OOK/FSK scanning, sensor history and readings, and frequency configuration; decodes Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
 - **Fixed-Code Brute Force** — sequentially transmit candidate codes for fixed-code protocols (Princeton, CAME, Nice FLO, Linear, Holtek, Security+ 1.0 counter)
 - **Playlist Player** — load `.txt` playlist files from `SubGHz/playlist/` and transmit each `.sub` file sequentially; supports repeat count, progress display, and Flipper path remapping
 - **Proto Pirate** — rolling-code analysis toolkit: live capture, offline `.sub` decode, timing analysis, and protocol-specific key recovery from saved captures (PSA TEA / Renault V1); separate from fixed-code code-space transmission above
