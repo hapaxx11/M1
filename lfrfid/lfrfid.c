@@ -300,13 +300,13 @@ void lfrfid_Init(void)
 /*============================================================================*/
 void lfrfid_DeInit(void)
 {
-	lfrfid_tpms_activation_cleanup();
-
 	if(lfrfid_task_hdl)
 	{
 		vTaskDelete(lfrfid_task_hdl);
 		lfrfid_task_hdl = NULL;
 	}
+
+	lfrfid_tpms_activation_cleanup();
 
 	if(lfrfid_q_hdl)
 	{
