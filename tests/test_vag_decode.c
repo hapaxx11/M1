@@ -181,6 +181,9 @@ void test_decode_waveform(void)
     TEST_ASSERT_EQUAL_HEX8(VAG_BTN_LOCK, subghz_decenc_ctl.n8_buttonid);
     TEST_ASSERT_EQUAL_HEX64(TEST_KEY1, subghz_decenc_ctl.n64_decodedvalue);
     TEST_ASSERT_EQUAL_HEX32(0xAABBCCDDu, subghz_decenc_ctl.n32_serialnumber);
+    /* Key2 (logical) + frame type are surfaced for the TX save path. */
+    TEST_ASSERT_EQUAL_HEX32((uint32_t)TEST_KEY2 | (1u << 16),
+                            subghz_decenc_ctl.n32_key2);
 }
 
 void test_decode_rejects_noise(void)

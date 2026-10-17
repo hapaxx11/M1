@@ -148,3 +148,47 @@ void m1_aut64_decrypt(const m1_aut64_key_t *key, uint8_t block[8])
         permute_bytes(key, block);
     }
 }
+
+/*============================================================================*/
+/* Encryption (ported from the reference's aut64.c encrypt side)             */
+/*============================================================================*/
+
+/* Forward compression: the inverse of decrypt_compress — with
+ * c = gf16_mul(K, orig) ^ rk, decrypt recovers
+ * orig = gf16_mul(gf16_inverse(K), c ^ rk). */
+static uint8_t encrypt_compress(const m1_aut64_key_t *key,
+                                const uint8_t state[8], uint8_t round)
+{
+    const uint8_t rk = round_key(key, state, round);
+    const uint8_t high = (uint8_t)(gf16_mul(key->key[table_un[round][7]],
+                                            (uint8_t)(state[7] >> 4)) ^
+                                   (rk >> 4));
+    const uint8_t low = (uint8_t)(gf16_mul(key->key[table_ln[round][7]],
+                                           (uint8_t)(state[7] & 0x0Fu)) ^
+                                  (rk & 0x0Fu));
+    return (uint8_t)((high << 4) | low);
+}
+
+void m1_aut64_encrypt(const m1_aut64_key_t *key, uint8_t block[8])
+{
+    if (key == NULL || block == NULL)
+        return;
+
+    /* Encryption runs the same primitives with the reversed (inverse)
+     * pbox/sbox, in forward round order. */
+    m1_aut64_key_t rev;
+    rev.index = key->index;
+    memcpy(rev.key, key->key, sizeof(rev.key));
+    for (uint8_t i = 0; i < 8u; i++)
+        rev.pbox[key->pbox[i]] = i;
+    for (uint8_t i = 0; i < 16u; i++)
+        rev.sbox[key->sbox[i]] = i;
+
+    for (uint8_t round = 0; round < 12u; round++) {
+        permute_bytes(&rev, block);
+        block[7] = encrypt_compress(&rev, block, round);
+        block[7] = substitute(&rev, block[7]);
+        block[7] = permute_bits(&rev, block[7]);
+        block[7] = substitute(&rev, block[7]);
+    }
+}

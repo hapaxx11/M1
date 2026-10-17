@@ -257,6 +257,10 @@ static bool vag_try_window(const uint8_t *cells, uint16_t cell_count,
         subghz_decenc_ctl.n32_rollingcode = 0;
     }
     subghz_decenc_ctl.n64_decodedvalue  = key1;
+    /* Key2 (logical, 16-bit) + frame type ride the aux slot so the save path
+     * can persist them (both are required to re-encrypt frames for TX). */
+    subghz_decenc_ctl.n32_key2          = ((uint32_t)(uint16_t)(~key2_raw)) |
+                                          ((uint32_t)type << 16);
     subghz_decenc_ctl.n8_buttonid       = button;
     subghz_decenc_ctl.ndecodedbitlength = (uint16_t)VAG_WIRE_BITS;
     subghz_decenc_ctl.ndecodeddelay     = 0;

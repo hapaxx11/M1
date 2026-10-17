@@ -148,6 +148,8 @@ void test_decoder_decodes_manchester_waveform(void)
     TEST_ASSERT_EQUAL_HEX32(0x123456u, subghz_decenc_ctl.n32_serialnumber);
     TEST_ASSERT_EQUAL_HEX32(0x01020304u, subghz_decenc_ctl.n32_rollingcode);
     TEST_ASSERT_EQUAL_HEX8(2u, subghz_decenc_ctl.n8_buttonid);
+    /* Fx rides the aux Key_2 slot so the save path can persist it. */
+    TEST_ASSERT_EQUAL_HEX32(0x34u, subghz_decenc_ctl.n32_key2);
 }
 
 void test_decoder_accepts_321_pulse_kia_frame(void)

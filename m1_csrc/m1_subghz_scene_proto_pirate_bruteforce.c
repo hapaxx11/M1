@@ -18,9 +18,10 @@
  *      BACK cancels.
  *   3. On FOUND the recovered material is shown and OK saves a
  *      `<name>_recovered.sub` copy patched with the recovered fields.
- *      For Renault V1 the seed additionally unlocks TX: RIGHT synthesizes a
- *      fresh frame with an incremented counter (subghz_renault_v1_encoder.c),
- *      writes it as a temp .sgh and hands off to the Read Raw scene in Loaded
+ *      RIGHT (Emulate) synthesizes a fresh frame with an incremented counter
+ *      — Renault V1 via subghz_renault_v1_encoder.c (seed path), PSA via
+ *      subghz_psa_encoder.c (type 0x36 TEA re-encryption) — writes it as a
+ *      temp Flipper RAW .sub and hands off to the Read Raw scene in Loaded
  *      state, where Send transmits it via the async TX path.
  *
  * Async pattern: bounded one-shot worker + binary semaphore + cancel flag
@@ -47,7 +48,9 @@
 #include "m1_storage.h"
 #include "subghz_saved_path.h"
 #include "flipper_subghz.h"
+#include "subghz_upload_entry.h"
 #include "subghz_psa_bruteforce.h"
+#include "subghz_psa_encoder.h"
 #include "subghz_renault_v1_bruteforce.h"
 #include "subghz_renault_v1_encoder.h"
 #include "ff.h"
@@ -71,8 +74,8 @@ typedef enum {
     PP_BF_KIND_RENAULT_V1,
 } pp_bf_kind_t;
 
-/** Temp waveform file handed to the Read Raw scene for Renault V1 TX. */
-#define PP_BF_TX_TMP_PATH  "0:/SUBGHZ/_pp_bf_tx_tmp.sgh"
+/** Temp waveform file (Flipper RAW format) handed to the Read Raw scene. */
+#define PP_BF_TX_TMP_PATH  "0:/SUBGHZ/_pp_bf_tx_tmp.sub"
 
 /* Worker + scene shared context — heap-allocated for the scene's lifetime.
  * Budget: ~400 B context + 3 KB task stack/TCB from the 256 KB FreeRTOS pool
@@ -92,6 +95,7 @@ typedef struct {
     pp_bf_state_t state;
     /* PSA result */
     subghz_psa_bf_result_t psa;
+    uint32_t psa_tx_cnt;    /* session TX counter (increments per Emulate) */
     /* Renault V1 result + TX state */
     uint8_t  rv1_iv[4];
     uint32_t rv1_seed;
@@ -285,76 +289,94 @@ static void pp_bf_rv1_finish(pp_bf_ctx_t *ctx)
 /*============================================================================*/
 
 /**
- * Write the upload waveform as an M1 native NOISE .sgh (unsigned alternating
- * durations, first sample is a mark).  Consecutive same-level entries are
- * merged so the alternation invariant holds.
+ * Write the upload waveform as a Flipper RAW .sub file (signed RAW_Data:
+ * mark positive, space negative, first sample is a mark).  The Flipper format
+ * keeps the synthesized capture interchangeable with Flipper/ProtoPirate
+ * tooling; the M1 replay path converts it internally.  Consecutive same-level
+ * entries are merged so the sign alternation invariant holds.
  */
-static bool pp_bf_rv1_write_waveform(const char *path,
-                                    const renault_v1_upload_entry_t *upload,
-                                    uint32_t count, uint32_t frequency)
+static bool pp_bf_write_waveform(const char *path,
+                                 const subghz_upload_entry_t *upload,
+                                 uint32_t count, uint32_t frequency)
 {
     FIL f;
     if (f_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
         return false;
 
-    bool ok = f_puts("Filetype: M1 SubGHz NOISE\r\n", &f) >= 0 &&
-              f_puts("Version: 0.9\r\n", &f) >= 0;
+    bool ok = f_puts("Filetype: " FLIPPER_SUBGHZ_RAW_FILETYPE "\r\n", &f) >= 0 &&
+              f_puts("Version: 1\r\n", &f) >= 0;
 
     char line[160];
     if (ok)
     {
-        snprintf(line, sizeof(line), "Frequency: %lu\r\nModulation: OOK\r\n",
+        snprintf(line, sizeof(line),
+                 "Frequency: %lu\r\nPreset: FuriHalSubGhzPresetOok650Async\r\n"
+                 "Protocol: RAW\r\n",
                  (unsigned long)frequency);
         ok = f_puts(line, &f) >= 0;
     }
 
-    /* Stream merged durations in Data: lines of bounded length. */
-    int pos = snprintf(line, sizeof(line), "Data:");
+    /* Stream merged runs in RAW_Data: lines of bounded length. */
+    int pos = snprintf(line, sizeof(line), "RAW_Data:");
     bool have_pending = false;
+    bool pending_level = false;
     uint32_t pending = 0;
     for (uint32_t i = 0; ok && i < count; i++)
     {
         if (!have_pending)
         {
             pending = upload[i].duration;
+            pending_level = upload[i].level;
             have_pending = true;
             continue;
         }
-        if (upload[i].level == upload[i - 1u].level)
+        if (upload[i].level == pending_level)
         {
             pending += upload[i].duration;
             continue;
         }
 
-        int w = snprintf(line + pos, sizeof(line) - (size_t)pos, " %lu",
-                         (unsigned long)pending);
+        int w = snprintf(line + pos, sizeof(line) - (size_t)pos, " %s%lu",
+                         pending_level ? "" : "-", (unsigned long)pending);
         if (w <= 0)
         {
             ok = false;
             break;
         }
         pos += w;
-        have_pending = false;
         pending = upload[i].duration;
-        have_pending = true;
+        pending_level = upload[i].level;
 
         if (pos > 100)
         {
             ok = f_puts(line, &f) >= 0 && f_puts("\r\n", &f) >= 0;
-            pos = snprintf(line, sizeof(line), "Data:");
+            pos = snprintf(line, sizeof(line), "RAW_Data:");
         }
     }
     if (ok && have_pending)
     {
-        snprintf(line + pos, sizeof(line) - (size_t)pos, " %lu",
-                 (unsigned long)pending);
+        snprintf(line + pos, sizeof(line) - (size_t)pos, " %s%lu",
+                 pending_level ? "" : "-", (unsigned long)pending);
         pos = (int)strlen(line);
     }
-    if (ok && pos > 5)
+    if (ok && pos > 9)
         ok = f_puts(line, &f) >= 0 && f_puts("\r\n", &f) >= 0;
 
     f_close(&f);
     return ok;
+}
+
+/** Hand the temp waveform (Flipper RAW .sub) to Read Raw: Loaded state,
+ *  async Send via sub_ghz_replay_prepare_flipper(). */
+static void pp_bf_handoff_to_read_raw(SubGhzApp *app, pp_bf_ctx_t *ctx)
+{
+    strncpy(app->raw_load_path, PP_BF_TX_TMP_PATH, SUBGHZ_SAVED_PATH_MAX - 1U);
+    app->raw_load_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
+    app->raw_load_is_native = false;
+    app->raw_load_freq_hz = ctx->frequency > 0 ? ctx->frequency : 433920000UL;
+    app->raw_load_mod = MODULATION_OOK;
+    app->resume_from_child = true;
+    subghz_scene_push(app, SubGhzSceneReadRaw);
 }
 
 /** Synthesize a fresh Renault V1 frame (counter incremented per press) and
@@ -371,8 +393,8 @@ static bool pp_bf_rv1_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
     const uint32_t key2 = ((uint32_t)out[8] << 16) |
                           ((uint32_t)out[9] << 8) | out[10];
 
-    renault_v1_upload_entry_t *upload = malloc(
-        RENAULT_V1_UPLOAD_CAPACITY * sizeof(renault_v1_upload_entry_t));
+    subghz_upload_entry_t *upload = malloc(
+        RENAULT_V1_UPLOAD_CAPACITY * sizeof(subghz_upload_entry_t));
     if (upload == NULL)
         return false;
 
@@ -381,9 +403,9 @@ static bool pp_bf_rv1_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
         upload, RENAULT_V1_UPLOAD_CAPACITY, key, key2);
     if (n > 0)
     {
-        ok = pp_bf_rv1_write_waveform(PP_BF_TX_TMP_PATH, upload, n,
-                                     ctx->frequency > 0 ? ctx->frequency
-                                                        : 433920000UL);
+        ok = pp_bf_write_waveform(PP_BF_TX_TMP_PATH, upload, n,
+                                  ctx->frequency > 0 ? ctx->frequency
+                                                     : 433920000UL);
     }
     free(upload);
 
@@ -391,15 +413,44 @@ static bool pp_bf_rv1_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
         return false;
 
     ctx->rv1_tx_cnt++;
+    pp_bf_handoff_to_read_raw(app, ctx);
+    return true;
+}
 
-    /* Hand the temp waveform to Read Raw (Loaded state → async Send). */
-    strncpy(app->raw_load_path, PP_BF_TX_TMP_PATH, SUBGHZ_SAVED_PATH_MAX - 1U);
-    app->raw_load_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
-    app->raw_load_is_native = true;
-    app->raw_load_freq_hz = ctx->frequency > 0 ? ctx->frequency : 433920000UL;
-    app->raw_load_mod = MODULATION_OOK;
-    app->resume_from_child = true;
-    subghz_scene_push(app, SubGhzSceneReadRaw);
+/** Synthesize a fresh PSA type-0x36 frame (counter incremented per press)
+ *  and hand it to the Read Raw scene in Loaded state for async TX. */
+static bool pp_bf_psa_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
+{
+    /* Preserve the original capture's wire bytes 0..1 (marker nibble). */
+    const uint8_t preserve01[2] = {(uint8_t)(ctx->key1 >> 56),
+                                   (uint8_t)(ctx->key1 >> 48)};
+
+    uint8_t buffer[10];
+    subghz_psa_encode_buffer36(ctx->psa.serial, ctx->psa_tx_cnt,
+                               ctx->psa.button, preserve01,
+                               ctx->psa.candidate, ctx->psa.phase, buffer);
+
+    subghz_upload_entry_t *upload = malloc(
+        PSA_ENC_UPLOAD_CAPACITY * sizeof(subghz_upload_entry_t));
+    if (upload == NULL)
+        return false;
+
+    bool ok = false;
+    const uint32_t n = subghz_psa_build_upload(upload, PSA_ENC_UPLOAD_CAPACITY,
+                                               buffer);
+    if (n > 0)
+    {
+        ok = pp_bf_write_waveform(PP_BF_TX_TMP_PATH, upload, n,
+                                  ctx->frequency > 0 ? ctx->frequency
+                                                     : 433920000UL);
+    }
+    free(upload);
+
+    if (!ok)
+        return false;
+
+    ctx->psa_tx_cnt++;
+    pp_bf_handoff_to_read_raw(app, ctx);
     return true;
 }
 
@@ -475,6 +526,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     case SUBGHZ_BRUTEFORCE_JOB_FOUND:
                         if (s_ctx->kind == PP_BF_KIND_RENAULT_V1)
                             pp_bf_rv1_finish(s_ctx);
+                        else
+                            /* The first emulated frame must advance past the
+                             * recovered counter. */
+                            s_ctx->psa_tx_cnt = s_ctx->psa.counter + 1u;
                         s_ctx->state = PP_BF_STATE_FOUND;
                         break;
                     case SUBGHZ_BRUTEFORCE_JOB_CANCELLED:
@@ -518,12 +573,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventRight:
-            /* Renault V1: transmit a fresh frame with the recovered seed. */
-            if ((s_ctx->state == PP_BF_STATE_FOUND ||
-                 s_ctx->state == PP_BF_STATE_SAVED) &&
-                s_ctx->kind == PP_BF_KIND_RENAULT_V1)
+            /* Transmit a fresh frame with the recovered key material. */
+            if (s_ctx->state == PP_BF_STATE_FOUND ||
+                s_ctx->state == PP_BF_STATE_SAVED)
             {
-                if (!pp_bf_rv1_emulate(app, s_ctx))
+                const bool ok =
+                    (s_ctx->kind == PP_BF_KIND_RENAULT_V1)
+                        ? pp_bf_rv1_emulate(app, s_ctx)
+                        : pp_bf_psa_emulate(app, s_ctx);
+                if (!ok)
                 {
                     s_ctx->state = PP_BF_STATE_ERROR;
                     app->need_redraw = true;
@@ -541,7 +599,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 static void scene_on_exit(SubGhzApp *app)
 {
     subghz_scene_set_tick_period(app, 0);
-    if (app->resume_from_child)
+    if (subghz_read_raw_consume_resume(&app->resume_from_child))
         return;  /* handing off to Read Raw for TX; keep the context */
     pp_bf_stop_worker();
     pp_bf_ctx_free();
@@ -628,10 +686,7 @@ static void draw(SubGhzApp *app)
             if (s_ctx->state == PP_BF_STATE_SAVED)
                 u8g2_DrawStr(&m1_u8g2, 2, 54, "Saved _recovered.sub");
             subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Save",
-                                   NULL,
-                                   s_ctx->kind == PP_BF_KIND_RENAULT_V1
-                                       ? "Emulate"
-                                       : NULL);
+                                   NULL, "Emulate");
             break;
 
         case PP_BF_STATE_NOT_FOUND:
