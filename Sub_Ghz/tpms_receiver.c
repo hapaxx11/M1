@@ -121,3 +121,8 @@ uint8_t tpms_sensor_age_min(const tpms_sensor_t *sensor, uint32_t now_ms)
     uint32_t age = (uint32_t)(now_ms - sensor->last_seen_ms) / 60000U;
     return (age > 99U) ? 99U : (uint8_t)age;
 }
+
+bool tpms_activation_expired(uint32_t started_ms, uint32_t now_ms)
+{
+    return (uint32_t)(now_ms - started_ms) >= TPMS_ACTIVATION_DURATION_MS;
+}

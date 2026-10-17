@@ -59,10 +59,12 @@ uint8_t sb_storage[LFR_SBUF_BYTES];
 StreamBufferHandle_t lfrfid_sb_hdl;
 static int lfrfid_lock = 0;
 static bool lfrfid_tpms_activation_active = false;
+static uint32_t lfrfid_tpms_activation_started_ms = 0U;
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 static void lfrfidThread(void *param);
 static void lfrfid_rxThread(void *param);
+static void lfrfid_tpms_activation_cleanup(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -298,12 +300,7 @@ void lfrfid_Init(void)
 /*============================================================================*/
 void lfrfid_DeInit(void)
 {
-	if(lfrfid_tpms_activation_active)
-	{
-		lfrfid_tpms_activation_stop();
-		lfrfid_tpms_activation_active = false;
-		lfrfid_lock = 0;
-	}
+	lfrfid_tpms_activation_cleanup();
 
 	if(lfrfid_task_hdl)
 	{
@@ -331,6 +328,31 @@ void lfrfid_DeInit(void)
 	safe_free((void**)&lfrfid_encoded_data.data);
 	safe_free((void**)&lfrfid_program);
 	safe_free((void**)&lfrfid_tag_info_back);
+}
+
+bool lfrfid_tpms_activation_request(bool active)
+{
+	if(lfrfid_q_hdl == NULL)
+		return false;
+
+	S_M1_Main_Q_t q_item = {
+		.q_evt_type = active ? Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_START :
+			Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_STOP,
+	};
+	return xQueueSend(lfrfid_q_hdl, &q_item, 0U) == pdTRUE;
+}
+
+static void lfrfid_tpms_activation_cleanup(void)
+{
+	if(!lfrfid_tpms_activation_active)
+		return;
+
+	lfrfid_tpms_activation_stop();
+	lfrfid_tpms_activation_active = false;
+	lfrfid_tpms_activation_started_ms = 0U;
+	lfrfid_lock = 0;
+	if(lfrfid_state == LFRFID_STATE_EMULATE)
+		lfrfid_state = LFRFID_STATE_IDLE;
 }
 
 
@@ -523,7 +545,22 @@ void lfrfidThread(void *param)
 
 	while(1)
 	{
-		ret = xQueueReceive(lfrfid_q_hdl, &q_item, portMAX_DELAY);
+		TickType_t wait_ticks = portMAX_DELAY;
+		if(lfrfid_tpms_activation_active)
+		{
+			uint32_t elapsed_ms = HAL_GetTick() - lfrfid_tpms_activation_started_ms;
+			if(elapsed_ms >= LFRFID_TPMS_ACTIVATION_MAX_MS)
+			{
+				lfrfid_tpms_activation_cleanup();
+				continue;
+			}
+
+			wait_ticks = pdMS_TO_TICKS(LFRFID_TPMS_ACTIVATION_MAX_MS - elapsed_ms);
+			if(wait_ticks == 0U)
+				wait_ticks = 1U;
+		}
+
+		ret = xQueueReceive(lfrfid_q_hdl, &q_item, wait_ticks);
 		if (ret==pdTRUE)
 		{
 			if ( q_item.q_evt_type==Q_EVENT_LFRFID_TAG_DETECTED )
@@ -592,17 +629,14 @@ void lfrfidThread(void *param)
 				   lfrfid_tpms_activation_start())
 				{
 					lfrfid_tpms_activation_active = true;
+					lfrfid_tpms_activation_started_ms = HAL_GetTick();
 					lfrfid_lock = 1;
+					lfrfid_state = LFRFID_STATE_EMULATE;
 				}
 			}
 			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_STOP)
 			{
-				if(lfrfid_tpms_activation_active)
-				{
-					lfrfid_tpms_activation_stop();
-					lfrfid_tpms_activation_active = false;
-					lfrfid_lock = 0;
-				}
+				lfrfid_tpms_activation_cleanup();
 			}
 			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_STOP)
 			{
@@ -686,7 +720,10 @@ void lfrfidThread(void *param)
 				osDelay(10);
 				task_suspend_safe(lfrfid_rx_task_hdl);
 			}
-
 		} // if (ret==pdTRUE)
+		else if(lfrfid_tpms_activation_active)
+		{
+			lfrfid_tpms_activation_cleanup();
+		}
 	}
 }

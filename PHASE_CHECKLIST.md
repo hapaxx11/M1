@@ -40,10 +40,10 @@
 
 ### Phase 2 — TPMS scene integration and tests
 - **Description**: Add receiver-scene activation controls, bounded timing, and host-side coverage.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Expose bounded TPMS sensor activation`
 
 ### Phase 3 — Documentation and validation
 - **Description**: Add a changelog fragment, run tests and the firmware build/RAM check, then remove this supplemental checklist section.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
