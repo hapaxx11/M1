@@ -58,6 +58,7 @@ StaticStreamBuffer_t sb_ctrl;
 uint8_t sb_storage[LFR_SBUF_BYTES];
 StreamBufferHandle_t lfrfid_sb_hdl;
 static int lfrfid_lock = 0;
+static bool lfrfid_tpms_activation_active = false;
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 static void lfrfidThread(void *param);
@@ -297,6 +298,13 @@ void lfrfid_Init(void)
 /*============================================================================*/
 void lfrfid_DeInit(void)
 {
+	if(lfrfid_tpms_activation_active)
+	{
+		lfrfid_tpms_activation_stop();
+		lfrfid_tpms_activation_active = false;
+		lfrfid_lock = 0;
+	}
+
 	if(lfrfid_task_hdl)
 	{
 		vTaskDelete(lfrfid_task_hdl);
@@ -574,6 +582,26 @@ void lfrfidThread(void *param)
 					lfrfid_decoder_begin();
 					/* Brief stabilization delay */
 					osDelay(LFRFID_CARRIER_STABILIZE_MS);
+				}
+			}
+			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_START)
+			{
+				if(!lfrfid_tpms_activation_active &&
+				   !lfrfid_lock &&
+				   lfrfid_state == LFRFID_STATE_IDLE &&
+				   lfrfid_tpms_activation_start())
+				{
+					lfrfid_tpms_activation_active = true;
+					lfrfid_lock = 1;
+				}
+			}
+			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_STOP)
+			{
+				if(lfrfid_tpms_activation_active)
+				{
+					lfrfid_tpms_activation_stop();
+					lfrfid_tpms_activation_active = false;
+					lfrfid_lock = 0;
 				}
 			}
 			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_STOP)

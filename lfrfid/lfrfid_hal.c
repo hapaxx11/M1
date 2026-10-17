@@ -46,6 +46,7 @@ uint8_t rfid_rxtx_is_taking_this_irq; // Flag to use shared interrupt handler
 
 static lfrfid_evt_t isr_batch[LFR_BATCH_ITEMS];
 static uint16_t     isr_batch_index = 0;
+static bool lfrfid_tpms_activation_active = false;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 void LFRFID_Timebase_Init(uint32_t freq_hz, uint32_t period_us);
@@ -259,6 +260,37 @@ void lfrfid_emul_hw_deinit(void)
   rfid_rxtx_is_taking_this_irq = 0;
 
 } // rfid_emul_deinit
+
+bool lfrfid_tpms_activation_start(void)
+{
+    if (lfrfid_tpms_activation_active)
+        return true;
+    if (rfid_rxtx_is_taking_this_irq)
+        return false;
+
+    HAL_GPIO_WritePin(EN_EXT_5V_GPIO_Port, EN_EXT_5V_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
+    lfrfid_RFIDOut_Init(125000U);
+    if (HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3) != HAL_OK)
+    {
+        HAL_GPIO_WritePin(RFID_OUT_GPIO_Port, RFID_OUT_Pin, GPIO_PIN_RESET);
+        return false;
+    }
+
+    lfrfid_tpms_activation_active = true;
+    return true;
+}
+
+void lfrfid_tpms_activation_stop(void)
+{
+    if (!lfrfid_tpms_activation_active)
+        return;
+
+    HAL_TIM_PWM_Stop(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);
+    HAL_GPIO_WritePin(RFID_OUT_GPIO_Port, RFID_OUT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
+    lfrfid_tpms_activation_active = false;
+}
 
 
 /*============================================================================*/
@@ -549,4 +581,3 @@ void lfrfid_read_hw_deinit(void)
   //lfrfid_stream_deinit();
   rfid_rxtx_is_taking_this_irq = 0; // reset
 } // void rfid_read_deinit(void)
-

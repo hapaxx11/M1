@@ -35,8 +35,8 @@
 
 ### Phase 1 — LF activation backend
 - **Description**: Add worker-serialized start/stop events and a safe 125 kHz field lifecycle.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add worker-owned TPMS activation field`
 
 ### Phase 2 — TPMS scene integration and tests
 - **Description**: Add receiver-scene activation controls, bounded timing, and host-side coverage.
