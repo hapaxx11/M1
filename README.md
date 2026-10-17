@@ -57,7 +57,7 @@ project discussion, and related project resources:
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
-| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG and restaurant pagers, weather, TPMS, brute force, playlist) | ✗ | ✓ |
+| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG and restaurant pagers, weather, TPMS, fixed-code brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
 | OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
@@ -94,9 +94,9 @@ project discussion, and related project resources:
 - **Frequency Scanner** — sweep and find active frequencies above threshold
 - **Signal Identifier (RF Rosetta)** — passive signal identification: fingerprints captured signals by physical characteristics (band, modulation, timing, repetition) and scores against a protocol database with security metadata; works on both sub-GHz and 2.4 GHz domains (BLE/WiFi/802.15.4 via ESP32-C6)
 - **Weather Station** — non-blocking receiver with automatic OOK/FSK scanning, sensor history and readings, and frequency configuration; decodes Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
-- **Brute Force** — brute-force RF code transmitter (Princeton, CAME, Nice FLO, Linear, Holtek)
+- **Fixed-Code Brute Force** — sequentially transmit candidate codes for fixed-code protocols (Princeton, CAME, Nice FLO, Linear, Holtek, Security+ 1.0 counter)
 - **Playlist Player** — load `.txt` playlist files from `SubGHz/playlist/` and transmit each `.sub` file sequentially; supports repeat count, progress display, and Flipper path remapping
-- **Proto Pirate** — rolling-code analysis toolkit: live capture, offline `.sub` file decode, and timing tuner comparing captured pulse widths against 25 automotive/garage protocol definitions (KeeLoq, Star Line, CAME, Nice FLO, etc.)
+- **Proto Pirate** — rolling-code analysis toolkit: live capture, offline `.sub` decode, timing analysis, and protocol-specific key recovery from saved captures (PSA TEA / Renault V1); separate from fixed-code code-space transmission above
 - **Add Manually** — select a protocol, enter a hex key, and transmit a single-burst RF signal
 - **Create from Scratch** — protocol picker with per-field editors for KeeLoq/Star Line/Jarolift (serial, button, counter, manufacturer key)
 - **Radio Settings** — adjustable TX power, custom frequency entry (300–928 MHz)
