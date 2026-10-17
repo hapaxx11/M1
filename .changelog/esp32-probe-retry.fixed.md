@@ -1,1 +1,0 @@
-**ESP32: retry transient compatibility-probe failures** — Do not cache a failed coprocessor probe for the entire STM32 boot; retry after a short cooldown so qMonstatek can recognize a brain ESP32 that was not ready during the initial probe.
