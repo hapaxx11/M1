@@ -1006,6 +1006,17 @@ typedef enum
     M1_ESP32_PROBE_UNKNOWN       /**< every probe failed — bitmap left at zero    */
 } m1_esp32_probe_outcome_t;
 
+#define M1_ESP32_CAPS_RETRY_INTERVAL_MS 3000u
+
+static inline bool m1_esp32_caps_probe_retry_due(bool previous_probe_failed,
+                                                 uint32_t last_probe_ms,
+                                                 uint32_t now_ms)
+{
+    return !previous_probe_failed ||
+           (uint32_t)(now_ms - last_probe_ms) >=
+               M1_ESP32_CAPS_RETRY_INTERVAL_MS;
+}
+
 /** Snapshot of the last probe sequence. */
 typedef struct
 {
