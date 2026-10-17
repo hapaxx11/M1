@@ -52,6 +52,7 @@ typedef enum {
     SettingsSceneEsp32Backup,
     SettingsSceneEsp32CheckInfo,
     SettingsSceneDashboard,
+    SettingsSceneBluetoothDirect,
     SettingsSceneCount
 } SettingsSceneId;
 
@@ -63,6 +64,7 @@ typedef enum {
 extern const M1SceneHandlers settings_scene_menu_handlers;
 extern const M1SceneHandlers settings_scene_lcd_handlers;
 extern const M1SceneHandlers settings_scene_dashboard_handlers;
+extern const M1SceneHandlers settings_scene_bluetooth_direct_handlers;
 
 /* m1_settings_scene_storage.c */
 extern const M1SceneHandlers settings_scene_storage_menu_handlers;

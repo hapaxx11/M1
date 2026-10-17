@@ -43,25 +43,22 @@ Performance implications
 Security concerns
 
 5. CI/CD
-Hapax is the only M1 fork with a GitHub-first CI/CD pipeline.  All builds,
-tests, releases, and documentation deploy through GitHub Actions:
-All PRs must pass automated tests
+Hapax uses GitHub Actions for builds, tests, releases, and documentation deploys:
+Required checks must pass; host tests run when their source/test path filters match
 Maintain test coverage above agreed threshold (e.g., 80%)
 Automated linting must pass
-Build must succeed (skipped automatically for docs/config-only changes — see paths-ignore in ci.yml)
+Firmware build must succeed for matching firmware-input changes (docs-only changes are excluded by the `paths` filters in `ci.yml`)
 No security vulnerabilities in dependencies
-Every merge to main auto-creates a GitHub Release with firmware artifacts
+Merges that change firmware inputs trigger a GitHub Release with firmware artifacts;
+docs-only and other excluded changes do not create a release
 The Web Updater (GitHub Pages) and device OTA both pull from GitHub Releases
 
 6. Documentation
 Keep README.md updated with accurate feature descriptions and protocol counts
-Update CHANGELOG.md for every meaningful change following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
-  - Use version label [{major}.{minor}.{build}.{rc}] matching the FW_VERSION_* macros in m1_fw_update_bl.h (e.g. [0.9.0.94])
-  - Always add new entries under `[Unreleased]` — CI automatically stamps the version heading on each release
-  - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
-  - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
-  - Append to the current version block rather than creating a duplicate heading — scan the entire `[Unreleased]` block for an existing `### Fixed` / `### Added` / etc. before adding a new one
-  - Do not manually create versioned headings — CI handles promotion from [Unreleased] to a version number
+For each meaningful change, create a fragment under `.changelog/` instead of editing
+`CHANGELOG.md` directly. Use `<short-description>.<added|changed|fixed|removed>.md`;
+CI assembles fragments for qualifying firmware-input PRs. See
+`.changelog/README.md` for format and assembly details.
   - Never write the literal string `## [Unreleased]` in changelog body text — the CI stamper matches it by simple text replace and will corrupt the file (see CLAUDE.md changelog rules)
   - Automated "changelog: stamp [Unreleased] as ..." PRs are infrastructure housekeeping — do NOT mention them in changelog entries, release notes, or PR descriptions. They are excluded from auto-generated release notes via `.github/release.yml` and the `changelog-stamp` label.
 Update `.github/skills/flipper-import/SKILL.md` inventory tables when Flipper-derived files are added or removed

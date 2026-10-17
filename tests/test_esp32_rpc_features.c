@@ -57,7 +57,7 @@ uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return 0u; }
 static uint8_t g_canned[2048];
 static int     g_canned_len;
 static uint8_t g_ret;
-static uint8_t g_last_tx[256];
+static uint8_t g_last_tx[M1_ESP32_RPC_FRAME_MAX];
 static int     g_last_tx_len;
 static int     g_last_timeout_sec;
 
@@ -104,6 +104,11 @@ static int make_frame(uint8_t *buf, uint8_t msg_type, uint16_t msg_id,
 static void canned_ok(uint16_t msg_id)
 {
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP, msg_id, NULL, 0u);
+}
+
+static void canned_resp(uint16_t msg_id, const uint8_t *payload, uint16_t plen)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP, msg_id, payload, plen);
 }
 
 /* Accessors for the captured request frame. */
@@ -226,6 +231,61 @@ void test_trigger_variants_route_expected_opcodes(void)
         TEST_ASSERT_EQUAL_HEX16(cases[i].op, tx_msg_id());
         TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
     }
+
+}
+
+void test_softap_start_encodes_configuration(void)
+{
+    static const uint8_t expected[] = { 6u, 'M', '1', '-', 'A', 'P', 0u,
+                                        'p', 'a', 's', 's', 'w', 'o', 'r', 'd', 0u };
+    canned_ok(M1_ESP32_RPC_SOFTAP_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_softap_start("M1-AP", "password", 6u));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_SOFTAP_START, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(sizeof(expected), tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(expected, tx_payload(), sizeof(expected));
+}
+
+void test_softap_start_rejects_invalid_configuration(void)
+{
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+        m1_esp32_rpc_softap_start("", "password", 6u));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+        m1_esp32_rpc_softap_start("M1-AP", "short", 6u));
+    canned_ok(M1_ESP32_RPC_SOFTAP_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_softap_start("M1-AP", NULL, 6u));
+}
+
+void test_softap_status_decodes_clients_and_nat(void)
+{
+    const uint8_t payload[] = { 3u, 1u };
+    uint8_t clients = 0u;
+    bool internet_shared = false;
+    canned_resp(M1_ESP32_RPC_SOFTAP_STA_LIST, payload, sizeof(payload));
+
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_softap_status(&clients, &internet_shared));
+    TEST_ASSERT_EQUAL_UINT8(3u, clients);
+    TEST_ASSERT_TRUE(internet_shared);
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_SOFTAP_STA_LIST, tx_msg_id());
+}
+
+void test_softap_status_rejects_malformed_reply_and_null_outputs(void)
+{
+    const uint8_t payload[] = { 2u };
+    uint8_t clients = 7u;
+    bool internet_shared = true;
+    canned_resp(M1_ESP32_RPC_SOFTAP_STA_LIST, payload, sizeof(payload));
+
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME,
+        m1_esp32_rpc_softap_status(&clients, &internet_shared));
+    TEST_ASSERT_EQUAL_UINT8(7u, clients);
+    TEST_ASSERT_TRUE(internet_shared);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+        m1_esp32_rpc_softap_status(NULL, &internet_shared));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+        m1_esp32_rpc_softap_status(&clients, NULL));
 }
 
 void test_trigger_propagates_nak(void)
@@ -403,7 +463,7 @@ void test_ble_adv_start_null_name_empty_payload(void)
     TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
 }
 
-void test_beacon_start_caps_payload_and_patches_count(void)
+void test_beacon_start_uses_full_ssid_capacity(void)
 {
     char ssids[8][33];
     for (uint8_t i = 0u; i < 8u; i++) {
@@ -415,11 +475,11 @@ void test_beacon_start_caps_payload_and_patches_count(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_beacon_start((const char (*)[33])ssids, 8u));
     TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_BEACON_START, tx_msg_id());
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
-    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT16(265u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(8u, tx_payload()[0]);
 }
 
-void test_probe_start_caps_payload_and_patches_count(void)
+void test_probe_start_uses_full_ssid_capacity(void)
 {
     char ssids[8][33];
     for (uint8_t i = 0u; i < 8u; i++) {
@@ -431,9 +491,42 @@ void test_probe_start_caps_payload_and_patches_count(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_probe_start(6u, (const char (*)[33])ssids, 8u));
     TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_PROBE_START, tx_msg_id());
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
+    TEST_ASSERT_EQUAL_UINT16(266u, tx_plen());
     TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[0]);
-    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[1]);
+    TEST_ASSERT_EQUAL_UINT8(8u, tx_payload()[1]);
+}
+
+void test_beacon_start_fills_ssid_buffer_capacity(void)
+{
+    char ssids[32][33];
+    for (uint8_t i = 0u; i < 32u; i++) {
+        memset(ssids[i], 'A' + (char)(i % 26u), 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_BEACON_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_beacon_start((const char (*)[33])ssids, 32u));
+    TEST_ASSERT_EQUAL_UINT16(1057u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1024u]);
+}
+
+void test_probe_start_fills_ssid_buffer_capacity(void)
+{
+    char ssids[32][33];
+    for (uint8_t i = 0u; i < 32u; i++) {
+        memset(ssids[i], 'a' + (char)(i % 26u), 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_PROBE_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_probe_start(6u, (const char (*)[33])ssids, 32u));
+    TEST_ASSERT_EQUAL_UINT16(1058u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1025u]);
 }
 
 void test_probe_start_rejects_missing_ssids_or_zero_count(void)
@@ -543,6 +636,97 @@ void test_ble_hid_init_null_name_empty_payload(void)
     canned_ok(M1_ESP32_RPC_BLE_HID_INIT);
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_hid_init(NULL));
     TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
+}
+
+void test_ble_rpc_adv_encodes_enable_flag(void)
+{
+    canned_ok(M1_ESP32_RPC_BLE_RPC_ADV);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_rpc_adv(true));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_BLE_RPC_ADV, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(1u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(1u, tx_payload()[0]);
+}
+
+void test_ble_state_decodes_direct_flags(void)
+{
+    const uint8_t flags[2] = { M1_ESP32_RPC_BLE_DIRECT_ADVERTISING |
+                               M1_ESP32_RPC_BLE_DIRECT_CONNECTED, 0u };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_BLE_STATE, flags, sizeof(flags));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_state(&out));
+    TEST_ASSERT_EQUAL_UINT8(flags[0], out);
+}
+
+void test_rpc_status_decodes_client_mask(void)
+{
+    const uint8_t client_mask = M1_ESP32_RPC_CLIENT_TCP |
+                                M1_ESP32_RPC_CLIENT_BLE;
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_RPC_STATUS,
+                              &client_mask, sizeof(client_mask));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_rpc_status(&out));
+    TEST_ASSERT_EQUAL_UINT8(client_mask, out);
+}
+
+void test_rpc_status_supports_short_poll_timeout(void)
+{
+    const uint8_t client_mask = M1_ESP32_RPC_CLIENT_BLE;
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_RPC_STATUS,
+                              &client_mask, sizeof(client_mask));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_rpc_status_timeout(&out, 1));
+    TEST_ASSERT_EQUAL_UINT8(client_mask, out);
+    TEST_ASSERT_EQUAL_INT(1, g_last_timeout_sec);
+}
+
+void test_qmon_poll_copies_complete_frame(void)
+{
+    static uint8_t body[1200];
+    static uint8_t out[M1_ESP32_RPC_RESP_PAYLOAD_MAX];
+    for (uint16_t i = 0u; i < sizeof(body); i++)
+        body[i] = (uint8_t)(i ^ 0xA5u);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_QMON_POLL, body, sizeof(body));
+
+    uint16_t len = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_qmon_poll(out, sizeof(out), &len));
+    TEST_ASSERT_EQUAL_UINT16(sizeof(body), len);
+    TEST_ASSERT_EQUAL_MEMORY(body, out, sizeof(body));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_qmon_poll(out, 32u, &len));
+    TEST_ASSERT_EQUAL_UINT16(0u, len);
+}
+
+void test_qmon_response_accepts_fragmentable_frame(void)
+{
+    static uint8_t frame[1024];
+    memset(frame, 0x6C, sizeof(frame));
+    canned_ok(M1_ESP32_RPC_QMON_RESP);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_qmon_resp(frame, sizeof(frame)));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_QMON_RESP, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(sizeof(frame), tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(frame, tx_payload(), sizeof(frame));
+}
+
+void test_screen_push_requires_full_framebuffer(void)
+{
+    static uint8_t framebuffer[M1_ESP32_RPC_SCREEN_FB_SIZE];
+    memset(framebuffer, 0x93, sizeof(framebuffer));
+    canned_ok(M1_ESP32_RPC_SCREEN_PUSH);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_screen_push(framebuffer, sizeof(framebuffer)));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_SCREEN_PUSH, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(sizeof(framebuffer), tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(framebuffer, tx_payload(), sizeof(framebuffer));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_screen_push(framebuffer,
+                                              sizeof(framebuffer) - 1u));
 }
 
 /* ================================================================== */
@@ -962,6 +1146,10 @@ int main(void)
 
     RUN_TEST(test_trigger_builds_correct_opcode_and_empty_payload);
     RUN_TEST(test_trigger_variants_route_expected_opcodes);
+    RUN_TEST(test_softap_start_encodes_configuration);
+    RUN_TEST(test_softap_start_rejects_invalid_configuration);
+    RUN_TEST(test_softap_status_decodes_clients_and_nat);
+    RUN_TEST(test_softap_status_rejects_malformed_reply_and_null_outputs);
     RUN_TEST(test_trigger_propagates_nak);
     RUN_TEST(test_trigger_transport_failure);
 
@@ -978,6 +1166,11 @@ int main(void)
 
     RUN_TEST(test_ble_adv_start_encodes_name);
     RUN_TEST(test_ble_adv_start_null_name_empty_payload);
+    RUN_TEST(test_beacon_start_uses_full_ssid_capacity);
+    RUN_TEST(test_probe_start_uses_full_ssid_capacity);
+    RUN_TEST(test_beacon_start_fills_ssid_buffer_capacity);
+    RUN_TEST(test_probe_start_fills_ssid_buffer_capacity);
+    RUN_TEST(test_probe_start_rejects_missing_ssids_or_zero_count);
 
     RUN_TEST(test_deauth_start_serialises_struct);
     RUN_TEST(test_deauth_start_null_rejected);
@@ -990,6 +1183,13 @@ int main(void)
     RUN_TEST(test_ble_hid_key_rejects_bad_args);
     RUN_TEST(test_ble_hid_init_truncates_long_name);
     RUN_TEST(test_ble_hid_init_null_name_empty_payload);
+    RUN_TEST(test_ble_rpc_adv_encodes_enable_flag);
+    RUN_TEST(test_ble_state_decodes_direct_flags);
+    RUN_TEST(test_rpc_status_decodes_client_mask);
+    RUN_TEST(test_rpc_status_supports_short_poll_timeout);
+    RUN_TEST(test_qmon_poll_copies_complete_frame);
+    RUN_TEST(test_qmon_response_accepts_fragmentable_frame);
+    RUN_TEST(test_screen_push_requires_full_framebuffer);
 
     RUN_TEST(test_wifi_scan_decodes_entries);
     RUN_TEST(test_wifi_scan_caps_to_max);

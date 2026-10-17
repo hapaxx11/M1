@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 #include "m1_compile_cfg.h"
+#include "wifi_boot_config.h"
 
 void menu_wifi_init(void);
 void menu_wifi_exit(void);
@@ -98,6 +99,9 @@ const char *wifi_get_connected_ssid(void);
 uint8_t wifi_sync_rtc(void);
 void wifi_ntp_background_sync(void);
 void wifi_saved_networks(void);
+wifi_boot_config_t wifi_boot_config_get(void);
+void wifi_boot_config_set(wifi_boot_config_t config);
+void wifi_auto_connect_primary(void);
 void wifi_show_status(void);
 void wifi_disconnect(void);
 

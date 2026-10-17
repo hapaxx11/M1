@@ -12,9 +12,11 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 
 ### Firmware Source
 
-> **Two distinct ESP32 firmware variants are supported.  Choose based on which features you need.**
+> **Native brain CD3 is the recommended primary firmware** for most M1 users
+> because it provides the broadest integrated feature set. The AT and SiN360
+> variants remain supported alternatives when a specific capability is needed.
 
-#### CD3-AT firmware (legacy AT-command — bedge117 / neddy299 / dag)
+#### CD3-AT firmware (legacy AT-command alternative — bedge117 / neddy299 / dag)
 - **Source repo**: [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1) (CD3-AT — not to be confused with the newer CD3 native `m1-esp32-brain` firmware below)
 - **Deauth fork**: [`neddy299/esp32-at-monstatek-m1`](https://github.com/neddy299/esp32-at-monstatek-m1) (adds `AT+DEAUTH` + `AT+STASCAN`)
 - **dag fork**: [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1) (additional AT command extensions)
@@ -24,7 +26,7 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - Does NOT support (AT firmware): WiFi packet sniffers / signal monitor, MAC tracker / wardrive, BLE wardrive / BLE sniffers, network scanners, station scan (currently binary-SPI-only in M1; no `AT+STASCAN` dispatch), BT device management
 - See [`documentation/esp32_firmware.md`](../../../documentation/esp32_firmware.md) for the full reference
 
-#### Binary SPI firmware (recommended — sincere360 / SiN360)
+#### Binary SPI firmware (SiN360 alternative — sincere360)
 - **Source repo**: [`sincere360/M1_SiN360_ESP32`](https://github.com/sincere360/M1_SiN360_ESP32) (NimBLE binary SPI slave)
 - Pre-built binaries on the Releases page (`factory_ESP32C6-SPI-XIAO.bin` + `.md5`)
 - **Enables** (vs AT firmware): WiFi packet sniffers (All/Beacon/Probe/Deauth/EAPOL/SAE/Pwnagotchi), signal monitor, station scan, MAC tracker, wardrive, BLE wardrive (regular/continuous/Flock), BLE sniffers (Analyzer/Generic/Flipper/AirTag/Flock), BLE Spam (SourApple/SwiftPair/Samsung/Flipper/All/AirTag Spoof), BLE Detectors (Skimmers/Flock/Meta), WiFi attacks (Deauth/Beacon/Clone/Rickroll/Evil Portal/Probe Flood/Karma/Karma+Portal), network scanners (Ping/ARP/SSH/Telnet/Port scan), **Bad-BT/BLE HID** (v0.9.1.0+, via CMD_BLE_HID_START/STOP/STATUS/REPORT)
@@ -36,10 +38,12 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 #### CD3 native binary RPC firmware (next-gen — bedge117/m1-esp32-brain)
 - **Source repo**: [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) (native ESP-IDF, no AT stack)
 - Pre-built binaries on the Releases page
+- **Recommended primary firmware** for most M1 users: broad WiFi, BLE, and 802.15.4 support plus ESP-NOW peer link and GPIO.
 - **Architecture**: **full-duplex `spi_slave`** (NOT ESP-AT `spi_slave_hd`), M1_RPC binary protocol (magic `0x4D31` "M1"), fixed **512-byte** (`M1_ESP32_M1LINK_MTU`) transactions in both directions, same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required. The slave pipelines its reply onto a **later** transaction, so the host must poll with IDLE filler frames.
 - **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan), NimBLE (scan, adv, HID, GATT), 802.15.4, M1-to-M1 peer link over ESP-NOW, GPIO API
 - **Reserved, NOT yet implemented in shipped releases** (verified against public source, 2026-07-21): **PMKID capture** (`M1_ESP32_CAP_PMKID` / `M1_RPC_OFF_PMKID_CAPTURE`) and **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA` / `M1_RPC_SYS_OTA_BEGIN/DATA/END`) — message IDs exist in the shared `m1_rpc.h` but have no dispatch case in `main.c`, so they NAK with `ERR_UNSUPPORTED`. **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`) is dispatched and functional and is advertised by current brain firmware capability bitmaps.
 - **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
+- **Known gaps:** shipped releases do not yet implement PMKID capture or ESP32 OTA self-update. Use another variant when one of its specific capabilities is needed.
 - Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
 - Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response — a **bare identifier with no dotted version**. The real semver is fetched via the separate `M1_RPC SYS_GET_FW_VERSION` (0x0003) opcode and folded into the cached name as `"m1-native X.Y.Z[ <hash>]"` (`caps_cd3_fetch_fw_version()` + the pure `m1_esp32_rpc_format_fw_version()` helper). **This versioned string is required for qMonstatek compatibility**: the desktop app keys "compatible" off a parseable `X.Y.Z` in the device-info `esp32_version` (its `parseVerNums()`), so the bare `"m1-native"` reported as "incompatible firmware". Mirrors the C3 reference's `esp_fw_status_str()` ("m1_link X.Y.Z <hash>").
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)

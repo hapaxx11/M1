@@ -130,8 +130,8 @@ typedef enum {
     /** ESP-NOW peer link (discovery + file transfer + games) */
     ESP32_FEATURE_ESPNOW,
 
-    /* ----- WiFi Hotspot (Phase 5, §3.9) ------------------------------------ */
-    /** WiFi SoftAP hotspot (raw AT+CWMODE=2 / AT+CWSAP path) */
+    /* ----- WiFi Hotspot (CD3 native SoftAP) --------------------------------- */
+    /** WiFi SoftAP hotspot */
     ESP32_FEATURE_WIFI_HOTSPOT,
 
     /* ----- Sentinel (must be last) ---------------------------------------- */

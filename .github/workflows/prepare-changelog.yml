@@ -1,0 +1,224 @@
+name: Prepare Changelog
+
+# Assembles changelog fragments and stamps the next release version into
+# CHANGELOG.md *inside the PR branch*, so main is release-ready the moment the
+# PR merges and Build and Release never has to open a separate stamp PR.
+#
+#   1. .changelog/*.md fragments are merged into [Unreleased] by
+#      scripts/assemble_changelog.py (fragments are deleted).
+#   2. scripts/stamp_changelog.py stamps "## [Unreleased]" →
+#      "## [Unreleased]" + "## [<next version>] - <YYYY-MM-DD>".
+#   3. Changes (if any) are committed back to the PR branch.
+#
+# Version source: the *same* rule Build and Release uses at release time —
+# latest published release v{MAJOR}.{MINOR}.{BUILD}.N → N + 1 (MAJOR/MINOR/BUILD
+# from m1_fw_update_bl.h).  No separate RC scheme is introduced.  Because the
+# prediction is made before merge, it can go stale if another release is
+# published first; any stamped section that is not yet published — newer than
+# the latest release, or carrying entries absent from that release's
+# CHANGELOG.md — is folded back in and re-stamped on every run, so pushing to
+# (or re-running on) the PR corrects it.  Release notes are built from the same
+# pending sections, so they stay correct even if a stale heading reaches main.
+#
+# Only PRs that change firmware inputs (same `paths` allow-list as
+# build-release.yml) are stamped, because only those produce a release and
+# therefore a new version.  Fragments from other PRs (docs, CI, tests) stay
+# in .changelog/ and are assembled by the next firmware PR; release notes
+# include them either way.
+#
+# Draft PRs are skipped to keep CHANGELOG.md edits (and the conflicts they
+# can cause between concurrent PRs) as close to merge time as possible.
+#
+# Loop guard: the stamp is idempotent (a second run on the stamped branch is a
+# no-op, so nothing is committed), and the first automatic run of the push this
+# workflow just made is short-circuited when HEAD is its own stamp commit.
+# Manual `workflow_dispatch` runs and re-runs always do the full work so an
+# explicit refresh (e.g. after another release was published) can re-stamp.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Firmware inputs only — keep identical in build-release.yml, ci.yml and
+    # prepare-changelog.yml.  Anything else cannot change the release binary.
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.inc'                       # #included sources (e.g. Sub_Ghz/*.inc)
+      - '**.s'                         # startup assembly
+      - '**.ld'                        # linker scripts
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'scripts/gen_*_builtin.py'     # build-time generated key/table sources
+      - 'tools/append_crc32.py'        # injects CRC + Hapax metadata into the image
+      - '!tests/**'                    # host tests — covered by tests.yml
+      - '!documentation/**'            # reference-only sources, not compiled
+  workflow_dispatch:
+
+permissions:
+  contents: write       # commit the stamped changelog back to the PR branch
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Assemble and stamp changelog
+    runs-on: ubuntu-24.04
+    # Same-repo, non-draft PRs only (fork / Dependabot tokens are read-only);
+    # manual runs must target a branch other than main.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       !github.event.pull_request.draft &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.actor != 'dependabot[bot]')
+
+    steps:
+      # Prefer the GitHub App token (as in update-branches.yml) so the pushed
+      # commit triggers the PR's CI checks; fall back to GITHUB_TOKEN.
+      - name: Generate GitHub App token
+        id: app-token
+        if: vars.COPILOT_AGENT_APP_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.COPILOT_AGENT_APP_ID }}
+          private-key: ${{ secrets.COPILOT_AGENT_APP_PRIVATE_KEY }}
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token || github.token }}
+
+      - name: Check for own stamp commit
+        id: guard
+        env:
+          # Only the first automatic run of a `synchronize` event can be the
+          # push this workflow made; manual dispatches and re-runs must do the
+          # full work (the no-diff check below stops redundant commits).
+          AUTO_PUSH_RUN: ${{ github.event_name == 'pull_request'
+                             && github.event.action == 'synchronize'
+                             && github.run_attempt == '1' }}
+        run: |
+          AUTHOR="$(git log -1 --format='%ae')"
+          SUBJECT="$(git log -1 --format='%s')"
+          if [ "${AUTO_PUSH_RUN}" = "true" ] \
+             && [ "${AUTHOR}" = "41898282+github-actions[bot]@users.noreply.github.com" ] \
+             && [[ "${SUBJECT}" == "changelog: stamp "* ]]; then
+            echo "HEAD is this workflow's own stamp commit — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Mirrors "Compute next version and patch source" in build-release.yml,
+      # but fails instead of falling back to RC 0 so a transient API error
+      # can never stamp a bogus version.
+      - name: Compute next release version
+        id: version
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+
+          PREFIX="v${MAJOR}.${MINOR}.${BUILD}."
+          TAGS_JSON=$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 50 \
+              --json tagName)
+          LATEST_RC=$(printf '%s' "${TAGS_JSON}" | python3 -c "
+          import json, sys
+          prefix = '${PREFIX}'
+          tags = [t['tagName'] for t in json.load(sys.stdin)]
+          nums = []
+          for t in tags:
+              if t.startswith(prefix):
+                  tail = t[len(prefix):]
+                  if tail.isdigit():
+                      nums.append(int(tail))
+          print(max(nums) if nums else 0)
+          ")
+          NEW_RC=$((LATEST_RC + 1))
+          RELEASED="${MAJOR}.${MINOR}.${BUILD}.${LATEST_RC}"
+          VERSION="${MAJOR}.${MINOR}.${BUILD}.${NEW_RC}"
+          echo "Latest released: ${RELEASED} → stamping as: ${VERSION}"
+          echo "released=${RELEASED}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+          if [ "${LATEST_RC}" -gt 0 ]; then
+            echo "released_tag=v${RELEASED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Lets the stamper tell "already published" sections from a section that
+      # merely *predicted* a version another PR released first (its entries are
+      # absent from the published changelog, so they stay pending).
+      - name: Fetch published CHANGELOG.md
+        id: published
+        if: steps.guard.outputs.skip != 'true' && steps.version.outputs.released_tag != ''
+        env:
+          GH_TOKEN:     ${{ github.token }}
+          RELEASED_TAG: ${{ steps.version.outputs.released_tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GITHUB_REPOSITORY}/contents/CHANGELOG.md?ref=${RELEASED_TAG}" \
+               -H "Accept: application/vnd.github.raw" > "${RUNNER_TEMP}/released_changelog.md"; then
+            echo "path=${RUNNER_TEMP}/released_changelog.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not fetch CHANGELOG.md at ${RELEASED_TAG} — using version comparison only."
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Assemble fragments and stamp CHANGELOG.md
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          VERSION:  ${{ steps.version.outputs.version }}
+          RELEASED: ${{ steps.version.outputs.released }}
+          RELEASED_CHANGELOG: ${{ steps.published.outputs.path }}
+        run: |
+          set -euo pipefail
+          if ! grep -qF '## [Unreleased]' CHANGELOG.md 2>/dev/null; then
+            echo "::warning::CHANGELOG.md has no [Unreleased] section — skipping assembly and stamping."
+            exit 0
+          fi
+
+          python3 scripts/assemble_changelog.py
+          python3 scripts/stamp_changelog.py stamp \
+            --version "${VERSION}" \
+            --released "${RELEASED}" \
+            --released-changelog "${RELEASED_CHANGELOG}" \
+            --date "$(date -u +%Y-%m-%d)"
+
+          echo "--- First 20 lines of CHANGELOG.md ---"
+          head -20 CHANGELOG.md
+
+      - name: Commit changelog to PR branch
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH:  ${{ github.head_ref || github.ref_name }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add CHANGELOG.md
+          # Also stage deletion of assembled fragment files
+          if [ -d .changelog ]; then
+            git add .changelog/
+          fi
+          if git diff --cached --quiet; then
+            echo "No changelog changes to commit."
+            exit 0
+          fi
+          git commit -m "changelog: stamp [Unreleased] as v${VERSION}"
+          git push origin "HEAD:${BRANCH}"

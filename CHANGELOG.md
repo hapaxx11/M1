@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.13] - 2026-10-17
+
+### Added
+
+- Integrate opt-in Bluetooth Direct/NUS with the native ESP32 brain relay, including qMonstatek request/reply routing, persisted advertising preference, and screen mirroring through the brain's 5 fps BLE path.
+  - Fragment large native ESP32 RPC requests across fixed-size M1 Link transactions.
+- **RPC: GPIO and I2C hardware scans** — Add USB RPC commands for a read-only external GPIO level snapshot and bounded I2C address-range scans.
+- **WiFi Hotspot** — persist editable SoftAP credentials, use the native ESP32
+  SoftAP RPC, and report connected clients and upstream NAT status.
+- **WiFi: primary network auto-connect** — Select a saved network as the primary network and opt in to a single boot-time connection attempt; no other saved network is tried as fallback.
+
+### Changed
+
+- RPC request responses and screen streams now use their originating transport,
+  while USB RPC mode remains isolated from mobile-session state.
+- Documentation: Release builds, PR firmware builds and changelog stamping now run only for changes to firmware inputs (C/H/INC/S/LD sources, CMake files, build-time generator scripts), so docs, CI and test-only changes no longer produce a new version.
+- Documentation: Changelog fragments are now assembled and the next release version is stamped into `CHANGELOG.md` inside the PR branch before merge (new Prepare Changelog workflow), replacing the separate post-release changelog stamp PR.
+- Documentation: Recommend the native CD3 brain ESP32 firmware as the primary
+  choice for most M1 users, while documenting current capability gaps and
+  supported alternatives.
+
+### Fixed
+
+- **ESP32: retry transient compatibility-probe failures** — Do not cache a failed coprocessor probe for the entire STM32 boot; retry after a short cooldown so qMonstatek can recognize a brain ESP32 that was not ready during the initial probe.
+
 ## [0.9.4.11] - 2026-10-14
 
 ### Added

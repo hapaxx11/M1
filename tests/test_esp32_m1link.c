@@ -68,6 +68,9 @@ static int     g_fail_at;          /* transaction index to fail (-1 = never) */
 
 /* Record of the payloads the master clocked out, for assertions. */
 static uint8_t g_tx_type[MAX_TXNS]; /* msg_type of each master frame */
+static uint16_t g_tx_id[MAX_TXNS];
+static uint16_t g_tx_plen[MAX_TXNS];
+static uint8_t g_tx_payload[MAX_TXNS][MTU];
 static int     g_tx_calls;
 
 /* Fake wall-clock for m1_esp32_m1link_send_recv_timed() tests (issue #719
@@ -92,6 +95,9 @@ static void fake_reset(void)
     g_call = 0;
     g_fail_at = -1;
     memset(g_tx_type, 0, sizeof(g_tx_type));
+    memset(g_tx_id, 0, sizeof(g_tx_id));
+    memset(g_tx_plen, 0, sizeof(g_tx_plen));
+    memset(g_tx_payload, 0, sizeof(g_tx_payload));
     g_tx_calls = 0;
     g_fake_now = 0u;
     g_fake_step = 1u;
@@ -164,7 +170,15 @@ static int fake_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu, void *ctx)
 
     /* Record the master frame's msg_type (head of the padded buffer). */
     if (g_tx_calls < MAX_TXNS)
+    {
         g_tx_type[g_tx_calls] = tx[3];
+        g_tx_id[g_tx_calls] = (uint16_t)tx[4] | ((uint16_t)tx[5] << 8u);
+        g_tx_plen[g_tx_calls] = (uint16_t)tx[6] | ((uint16_t)tx[7] << 8u);
+        if (g_tx_plen[g_tx_calls] <= MTU - M1_ESP32_RPC_HDR_SIZE -
+                                         M1_ESP32_RPC_CRC_SIZE)
+            memcpy(g_tx_payload[g_tx_calls], tx + M1_ESP32_RPC_HDR_SIZE,
+                   g_tx_plen[g_tx_calls]);
+    }
     g_tx_calls++;
 
     if (g_fail_at >= 0 && g_call == g_fail_at) {
@@ -186,11 +200,19 @@ static uint8_t   s_tx[MTU];
 static uint8_t   s_rx[MTU];
 static uint8_t   s_req[MTU];
 static uint8_t   s_out[MTU];
+static uint8_t   s_large_req[M1_ESP32_RPC_FRAME_MAX];
 
 /* Build a REQ frame into s_req and return its length. */
 static int build_req(uint16_t msg_id, const uint8_t *payload, uint16_t plen)
 {
     return (int)m1_esp32_rpc_build_req(s_req, (uint16_t)sizeof(s_req),
+                                       msg_id, payload, plen);
+}
+
+static int build_large_req(uint16_t msg_id, const uint8_t *payload,
+                           uint16_t plen)
+{
+    return (int)m1_esp32_rpc_build_req(s_large_req, sizeof(s_large_req),
                                        msg_id, payload, plen);
 }
 
@@ -729,6 +751,52 @@ void test_m1link_timed_reassembles_fragments(void)
     TEST_ASSERT_EQUAL_MEMORY(expect, pl, 10);
 }
 
+/* Large host requests are sent as M1_RPC_FRAG chunks followed by the original
+ * REQ type, matching m1_link_send_msg() on the brain firmware. */
+void test_m1link_timed_fragments_large_request(void)
+{
+    uint8_t payload[1024];
+    for (uint16_t i = 0u; i < sizeof(payload); i++)
+        payload[i] = (uint8_t)(i ^ 0x5Au);
+    int req_len = build_large_req(M1_ESP32_RPC_QMON_RESP,
+                                  payload, sizeof(payload));
+
+    queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+    queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+    queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+    const uint8_t ack = 0u;
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_QMON_RESP, &ack, 1u);
+
+    g_fake_now = 0u;
+    g_fake_step = 1u;
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000u, 10,
+        NULL, NULL,
+        s_large_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+
+    TEST_ASSERT_EQUAL_UINT8(0u, rc);
+    TEST_ASSERT_EQUAL_INT(4, g_tx_calls);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_FRAG, g_tx_type[0]);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_FRAG, g_tx_type[1]);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_REQ, g_tx_type[2]);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_IDLE, g_tx_type[3]);
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_QMON_RESP, g_tx_id[0]);
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_QMON_RESP, g_tx_id[1]);
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_QMON_RESP, g_tx_id[2]);
+    TEST_ASSERT_EQUAL_UINT16(MTU - M1_ESP32_RPC_HDR_SIZE -
+                             M1_ESP32_RPC_CRC_SIZE, g_tx_plen[0]);
+    TEST_ASSERT_EQUAL_UINT16(MTU - M1_ESP32_RPC_HDR_SIZE -
+                             M1_ESP32_RPC_CRC_SIZE, g_tx_plen[1]);
+    TEST_ASSERT_EQUAL_UINT16(20u, g_tx_plen[2]);
+    TEST_ASSERT_EQUAL_MEMORY(payload, g_tx_payload[0], g_tx_plen[0]);
+    TEST_ASSERT_EQUAL_MEMORY(payload + g_tx_plen[0], g_tx_payload[1],
+                             g_tx_plen[1]);
+    TEST_ASSERT_EQUAL_MEMORY(payload + g_tx_plen[0] + g_tx_plen[1],
+                             g_tx_payload[2], g_tx_plen[2]);
+}
+
 /* ---- Invalid arguments are rejected ------------------------------------ */
 void test_m1link_timed_invalid_args(void)
 {
@@ -758,12 +826,15 @@ void test_m1link_timed_invalid_args(void)
                                         NULL, NULL,
                                         s_req, req_len, s_out,
                                         (int)sizeof(s_out), &out_len));
-    /* tx_len > mtu */
+    /* A logical request larger than the configured fragment buffer is rejected
+     * before the helper reads from tx_buf. */
     TEST_ASSERT_NOT_EQUAL(0u,
         m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
                                         fake_now_ms, 1000u, 10,
                                         NULL, NULL,
-                                        s_req, (int)MTU + 1, s_out,
+                                        s_req,
+                                        (int)M1_ESP32_RPC_FRAME_MAX + 1,
+                                        s_out,
                                         (int)sizeof(s_out), &out_len));
 }
 
@@ -791,6 +862,7 @@ int main(void)
     RUN_TEST(test_m1link_timed_max_iterations_safety_net);
     RUN_TEST(test_m1link_timed_transport_error);
     RUN_TEST(test_m1link_timed_reassembles_fragments);
+    RUN_TEST(test_m1link_timed_fragments_large_request);
     RUN_TEST(test_m1link_timed_invalid_args);
     return UNITY_END();
 }

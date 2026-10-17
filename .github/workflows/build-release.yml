@@ -2,28 +2,27 @@ name: Build and Release
 
 # Triggers:
 #   1. Every push (merge) to main → automatic release with auto-incremented version.
-#      Docs-only pushes (*.md, documentation/, LICENSE, IDE files) are skipped.
+#      Only pushes that change firmware inputs (see `paths` below) release;
+#      docs, databases, IDE files, CI workflows and host tests are skipped.
 #   2. Manual dispatch from the Actions tab → optional tag/name overrides.
 # Releases are NOT marked pre-release by default — use the 'prerelease' input to override.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'documentation/**'
-      - 'ir_database/**'
-      - 'subghz_database/**'
-      - 'LICENSE'
-      - 'COPYING.txt'
-      - '.vscode/**'
-      - '.settings/**'
-      - '.project'
-      - '.cproject'
-      - '.mxproject'
-      - 'subghz_playlist/**'
-      - '.github/workflows/**'
-      - '.github/*.md'
-      - '.github/ISSUE_TEMPLATE/**'
+    # Firmware inputs only — keep identical in build-release.yml, ci.yml and
+    # prepare-changelog.yml.  Anything else cannot change the release binary.
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.inc'                       # #included sources (e.g. Sub_Ghz/*.inc)
+      - '**.s'                         # startup assembly
+      - '**.ld'                        # linker scripts
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'scripts/gen_*_builtin.py'     # build-time generated key/table sources
+      - 'tools/append_crc32.py'        # injects CRC + Hapax metadata into the image
+      - '!tests/**'                    # host tests — covered by tests.yml
+      - '!documentation/**'            # reference-only sources, not compiled
   workflow_dispatch:
     inputs:
       tag:
@@ -44,8 +43,6 @@ on:
 
 permissions:
   contents: write        # needed to create the release and upload assets
-  pull-requests: write   # needed to open changelog update PRs
-  issues: write          # needed to create the changelog-stamp label
 
 jobs:
   build:
@@ -70,25 +67,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-
-      # ------------------------------------------------------------------ #
-      # 1a. Assemble changelog fragments into "What's Changed" release notes
-      #
-      # Fragments in .changelog/*.md are the source of truth for this
-      # release's user-visible changes (see .changelog/README.md). Rendering
-      # them here — instead of relying on GitHub's PR-label-based auto-notes
-      # — avoids the release page collapsing everything into a single
-      # "Other Changes" bullet when PRs aren't labelled.
-      # ------------------------------------------------------------------ #
-      - name: Build "What's Changed" notes from changelog fragments
-        id: changelog
-        run: |
-          set -euo pipefail
-          RAW="$(python3 scripts/assemble_changelog.py --preview | tail -n +3)"
-          if [ -z "$(printf '%s' "${RAW}" | tr -d '[:space:]')" ]; then
-            RAW="_No changelog fragments were recorded for this release._"
-          fi
-          printf 'notes<<CHANGELOG_NOTES_EOF\n%s\nCHANGELOG_NOTES_EOF\n' "${RAW}" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------ #
       # 2. Auto-increment version — patch source files before building
@@ -159,6 +137,42 @@ jobs:
               m1_csrc/m1_fw_update_bl.h
           echo "--- Patched values ---"
           grep -E 'FW_VERSION_RC|M1_HAPAX_REVISION' m1_csrc/m1_fw_update_bl.h
+
+      # ------------------------------------------------------------------ #
+      # 2a. Build "What's Changed" release notes from CHANGELOG.md
+      #
+      # Fragments are assembled and the version is stamped into CHANGELOG.md
+      # in the PR branch before merge (prepare-changelog.yml), so the notes
+      # are the changelog sections newer than the previous release, plus any
+      # fragments that reached main without being assembled (see
+      # .changelog/README.md). Rendering them here — instead of relying on
+      # GitHub's PR-label-based auto-notes — avoids the release page
+      # collapsing everything into a single "Other Changes" bullet when PRs
+      # aren't labelled.
+      # ------------------------------------------------------------------ #
+      - name: Build "What's Changed" notes from CHANGELOG.md
+        id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREV_TAG: ${{ steps.patch.outputs.prev_tag }}
+        run: |
+          set -euo pipefail
+          # CHANGELOG.md as published in the previous release, so sections that
+          # only *predicted* an already-used version are still recognised as
+          # pending instead of being silently dropped from the notes.
+          RELEASED_CHANGELOG=""
+          if [ -n "${PREV_TAG}" ] && gh api \
+                "repos/${GITHUB_REPOSITORY}/contents/CHANGELOG.md?ref=${PREV_TAG}" \
+                -H "Accept: application/vnd.github.raw" \
+                > "${RUNNER_TEMP}/released_changelog.md"; then
+            RELEASED_CHANGELOG="${RUNNER_TEMP}/released_changelog.md"
+          fi
+          RAW="$(python3 scripts/stamp_changelog.py notes --released "${PREV_TAG}" \
+                   --released-changelog "${RELEASED_CHANGELOG}")"
+          if [ -z "$(printf '%s' "${RAW}" | tr -d '[:space:]')" ]; then
+            RAW="_No changelog fragments were recorded for this release._"
+          fi
+          printf 'notes<<CHANGELOG_NOTES_EOF\n%s\nCHANGELOG_NOTES_EOF\n' "${RAW}" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------ #
       # 3. Read project metadata from source tree (after patching)
@@ -488,112 +502,3 @@ jobs:
           python3 scripts/release_retention.py \
             --repo "$GITHUB_REPOSITORY" \
             --tag  "${{ needs.build.outputs.tag }}"
-
-  # ====================================================================== #
-  # Stamp CHANGELOG.md — replace [Unreleased] with the release version
-  # ====================================================================== #
-  update-changelog:
-    name: Stamp changelog
-    needs: [build, release]
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 1
-
-      - name: Assemble changelog fragments
-        run: |
-          echo "=== Assembling changelog fragments ==="
-          FRAGMENT_COUNT=$(find .changelog -maxdepth 1 -name '*.md' ! -iname 'README.md' 2>/dev/null | wc -l)
-          if [ "$FRAGMENT_COUNT" -gt 0 ]; then
-            python3 scripts/assemble_changelog.py
-          else
-            echo "No changelog fragments found — skipping assembly."
-          fi
-
-      - name: Replace [Unreleased] with version heading
-        env:
-          TAG: ${{ needs.build.outputs.tag }}
-        run: |
-          VERSION="${TAG#v}"
-          DATE="$(date -u +%Y-%m-%d)"
-          echo "Stamping CHANGELOG.md: [Unreleased] → [${VERSION}] - ${DATE}"
-
-          python3 - "$VERSION" "$DATE" <<'PYEOF'
-          import sys, pathlib
-
-          version, date = sys.argv[1], sys.argv[2]
-          cl = pathlib.Path("CHANGELOG.md")
-          text = cl.read_text()
-
-          old = "## [Unreleased]"
-          if old not in text:
-              print("No [Unreleased] section found — nothing to do.")
-              sys.exit(0)
-
-          new = f"## [Unreleased]\n\n## [{version}] - {date}"
-          text = text.replace(old, new, 1)
-          cl.write_text(text)
-          print(f"Replaced with: ## [{version}] - {date}")
-          PYEOF
-
-          echo "--- First 15 lines of CHANGELOG.md ---"
-          head -15 CHANGELOG.md
-
-      - name: Commit, open PR, and auto-merge changelog update
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.build.outputs.tag }}
-        run: |
-          BRANCH="changelog/stamp-${TAG}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Delete any stale changelog stamp branches from previous releases
-          STALE=$(git ls-remote --heads origin 'changelog/stamp-*' \
-                  | awk '{print $2}' | sed 's|refs/heads/||')
-          for branch in ${STALE}; do
-            echo "Deleting stale branch: ${branch}"
-            git push origin --delete "${branch}" || true
-          done
-
-          git checkout -b "${BRANCH}"
-          git add CHANGELOG.md
-          # Also stage deletion of assembled fragment files
-          if [ -d .changelog ]; then
-            git add .changelog/
-          fi
-          if git diff --cached --quiet; then
-            echo "No changelog changes to commit."
-            exit 0
-          fi
-          git commit -m "changelog: stamp [Unreleased] as ${TAG} [skip ci]"
-          git push origin "${BRANCH}"
-
-          # Ensure the changelog-stamp label exists (excluded from auto-generated release notes via .github/release.yml)
-          gh label create changelog-stamp --description "Automated changelog stamp PR" --color "ededed" 2>/dev/null || true
-
-          # Create the PR with the changelog-stamp label so it is excluded from release notes
-          PR_URL=$(gh pr create \
-            --base main \
-            --head "${BRANCH}" \
-            --title "changelog: stamp [Unreleased] as ${TAG}" \
-            --label "changelog-stamp" \
-            --body "Automated changelog update from release workflow for \`${TAG}\`.") \
-            || true
-
-          if [ -z "${PR_URL}" ]; then
-            echo "::warning::Failed to create changelog PR for ${TAG}"
-            exit 0
-          fi
-          echo "Created PR: ${PR_URL}"
-
-          # Try to merge immediately, then fall back to auto-merge
-          if ! gh pr merge "${BRANCH}" --squash --delete-branch; then
-            echo "Immediate merge not possible — enabling auto-merge"
-            gh pr merge "${BRANCH}" --squash --delete-branch --auto \
-              || echo "::warning::Could not merge or enable auto-merge — PR remains open for manual review"
-          fi

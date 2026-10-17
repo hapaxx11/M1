@@ -132,6 +132,7 @@ typedef enum {
     M1_ESP32_RPC_BLE_SPAM_START     = 0x040D,
     M1_ESP32_RPC_BLE_SPAM_STOP      = 0x040E,
     M1_ESP32_RPC_BLE_RPC_ADV        = 0x040F,
+    M1_ESP32_RPC_BLE_STATE          = 0x0410,
 
     /* ---- Zigbee / 802.15.4 0x0500-0x05FF ---- */
     M1_ESP32_RPC_ZB_INIT            = 0x0500,
@@ -197,15 +198,16 @@ typedef enum {
 /* =========================================================================
  * Frame sizing
  *
- * Single-transaction control commands and their requests fit comfortably in
- * this budget (ESP-NOW frames are <= 64 bytes; deauth / connect / HID-string
- * requests are well under 246 payload bytes), so M1_ESP32_RPC_FRAME_MAX still
- * bounds outbound REQ frames (built into the small stack buffer in
- * m1_esp32_rpc_call()).
+ * The full-duplex M1 Link fragments larger REQ payloads across 512-byte SPI
+ * transactions. This budget covers qMonstatek relay frames and screen pushes;
+ * the temporary request buffer is heap-allocated in m1_esp32_rpc_call().
  * =========================================================================*/
-#define M1_ESP32_RPC_FRAME_MAX   256u
+#define M1_ESP32_RPC_FRAME_MAX   4092u
 #define M1_ESP32_RPC_PAYLOAD_MAX \
     (M1_ESP32_RPC_FRAME_MAX - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
+#define M1_ESP32_RPC_CONTROL_FRAME_MAX 256u
+#define M1_ESP32_RPC_CONTROL_PAYLOAD_MAX \
+    (M1_ESP32_RPC_CONTROL_FRAME_MAX - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
 
 /* =========================================================================
  * Response reception budget.
@@ -619,7 +621,8 @@ typedef void (*m1_esp32_m1link_pace_fn)(void *ctx);
  *                       pure-logic tests: pass NULL.
  * @param pace_ctx       Opaque pointer forwarded to @p pace_fn (ignored if NULL)
  * @param tx_buf         Request frame bytes (built by m1_esp32_rpc_build_req)
- * @param tx_len         Request frame length (> 0, <= @p mtu)
+ * @param tx_len         Request frame length (<= M1_ESP32_RPC_FRAME_MAX); larger
+ *                       requests are sent as FRAG chunks followed by the final REQ
  * @param rx_buf         Output buffer for the matched response frame
  * @param rx_buf_size    Capacity of @p rx_buf
  * @param out_len        [out] response frame bytes written (0 on failure)
@@ -717,6 +720,10 @@ m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
  * the snapshot along with the transport in host tests).
  */
 void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
+void m1_esp32_rpc_transaction_lock_init(void);
+bool m1_esp32_rpc_transaction_lock(void);
+bool m1_esp32_rpc_transaction_try_lock(void);
+void m1_esp32_rpc_transaction_unlock(void);
 
 /* =========================================================================
  * Public client API

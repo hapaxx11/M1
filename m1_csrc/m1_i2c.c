@@ -161,6 +161,89 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 	return stat;
 } // HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf trans_inf)
 
+/*
+ * Probe a bounded 7-bit address range while holding the same bus mutex used
+ * by normal I2C transactions. An address NACK is an expected empty result;
+ * bus errors and timeouts abort the scan.
+ */
+static m1_i2c_scan_probe_result_t m1_i2c_scan_probe(uint8_t address,
+                                                      void *context)
+{
+	I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)context;
+	uint32_t tickstart;
+	bool completed = false;
+	bool nack = false;
+
+	if (hi2c->State != HAL_I2C_STATE_READY ||
+	    __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)
+		return M1_I2C_SCAN_PROBE_ERROR;
+
+	if (hi2c->Lock == HAL_LOCKED)
+		return M1_I2C_SCAN_PROBE_ERROR;
+	__HAL_LOCK(hi2c);
+	hi2c->State = HAL_I2C_STATE_BUSY;
+	hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+	hi2c->Instance->CR2 = I2C_GENERATE_START(
+		hi2c->Init.AddressingMode, (uint16_t)(address << 1));
+
+	tickstart = HAL_GetTick();
+	while (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF) == RESET &&
+	       __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)
+	{
+		if ((HAL_GetTick() - tickstart) >= M1_I2C_SCAN_PROBE_TIMEOUT_MS)
+			goto probe_done;
+	}
+
+	nack = (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) != RESET);
+	while (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF) == RESET)
+	{
+		if ((HAL_GetTick() - tickstart) >= M1_I2C_SCAN_PROBE_TIMEOUT_MS)
+			goto probe_done;
+	}
+
+	if (nack)
+		__HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);
+	__HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);
+	completed = true;
+
+probe_done:
+	if (!completed)
+		hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;
+	hi2c->State = HAL_I2C_STATE_READY;
+	__HAL_UNLOCK(hi2c);
+	return m1_i2c_scan_probe_classify(completed, nack);
+}
+
+bool m1_i2c_scan_addresses(uint8_t first,
+                           uint8_t last,
+                           uint8_t *addresses,
+                           size_t capacity,
+                           uint8_t *count)
+{
+	uint16_t range_size;
+
+	if (count == NULL)
+		return false;
+	*count = 0u;
+
+	if (addresses == NULL ||
+	    !m1_i2c_scan_range_valid(first, last) ||
+	    pi2chdl == NULL || mutex_i2c_trans == NULL)
+		return false;
+
+	range_size = (uint16_t)last - first + 1u;
+	if (capacity < range_size)
+		return false;
+
+	if (xSemaphoreTake(mutex_i2c_trans, portMAX_DELAY) != pdTRUE)
+		return false;
+
+	bool success = m1_i2c_scan_collect(first, last, m1_i2c_scan_probe,
+	                                   pi2chdl, addresses, capacity, count);
+	xSemaphoreGive(mutex_i2c_trans);
+	return success;
+}
+
 
 
 /*============================================================================*/

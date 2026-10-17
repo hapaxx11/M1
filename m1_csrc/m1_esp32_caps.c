@@ -22,6 +22,7 @@
 #include "FreeRTOS.h"
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
+#include "m1_esp32_rpc.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -74,6 +75,7 @@ static bool     s_queried         = false;
 static char     s_fw_name[32]     = "Unknown";
 static uint32_t s_bss_bytes       = 0u;
 static uint32_t s_free_heap_bytes = 0u;
+static uint32_t s_last_probe_tick = 0u;
 
 /* Phase 0 (issue #719): read-only snapshot of the last probe sequence,
  * surfaced on the Settings > Dashboard so the "Unknown (fallback)" failure is
@@ -247,7 +249,7 @@ static void caps_apply_footprint_estimates(uint64_t bitmap)
 
 /*************** P U B L I C   A P I ******************************************/
 
-void m1_esp32_caps_init(void)
+static void m1_esp32_caps_init_locked(void)
 {
     m1_resp_t resp;
     int       ret;
@@ -628,7 +630,26 @@ caps_fallback:
     caps_apply_footprint_estimates(0u);
     s_diag.outcome = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
     s_diag.bitmap  = 0u;
-    s_queried = true;
+}
+
+void m1_esp32_caps_init(void)
+{
+    if (!m1_esp32_rpc_transaction_lock())
+        return;
+
+    if (!s_queried &&
+        !m1_esp32_caps_probe_retry_due(
+            s_diag.outcome == (uint8_t)M1_ESP32_PROBE_UNKNOWN,
+            s_last_probe_tick, HAL_GetTick()))
+    {
+        m1_esp32_rpc_transaction_unlock();
+        return;
+    }
+
+    m1_esp32_caps_init_locked();
+    if (!s_queried)
+        s_last_probe_tick = HAL_GetTick();
+    m1_esp32_rpc_transaction_unlock();
 }
 
 void m1_esp32_caps_reset(void)
@@ -637,6 +658,7 @@ void m1_esp32_caps_reset(void)
     s_bss_bytes       = 0u;
     s_free_heap_bytes = 0u;
     s_queried         = false;
+    s_last_probe_tick = 0u;
     s_fw_name[0]      = '\0';
     memset(&s_diag, 0, sizeof(s_diag));
 }

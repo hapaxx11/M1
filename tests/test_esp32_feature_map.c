@@ -292,9 +292,9 @@ void test_espnow_maps_to_cap_espnow(void)
         esp32_feature_required_caps(ESP32_FEATURE_ESPNOW));
 }
 
-void test_wifi_hotspot_maps_to_cap_wifi_hotspot(void)
+void test_wifi_hotspot_maps_to_canonical_softap_cap(void)
 {
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_HOTSPOT,
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_SOFTAP,
         esp32_feature_required_caps(ESP32_FEATURE_WIFI_HOTSPOT));
 }
 
@@ -628,7 +628,7 @@ int main(void)
     RUN_TEST(test_handshake_maps_to_cap_handshake);
     RUN_TEST(test_ota_maps_to_cap_ota);
     RUN_TEST(test_espnow_maps_to_cap_espnow);
-    RUN_TEST(test_wifi_hotspot_maps_to_cap_wifi_hotspot);
+    RUN_TEST(test_wifi_hotspot_maps_to_canonical_softap_cap);
 
     RUN_TEST(test_sin360_profile_lacks_wifi_join);
     RUN_TEST(test_sin360_profile_supports_attack_features);

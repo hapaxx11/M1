@@ -47,11 +47,14 @@
 #include "wifi_at_scan.h"
 #include "wifi_scan_fail_msg.h"
 #include "wifi_ntp_parse.h"
+#include "wifi_hotspot_config.h"
 #include "m1_esp32_caps.h"
 #include "esp_app_main.h"
 #include "m1_esp32_rpc_features.h"
 #include "m1_system.h"
+#include "m1_settings.h"
 #include "m1_wdt_hw.h"
+#include "wifi_boot_config.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -80,6 +83,26 @@ static uint16_t ap_view_idx = 0;
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 static bool s_wifi_stub_connected = false;
 static char s_wifi_stub_ssid[33] = {0};
+static wifi_boot_config_t s_wifi_boot_config = {
+	.primary_index = WIFI_BOOT_PRIMARY_NONE,
+	.auto_connect = false,
+};
+
+static void wifi_set_connected_state(const char *ssid)
+{
+	s_wifi_stub_connected = ssid != NULL;
+	if (ssid != NULL)
+	{
+		strncpy(s_wifi_stub_ssid, ssid, sizeof(s_wifi_stub_ssid) - 1u);
+		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1u] = '\0';
+	}
+	else
+	{
+		memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+	}
+	m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_WIFI_STA,
+	                              s_wifi_stub_connected);
+}
 #endif
 
 typedef struct {
@@ -614,10 +637,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 			wifi_show_message("Connect", "Warning", "Credentials not saved");
-		strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
-		        sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		s_wifi_stub_connected = true;
+		wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
@@ -668,10 +688,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 			wifi_show_message("Connect", "Warning", "Credentials not saved");
-		strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
-		        sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		s_wifi_stub_connected = true;
+		wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
@@ -717,9 +734,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 		wifi_show_message("Connect", "Warning", "Credentials not saved");
-	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	s_wifi_stub_connected = true;
+	wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 	memset(password, 0, sizeof(password));
 
@@ -4337,9 +4352,7 @@ void wifi_general_join_wifi(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 		wifi_show_message("Join WiFi", "Warning", "Credentials not saved");
-	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	s_wifi_stub_connected = true;
+	wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 	memset(password, 0, sizeof(password));
 
@@ -4761,76 +4774,190 @@ void wifi_general_select_ep_html(void)
 	wifi_show_message("EP HTML", line, "Ready for portal");
 }
 
-/* General: WiFi Hotspot (SoftAP) — Phase 5 of the WiFi cleanup plan (§3.9).
- * Raw ESP-AT path: AT+CWMODE=2 switches the radio to SoftAP mode and
- * AT+CWSAP configures the SSID/password/channel/security.  Gated behind
- * M1_ESP32_CAP_WIFI_HOTSPOT (esp32_feature_map.h), which no shipped
- * firmware self-reports yet — the DELEGATE_FEATURE wrapper in
- * m1_wifi_scene_general.c shows "Feature not supported" until a firmware
- * advertises the bit, so this body only runs once support is confirmed. */
+#define WIFI_HOTSPOT_CONFIG_PATH "0:/System/hotspot.cfg"
+
+static bool wifi_hotspot_config_load(char ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 1u],
+                                     char password[WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u])
+{
+	FIL file;
+	UINT bytes_read = 0u;
+	char text[WIFI_HOTSPOT_CONFIG_TEXT_MAX + 1u];
+	if (f_open(&file, WIFI_HOTSPOT_CONFIG_PATH, FA_READ) != FR_OK)
+		return false;
+
+	FRESULT result = f_read(&file, text, sizeof(text), &bytes_read);
+	f_close(&file);
+	if (result != FR_OK || bytes_read > WIFI_HOTSPOT_CONFIG_TEXT_MAX)
+		return false;
+
+	return wifi_hotspot_config_parse(text, bytes_read, ssid,
+	                                 WIFI_HOTSPOT_SSID_MAX_LEN + 1u,
+	                                 password,
+	                                 WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u);
+}
+
+static bool wifi_hotspot_config_save(const char *ssid, const char *password)
+{
+	char text[WIFI_HOTSPOT_CONFIG_TEXT_MAX + 1u];
+	size_t text_len = wifi_hotspot_config_format(text, sizeof(text), ssid, password);
+	if (text_len == 0u)
+		return false;
+
+	f_mkdir("0:/System");
+	FIL file;
+	if (f_open(&file, WIFI_HOTSPOT_CONFIG_PATH,
+	           FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+		return false;
+
+	UINT bytes_written = 0u;
+	FRESULT result = f_write(&file, text, (UINT)text_len, &bytes_written);
+	FRESULT close_result = f_close(&file);
+	return result == FR_OK && close_result == FR_OK &&
+	       bytes_written == (UINT)text_len;
+}
+
+/* General: editable, persisted WiFi Hotspot configuration.  Native M1_RPC
+ * firmware handles AP+STA mode and NAT passthrough; the legacy AT transport
+ * retains its existing SoftAP path without claiming NAT support. */
 void wifi_general_hotspot(void)
 {
-	char ssid[33];
-	char pwd[65];
+	char ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 1u] = "M1-Hotspot";
+	char pwd[WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u] = "";
 	char cmd_buf[160];
 	char resp_buf[256];
 	uint8_t choice;
+	wifi_hotspot_path_t hotspot_path =
+		wifi_hotspot_select_path(m1_esp32_active_transport());
+	bool use_rpc = (hotspot_path == WIFI_HOTSPOT_PATH_RPC);
+	uint8_t clients = 0u;
+	bool internet_shared = false;
+	char status_line[32];
+	const char *internet_line = "NAT unavailable";
 
-	memset(ssid, 0, sizeof(ssid));
-	if (m1_vkb_get_text("Hotspot SSID:", "", ssid, 32) == 0 || ssid[0] == '\0')
-		return;
-
-	memset(pwd, 0, sizeof(pwd));
-	if (m1_vkb_get_text("Hotspot Password:", "", pwd, 64) == 0)
-		return;
-
-	if (pwd[0] != '\0' && strlen(pwd) < 8)
+	if (hotspot_path == WIFI_HOTSPOT_PATH_UNSUPPORTED)
 	{
-		wifi_show_message("WiFi Hotspot", "Password too short", "Need 8+ chars");
+		wifi_show_message("WiFi Hotspot", "Unsupported transport", NULL);
 		return;
 	}
 
-	/* Reject characters that would break/inject into quoted ESP-AT parameters. */
-	for (size_t i = 0; ssid[i]; i++)
+	if (!wifi_hotspot_config_load(ssid, pwd))
 	{
-		char ch = ssid[i];
-		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		snprintf(ssid, sizeof(ssid), "%s", "M1-Hotspot");
+		pwd[0] = '\0';
+	}
+	if (m1_vkb_get_text("Hotspot SSID:", ssid, ssid, sizeof(ssid)) == 0)
+		return;
+
+	if (m1_vkb_get_text("Hotspot Password:", pwd, pwd, sizeof(pwd)) == 0)
+		return;
+
+	if (!wifi_hotspot_config_validate(ssid, pwd))
+	{
+		wifi_show_message("WiFi Hotspot", "Invalid settings",
+		                  "SSID 1-32, pass 8-63");
+		return;
+	}
+
+	if (!use_rpc)
+	{
+		/* Keep quoted ESP-AT parameters safe on legacy firmware. */
+		for (size_t i = 0; ssid[i]; i++)
 		{
-			wifi_show_message("WiFi Hotspot", "Invalid SSID", "No \\\\ \" , CR/LF");
-			return;
+			char ch = ssid[i];
+			if (ch == '"' || ch == '\\' || ch == ',')
+			{
+				wifi_show_message("WiFi Hotspot", "Invalid SSID", "Unsafe AT character");
+				return;
+			}
+		}
+		for (size_t i = 0; pwd[i]; i++)
+		{
+			char ch = pwd[i];
+			if (ch == '"' || ch == '\\' || ch == ',')
+			{
+				wifi_show_message("WiFi Hotspot", "Invalid password", "Unsafe AT character");
+				return;
+			}
 		}
 	}
-	for (size_t i = 0; pwd[i]; i++)
+
+	if (use_rpc)
 	{
-		char ch = pwd[i];
-		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		if (m1_esp32_rpc_softap_start(ssid, pwd, 6u) != M1_ESP32_RPC_OK)
 		{
-			wifi_show_message("WiFi Hotspot", "Invalid password", "No \\\\ \" , CR/LF");
+			wifi_show_message("WiFi Hotspot", "Start failed", "Check ESP32 firmware");
 			return;
 		}
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
+		if (m1_esp32_rpc_softap_status(&clients, &internet_shared) == M1_ESP32_RPC_OK)
+		{
+			snprintf(status_line, sizeof(status_line), "%u clients, %s", clients,
+			         internet_shared ? "Internet shared" : "NAT inactive");
+			internet_line = internet_shared ? "Internet shared" : "NAT inactive";
+		}
+		else
+		{
+			snprintf(status_line, sizeof(status_line), "%s", "Status unavailable");
+			internet_line = "NAT status unavailable";
+		}
 	}
-
-	ensure_esp32_ready();
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
-
-	snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
-	         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
-	if (strstr(resp_buf, "OK") == NULL)
+	else
 	{
-		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-		wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
-		return;
+		ensure_esp32_ready();
+		memset(resp_buf, 0, sizeof(resp_buf));
+		(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
+
+		snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
+		         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
+		memset(resp_buf, 0, sizeof(resp_buf));
+		(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
+		if (strstr(resp_buf, "OK") == NULL)
+		{
+			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+			wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
+		snprintf(status_line, sizeof(status_line), "%s", "NAT unavailable");
 	}
 
-	choice = m1_message_box_choice(&m1_u8g2, "WiFi Hotspot", "Broadcasting", ssid,
+	if (!wifi_hotspot_config_save(ssid, pwd))
+		wifi_show_message("WiFi Hotspot", "Settings not saved", "SD card write failed");
+
+	choice = m1_message_box_choice(&m1_u8g2, "Hotspot running", ssid, status_line,
 	                                "Stop\nKeep");
 	if (choice == 1)
 	{
-		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-		wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
+		if (use_rpc)
+		{
+			if (m1_esp32_rpc_softap_stop() == M1_ESP32_RPC_OK)
+			{
+				m1_esp32_background_owner_set(
+					M1_ESP32_BG_OWNER_HOTSPOT, false);
+				wifi_show_message("WiFi Hotspot", "Stopped", internet_line);
+			}
+			else
+				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
+		}
+		else
+		{
+			memset(resp_buf, 0, sizeof(resp_buf));
+			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+			if (strstr(resp_buf, "OK") != NULL)
+			{
+				m1_esp32_background_owner_set(
+					M1_ESP32_BG_OWNER_HOTSPOT, false);
+				wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
+			}
+			else
+			{
+				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
+			}
+		}
+	}
+	else if (use_rpc)
+	{
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
 	}
 }
 
@@ -6042,7 +6169,9 @@ void wifi_ntp_background_sync(void)
  * all ESP32 firmware variants.
  */
 /*============================================================================*/
-static void wifi_connect_from_saved(const wifi_credential_t *cred)
+static bool wifi_connect_from_saved(const wifi_credential_t *cred,
+                                    bool show_status,
+                                    bool sync_clock)
 {
 	m1_cmd_t cmd;
 	m1_resp_t resp;
@@ -6052,15 +6181,16 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	int ret;
 
 	if (cred == NULL || !cred->valid || cred->ssid[0] == '\0')
-		return;
+		return false;
 
 	ssid_len = (uint8_t)strnlen(cred->ssid, 32);
 	pass_len = (uint8_t)strnlen(cred->password, WIFI_JOIN_PASS_MAX);
 
 	if ((uint16_t)2 + ssid_len + pass_len > M1_MAX_CMD_PAYLOAD)
 	{
-		wifi_show_message("Connect", "Credentials too long", NULL);
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Credentials too long", NULL);
+		return false;
 	}
 
 	ensure_esp32_ready();
@@ -6082,21 +6212,23 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	/* ---- brain CD3 M1_RPC path ---- */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
-		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		if (show_status)
+			wifi_draw_message("Connect", "Connecting...", cred->ssid);
 		uint32_t assigned_ip = 0u;
 		m1_esp32_rpc_status_t st =
 		    m1_esp32_rpc_wifi_connect(cred->ssid, cred->password, &assigned_ip);
 		if (st != M1_ESP32_RPC_OK)
 		{
-			wifi_show_message("Connect", "Connect failed", "Check password");
-			return;
+			if (show_status)
+				wifi_show_message("Connect", "Connect failed", "Check password");
+			return false;
 		}
-		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		s_wifi_stub_connected = true;
-		wifi_show_message("Connect", "Connected!", cred->ssid);
-		wifi_sync_rtc();
-		return;
+		wifi_set_connected_state(cred->ssid);
+		if (show_status)
+			wifi_show_message("Connect", "Connected!", cred->ssid);
+		if (sync_clock)
+			wifi_sync_rtc();
+		return true;
 	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
@@ -6115,7 +6247,8 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
 		         ssid_esc, pass_esc);
 
-		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		if (show_status)
+			wifi_draw_message("Connect", "Connecting...", cred->ssid);
 		memset(at_resp, 0, sizeof(at_resp));
 		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
 
@@ -6130,17 +6263,18 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
 		if (!got_ip || has_fail)
 		{
-			wifi_show_message("Connect", "Connect failed", reason);
-			return;
+			if (show_status)
+				wifi_show_message("Connect", "Connect failed", reason);
+			return false;
 		}
 
 		/* Success — update connected state */
-		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		s_wifi_stub_connected = true;
-		wifi_show_message("Connect", "Connected!", cred->ssid);
-		wifi_sync_rtc();
-		return;
+		wifi_set_connected_state(cred->ssid);
+		if (show_status)
+			wifi_show_message("Connect", "Connected!", cred->ssid);
+		if (sync_clock)
+			wifi_sync_rtc();
+		return true;
 	}
 
 	/* ---- Binary SPI path (SiN360) ---- */
@@ -6153,37 +6287,40 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	memcpy(&cmd.payload[2 + ssid_len], cred->password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	wifi_draw_message("Connect", "Connecting...", cred->ssid);
+	if (show_status)
+		wifi_draw_message("Connect", "Connecting...", cred->ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
-		wifi_show_message("Connect", "Connect failed", "Check password");
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connect failed", "Check password");
+		return false;
 	}
 
 	if (resp.status == RESP_BUSY)
 	{
-		wifi_show_message("Connect", "Connecting...", "Check Status later");
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connecting...", "Check Status later");
+		return false;
 	}
 
 	/* Success — update connected state */
-	strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	s_wifi_stub_connected = true;
+	wifi_set_connected_state(cred->ssid);
 
-	if (resp.payload_len >= 2)
+	if (show_status && resp.payload_len >= 2)
 	{
 		snprintf(line, sizeof(line), "CH:%d RSSI:%ddBm",
 			resp.payload[0], (int8_t)resp.payload[1]);
 		wifi_show_message("Connect", "Connected!", line);
 	}
-	else
+	else if (show_status)
 	{
 		wifi_show_message("Connect", "Connected!", cred->ssid);
 	}
 
-	wifi_sync_rtc();
+	if (sync_clock)
+		wifi_sync_rtc();
+	return true;
 }
 
 /*============================================================================*/
@@ -6191,6 +6328,35 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
  * Saved Networks — browse, connect to, or delete encrypted WiFi credentials.
  */
 /*============================================================================*/
+wifi_boot_config_t wifi_boot_config_get(void)
+{
+	return s_wifi_boot_config;
+}
+
+void wifi_boot_config_set(wifi_boot_config_t config)
+{
+	s_wifi_boot_config = config;
+}
+
+void wifi_auto_connect_primary(void)
+{
+	wifi_credential_t creds[WIFI_CRED_MAX_STORED];
+	wifi_boot_config_t config = wifi_boot_config_get();
+	uint8_t count;
+	uint8_t index;
+
+	if (!config.auto_connect)
+		return;
+
+	count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
+	if (wifi_boot_config_target(&config, count, &index))
+	{
+		(void)wifi_connect_from_saved(&creds[index], false, false);
+		m1_esp32_deinit();
+	}
+	memset(creds, 0, sizeof(creds));
+}
+
 void wifi_saved_networks(void)
 {
 	wifi_credential_t creds[WIFI_CRED_MAX_STORED];
@@ -6216,6 +6382,7 @@ void wifi_saved_networks(void)
 		if (redraw)
 		{
 			redraw = false;
+			wifi_boot_config_t boot_config = wifi_boot_config_get();
 			const uint8_t item_h  = m1_menu_item_h();
 			const uint8_t vis     = m1_menu_max_visible();
 			const uint8_t text_ofs = item_h - 1;
@@ -6245,6 +6412,9 @@ void wifi_saved_networks(void)
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 				}
 				u8g2_DrawStr(&m1_u8g2, 4, (uint8_t)(y + text_ofs), creds[idx].ssid);
+				if (boot_config.auto_connect && boot_config.primary_index == idx)
+					u8g2_DrawStr(&m1_u8g2, M1_MENU_TEXT_W - 8,
+					             (uint8_t)(y + text_ofs), "P");
 				if (idx == sel)
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			}
@@ -6290,7 +6460,24 @@ void wifi_saved_networks(void)
 		else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Connect using stored password — no prompt */
-			wifi_connect_from_saved(&creds[sel]);
+			(void)wifi_connect_from_saved(&creds[sel], true, true);
+			redraw = true;
+		}
+		else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			wifi_boot_config_t config = wifi_boot_config_get();
+			if (config.primary_index == sel && config.auto_connect)
+			{
+				wifi_boot_config_set_enabled(&config, false);
+				wifi_show_message("WiFi on Boot", "Auto-connect off", creds[sel].ssid);
+			}
+			else
+			{
+				(void)wifi_boot_config_set_primary(&config, sel, count);
+				wifi_show_message("WiFi on Boot", "Primary selected", creds[sel].ssid);
+			}
+			wifi_boot_config_set(config);
+			settings_save_to_sd();
 			redraw = true;
 		}
 		else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
@@ -6302,7 +6489,13 @@ void wifi_saved_networks(void)
 			                     "OK\nCancel");
 			if (choice == 1)
 			{
-				wifi_cred_delete(creds[sel].ssid);
+				if (wifi_cred_delete(creds[sel].ssid))
+				{
+					wifi_boot_config_t config = wifi_boot_config_get();
+					wifi_boot_config_on_delete(&config, sel);
+					wifi_boot_config_set(config);
+					settings_save_to_sd();
+				}
 				count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
 				if (count == 0)
 				{
@@ -6374,8 +6567,7 @@ void wifi_disconnect(void)
 		m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
 	}
 
-	s_wifi_stub_connected = false;
-	memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+	wifi_set_connected_state(NULL);
 }
 
 bool wifi_prompt_disconnect(void)

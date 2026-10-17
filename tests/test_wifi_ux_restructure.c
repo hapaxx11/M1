@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "esp32_feature_map.h"
+#include "m1_esp32_caps.h"
 
 #ifndef M1_ROOT
 #error "M1_ROOT must be defined by CMake"
@@ -729,7 +730,7 @@ void test_multi_target_build_declared(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 32. Phase 5: WiFi Hotspot capability-gated General menu entry            */
+/* 32. Phase 6: WiFi Hotspot capability-gated General menu entry            */
 /*--------------------------------------------------------------------------*/
 
 void test_general_menu_has_hotspot_entry(void)
@@ -738,7 +739,7 @@ void test_general_menu_has_hotspot_entry(void)
     TEST_ASSERT_NOT_NULL(c);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"WiFi Hotspot\""),
-        "General menu must offer a 'WiFi Hotspot' entry (Phase 5, §3.9)");
+        "General menu must offer a 'WiFi Hotspot' entry");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "WifiSceneGeneralHotspot"),
         "General target table must route 'WiFi Hotspot' to WifiSceneGeneralHotspot");
     TEST_ASSERT_NOT_NULL_MESSAGE(
@@ -750,11 +751,10 @@ void test_general_menu_has_hotspot_entry(void)
 
 void test_hotspot_capability_hides_feature_when_absent(void)
 {
-    /* No shipped firmware self-reports M1_ESP32_CAP_WIFI_HOTSPOT yet, so the
-     * feature gate must fail closed (deferred / optional, plan §3.9). */
+    /* The feature gate uses the canonical CD3 SoftAP bit and remains fail-closed. */
     TEST_ASSERT_FALSE(esp32_feature_supported(0u, ESP32_FEATURE_WIFI_HOTSPOT));
     TEST_ASSERT_TRUE(esp32_feature_supported(
-        esp32_feature_required_caps(ESP32_FEATURE_WIFI_HOTSPOT),
+        M1_ESP32_CAP_SOFTAP,
         ESP32_FEATURE_WIFI_HOTSPOT));
 }
 

@@ -138,10 +138,12 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
 
     /* The full-sequence lock must wrap the abort AND the timed exchange, so
      * spi_trans_control_task cannot interpose between request and reply polls. */
-    const char *lock_call  = strstr(fn_start, "m1link_lock_spi_if_at_task_present();");
+    const char *lock_call  = strstr(fn_start, "esp32_m1link_spi_lock())");
     const char *abort_call = strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);");
     const char *timed_call = strstr(fn_start, "m1_esp32_m1link_send_recv_timed(");
-    const char *unlock_call= strstr(fn_start, "m1link_unlock_spi_if_at_task_present();");
+    const char *unlock_call= timed_call != NULL
+                                 ? strstr(timed_call, "esp32_m1link_spi_unlock();")
+                                 : NULL;
 
     TEST_ASSERT_NOT_NULL(lock_call);
     TEST_ASSERT_NOT_NULL(abort_call);
@@ -161,7 +163,7 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
     TEST_ASSERT_NOT_NULL(xfer_fn);
     TEST_ASSERT_TRUE_MESSAGE(fn_start > xfer_fn,
         "spi_m1link_send_recv_bin must come after m1link_hal_xfer");
-    const char *xfer_lock = strstr(xfer_fn, "m1link_lock_spi_if_at_task_present();");
+    const char *xfer_lock = strstr(xfer_fn, "esp32_m1link_spi_lock())");
     /* If the call is found at all, it must be in spi_m1link_send_recv_bin
      * (at or after fn_start), not inside m1link_hal_xfer (before fn_start). */
     TEST_ASSERT_TRUE_MESSAGE(xfer_lock == NULL || xfer_lock >= fn_start,

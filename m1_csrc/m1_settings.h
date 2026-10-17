@@ -14,6 +14,7 @@
 #define M1_SETTINGS_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 void menu_settings_init(void);
 void menu_settings_exit(void);
@@ -24,6 +25,8 @@ void settings_power(void);
 void settings_apply_orientation(uint8_t orient);
 void settings_load_from_sd(void);
 void settings_save_to_sd(void);
+bool settings_bluetooth_direct_enabled(void);
+void settings_set_bluetooth_direct_enabled(bool enabled);
 void settings_ensure_sd_folders(void);
 uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b);
 

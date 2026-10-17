@@ -51,6 +51,12 @@ static inline SemaphoreHandle_t xSemaphoreCreateBinary(void)
     if (p) *p = false;
     return (SemaphoreHandle_t)p;
 }
+static inline SemaphoreHandle_t xSemaphoreCreateMutex(void)
+{
+    bool *p = (bool *)malloc(sizeof(bool));
+    if (p) *p = true;
+    return (SemaphoreHandle_t)p;
+}
 static inline void vSemaphoreDelete(SemaphoreHandle_t s)  { free(s); }
 static inline BaseType_t xSemaphoreGive(SemaphoreHandle_t s)
 {

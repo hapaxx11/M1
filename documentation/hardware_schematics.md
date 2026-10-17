@@ -15,7 +15,7 @@ end of this file; individual values are omitted as not actionable.
 
 ## MCU
 
-- **STM32H573VIT** (Cortex-M33, 250 MHz, 2 MB dual-bank flash, 640 KB RAM, 100-pin LQFP)
+- **STM32H573VIT6** (Cortex-M33, 250 MHz, 2 MB dual-bank flash, 640 KB RAM, 100-pin LQFP)
   — designated **U1-A** on schematic; power-management portion designated **U1-B**
   (VREF, VDDUSB, VBAT, VDDA, VSS, VDD rails)
 - Crystals: **Y1** (main HSE system clock), **Y2** (32.768 kHz LSE for RTC)
