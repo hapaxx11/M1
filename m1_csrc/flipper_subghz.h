@@ -219,8 +219,8 @@ bool flipper_subghz_save_kia_v6(const char *path,
 /*
  * Save a VAG capture with the ProtoPirate field set needed to re-encrypt
  * frames for TX (Sub_Ghz/subghz_vag_encoder.c): Key (logical Key1; its top
- * byte is the manufacturer tag), `Key2:` (note: no underscore — the upstream
- * VAG field name), plus Serial/Btn/Cnt/Type.
+ * byte is the manufacturer tag), `Key_2:`, plus Serial/Btn/Cnt/Type.
+ * Readers also accept the legacy VAG `Key2:` spelling.
  */
 bool flipper_subghz_save_vag(const char *path,
                               uint32_t    frequency,

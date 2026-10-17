@@ -1504,7 +1504,7 @@ void test_save_vag_key_capture_preserves_native_fields(void)
 	char text[640];
 	read_tmp(path, text, sizeof(text));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Filetype: M1 SubGHz PACKET"));
-	TEST_ASSERT_NOT_NULL(strstr(text, "Key2: 4E 2A"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 4E 2A"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 22068"));
@@ -1549,6 +1549,44 @@ void test_save_kia_v6_key_capture_preserves_native_fields(void)
 	TEST_ASSERT_EQUAL_STRING("Kia V6", sig.protocol);
 
 	remove(path);
+}
+
+void test_load_vag_legacy_key2_field_aliases(void)
+{
+	const char *flipper_path = "/tmp/test_vag_legacy_key2.sub";
+	write_tmp(flipper_path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 434420000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: VAG\r\n"
+	    "Bit: 96\r\n"
+	    "Key: C0 AA BB CC DD EE FF 00\r\n"
+	    "Key2: 4E 2A\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(flipper_path, &sig));
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0x4E2Au, sig.key_2);
+	remove(flipper_path);
+
+	const char *native_path = "/tmp/test_vag_legacy_key2.sgh";
+	write_tmp(native_path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 434420000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: VAG\r\n"
+	    "Bits: 96\r\n"
+	    "Payload: 0xC0AABBCCDDEEFF00\r\n"
+	    "Key2: 4E 2A\r\n");
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(native_path, &sig));
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0x4E2Au, sig.key_2);
+	remove(native_path);
 }
 
 void test_save_psa_recovered_writes_all_fields(void)
@@ -1705,7 +1743,7 @@ void test_save_vag_writes_tx_fields(void)
 	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: VAG"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 96"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Key: C0 AA BB CC DD EE FF 00"));
-	TEST_ASSERT_NOT_NULL(strstr(text, "Key2: 4E 2A"));   /* upstream name */
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 4E 2A"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 300"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
@@ -1824,6 +1862,7 @@ int main(void)
 	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
 	RUN_TEST(test_save_vag_key_capture_preserves_native_fields);
 	RUN_TEST(test_save_kia_v6_key_capture_preserves_native_fields);
+	RUN_TEST(test_load_vag_legacy_key2_field_aliases);
 	RUN_TEST(test_load_flipper_key_renault_key2_8byte_field);
 	RUN_TEST(test_save_key_with_key2_three_bytes_roundtrip);
 

@@ -2322,11 +2322,13 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			/* ProtoPirate AUT64 key index (VAG TX). */
 			key_keyidx = (uint32_t)strtoul(line_buf + 7, NULL, 10);
 		}
-		else if (strncmp(line_buf, "Key2:", 5) == 0)
+		else if (strncmp(line_buf, "Key_2:", 6) == 0 ||
+		         strncmp(line_buf, "Key2:", 5) == 0)
 		{
-			/* ProtoPirate VAG second key word (no underscore — distinct
-			 * from the PSA/Renault "Key_2:" field). */
-			key2_tail = subghz_vag_parse_key2(line_buf + 5);
+			/* Accept both the canonical Key_2 and legacy VAG Key2 field. */
+			const char *key2_value =
+			    line_buf[3] == '_' ? line_buf + 6 : line_buf + 5;
+			key2_tail = subghz_vag_parse_key2(key2_value);
 		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{

@@ -122,11 +122,11 @@ crypto M1 fully implements:
 - **VAG** (`Sub_Ghz/subghz_vag_encoder.c` + AUT64 encrypt port in
   `Sub_Ghz/protocols/m1_aut64.c`): all four frame types (types 1/3/4 AUT64,
   type 2 fixed-schedule TEA; Passat type-1 with type byte 0x00 is emitted as
-  type 2, as upstream).  M1 captures persist Key/`Key2:`/Serial/Btn/Cnt/Type
+  type 2, as upstream).  M1 captures persist Key/`Key_2:`/Serial/Btn/Cnt/Type
   on save (the decoder surfaces Key2+type in the aux slot); the converter
-  parses them plus `KeyIdx:` back in.  The rolling counter auto-increments
-  per TX (reference behaviour).  AUT64 key auto-detection trial-decrypts the
-  original capture per key when the file lacks `KeyIdx:`.
+  accepts both `Key_2:` and legacy `Key2:` plus `KeyIdx:`.  The rolling counter
+  auto-increments per TX (reference behaviour).  AUT64 key auto-detection
+  trial-decrypts the original capture per key when the file lacks `KeyIdx:`.
 
 Note (decoder robustness, pre-existing): the Kia V6 and VAG decoders read
 fixed pulse windows; uploads whose final data pulse merges with the trailing

@@ -1085,7 +1085,7 @@ bool flipper_subghz_save_vag(const char *path,
 		snprintf(buf, sizeof(buf), "%02X %02X",
 		         (unsigned int)((key2 >> 8) & 0xFF),
 		         (unsigned int)( key2       & 0xFF));
-		result = ff_write_kv_str(&ff, "Key2", buf);
+		result = ff_write_kv_str(&ff, "Key_2", buf);
 	}
 
 	if (result && te > 0)
@@ -1462,7 +1462,7 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	if (result && is_vag)
 	{
 		subghz_format_key_2(buf, sizeof(buf), key_2, 2u);
-		result = ff_write_kv_str(&ff, "Key2", buf);
+		result = ff_write_kv_str(&ff, "Key_2", buf);
 	}
 	else if (result && key_2_len > 0)
 	{
