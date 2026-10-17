@@ -52,7 +52,7 @@ cmake -DSTM32_TOOLCHAIN_PATH="path_to_toolchain" -DSTM32_CUBE_H7_PATH="path_to_c
 
 Binaries to be flashed are placed in the separate folder (binaries.c) for each possible target and converted to C-array. Flash integrity verification is enabled by default.
 
-For more details regarding to esp_serial_flasher configuration and STM32 support, please refer to the top level [README.md](../../../README.md).
+For an overview of the M1 firmware project, see the top-level [README.md](../../../README.md).
 
 > [!NOTE]
 > CMake 3.16 or later is required.
