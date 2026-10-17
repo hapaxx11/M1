@@ -30,6 +30,7 @@
 #include "subghz_weather_history.h"
 #include "subghz_key_encoder.h"
 #include "subghz_proto_pirate.h"
+#include "subghz_vag_encoder.h"   /* subghz_vag_parse_key2() */
 #include "subghz_raw_pairs_writer.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_raw_capture_alloc.h"
