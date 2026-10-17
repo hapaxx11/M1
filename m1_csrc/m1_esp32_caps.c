@@ -646,9 +646,9 @@ void m1_esp32_caps_init(void)
         return;
     }
 
+    m1_esp32_caps_init_locked();
     if (!s_queried)
         s_last_probe_tick = HAL_GetTick();
-    m1_esp32_caps_init_locked();
     m1_esp32_rpc_transaction_unlock();
 }
 
