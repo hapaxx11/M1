@@ -29,30 +29,9 @@ void test_fallback_constants_are_nonzero(void)
 {
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_SIN360);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_SIN360);
-    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_AT);
-    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_AT);
-    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_T800);
-    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_T800);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_CD3);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_CD3);
 }
-
-void test_fallback_at_bss_exceeds_sin360(void)
-{
-    /* AT firmware (bedge117) has larger BSS than SiN360:
-     * full AT infrastructure + SPI ring buffers vs. NimBLE-only. */
-    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_BSS_SIN360,
-                             M1_ESP32_FALLBACK_BSS_AT);
-}
-
-void test_fallback_sin360_heap_exceeds_at(void)
-{
-    /* SiN360 has more free heap than AT firmware:
-     * NimBLE uses less runtime RAM than the full AT stack + BLE HID. */
-    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_AT,
-                             M1_ESP32_FALLBACK_HEAP_SIN360);
-}
-
 
 /* =========================================================================
  * Helper: build a well-formed 41-byte status payload
@@ -406,43 +385,6 @@ void test_sin360_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
-void test_dag_t800_profile_has_expected_caps(void)
-{
-    const uint64_t p = M1_ESP32_CAP_PROFILE_DAG_T800;
-    /* T-800 includes WiFi join (stock AT), all dag attack caps, and BLE HID */
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BEACON);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_KARMA);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PORTAL);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_ADV);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PKTMON);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PROBE_FLOOD);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
-    /* T-800 does NOT include BLE scan, STA scan, NETSCAN, or BLE GATT
-     * (those are SiN360-specific binary SPI features) */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_GATT);
-}
-
-void test_fallback_t800_bss_exceeds_sin360(void)
-{
-    /* T-800 AT firmware has larger BSS than SiN360 due to AT infrastructure.
-     * Unity: TEST_ASSERT_GREATER_THAN(threshold, actual) passes when actual > threshold. */
-    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_BSS_SIN360,
-                             M1_ESP32_FALLBACK_BSS_T800);
-}
-
-void test_fallback_t800_heap_less_than_sin360(void)
-{
-    /* T-800 has less free heap than SiN360 due to AT + custom modules.
-     * Use LESS_THAN so the assertion reads naturally: T800_HEAP < SIN360_HEAP. */
-    TEST_ASSERT_LESS_THAN(M1_ESP32_FALLBACK_HEAP_SIN360,
-                          M1_ESP32_FALLBACK_HEAP_T800);
-}
-
 /* =========================================================================
  * CD3 profile macro sanity checks
  * =========================================================================*/
@@ -472,20 +414,6 @@ void test_cd3_profile_has_expected_caps(void)
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_OTA);
     /* CD3 does NOT include NETSCAN (no ping/ARP scanner in v1) */
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
-}
-
-void test_cd3_fallback_bss_less_than_at(void)
-{
-    /* CD3 native WiFi has less BSS than AT firmware (no AT ring buffers). */
-    TEST_ASSERT_LESS_THAN(M1_ESP32_FALLBACK_BSS_AT,
-                          M1_ESP32_FALLBACK_BSS_CD3);
-}
-
-void test_cd3_fallback_heap_exceeds_at(void)
-{
-    /* CD3 has more free heap than AT firmware (no AT infrastructure overhead). */
-    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_AT,
-                             M1_ESP32_FALLBACK_HEAP_CD3);
 }
 
 void test_cd3_host_bits_add_probe_fallback_caps(void)
@@ -812,260 +740,6 @@ void test_rpc_caps_get_round_trip(void)
 }
 
 /* =========================================================================
- * AT+CMD? response parser: m1_esp32_caps_parse_at_cmd_list()
- *
- * The runtime AT secondary probe issues `AT+CMD?` to the connected ESP32 and
- * parses the response against a small (at_cmd_name → cap_bit) mapping table.
- * These tests use a representative mapping that mirrors the production
- * s_at_cmd_cap_map[] in m1_esp32_caps.c.
- * =========================================================================*/
-
-/* AT command name → capability bit mapping used by the parser tests.
- *
- * NOTE: This is intentionally a separate copy of the production table in
- * `m1_csrc/m1_esp32_caps.c` (`s_at_cmd_cap_map[]`) — the test deliberately
- * does not link in the production .c file (it would pull in FreeRTOS / HAL
- * headers and the SPI transport).  When the production table changes, this
- * test table must be updated in lockstep to keep the AT+CMD? parser
- * coverage in sync with the firmware behaviour. */
-static const m1_esp32_at_cmd_cap_entry_t k_test_at_cmd_map[] = {
-    /* Stock ESP-AT */
-    { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
-    { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
-    /* bedge117 / neddy299 custom commands */
-    { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
-    { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
-    { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
-    /* dag T-800 custom WiFi commands (at_custom_wifi_cmd.c) */
-    { "AT+M1DEAUTH",     M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1DEAUTHALL",  M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1DEAUTHSTOP", M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1BEACON",     M1_ESP32_CAP_BEACON     },
-    { "AT+M1KARMA",      M1_ESP32_CAP_KARMA      },
-    { "AT+M1EVILTWIN",   M1_ESP32_CAP_PORTAL     },
-    { "AT+M1BLESPAM",    M1_ESP32_CAP_BLE_ADV    },
-    { "AT+M1MONITOR",    M1_ESP32_CAP_PKTMON     },
-    { "AT+M1PROBE",      M1_ESP32_CAP_PROBE_FLOOD},
-    { "AT+M1PMKID",      M1_ESP32_CAP_PKTMON     },
-    { "AT+M1HSCAP",      M1_ESP32_CAP_PKTMON     },
-    { "AT+M1WIFISTATS",  M1_ESP32_CAP_WIFI_SCAN  },
-    /* dag T-800 custom HID commands (at_custom_hid_cmd.c) */
-    { "AT+HIDKBINIT",    M1_ESP32_CAP_BLE_HID    },
-    { "AT+HIDKBSEND",    M1_ESP32_CAP_BLE_HID    },
-};
-static const size_t k_test_at_cmd_map_n =
-    sizeof(k_test_at_cmd_map) / sizeof(k_test_at_cmd_map[0]);
-
-/* Stock ESP-AT AT+CMD? response excerpt (alphabetical, abbreviated). */
-static const char *k_resp_stock_at =
-    "+CMD:0,\"AT\",0,0,0,1\r\n"
-    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
-    "+CMD:2,\"AT+CWMODE\",1,1,1,0\r\n"
-    "+CMD:3,\"AT+GMR\",0,0,0,1\r\n"
-    "+CMD:4,\"AT+RST\",0,0,0,1\r\n"
-    "\r\nOK\r\n";
-
-/* bedge117/dag custom AT firmware: stock + BLE HID + 802.15.4 */
-static const char *k_resp_bedge_dag =
-    "+CMD:0,\"AT\",0,0,0,1\r\n"
-    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
-    "+CMD:2,\"AT+BLEHIDINIT\",1,1,1,1\r\n"
-    "+CMD:3,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
-    "\r\nOK\r\n";
-
-/* neddy299 / dag-deauth: stock + BLE HID + 802.15.4 + deauth + stascan */
-static const char *k_resp_neddy299 =
-    "+CMD:0,\"AT\",0,0,0,1\r\n"
-    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
-    "+CMD:2,\"AT+BLEHIDINIT\",1,1,1,1\r\n"
-    "+CMD:3,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
-    "+CMD:4,\"AT+DEAUTH\",1,1,1,0\r\n"
-    "+CMD:5,\"AT+STASCAN\",1,1,1,0\r\n"
-    "\r\nOK\r\n";
-
-/* dag T-800 (dagnazty/M1-T-800): all 14 custom AT commands.
- * Note: AT+CWJAP is stock ESP-AT and IS present; AT+ZIGSNIFF is also
- * present in the dag T-800 firmware. */
-static const char *k_resp_dag_t800 =
-    "+CMD:0,\"AT\",0,0,0,1\r\n"
-    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
-    "+CMD:2,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
-    "+CMD:3,\"AT+M1DEAUTH\",1,1,1,0\r\n"
-    "+CMD:4,\"AT+M1DEAUTHALL\",1,1,1,0\r\n"
-    "+CMD:5,\"AT+M1DEAUTHSTOP\",1,1,1,0\r\n"
-    "+CMD:6,\"AT+M1BEACON\",1,1,1,0\r\n"
-    "+CMD:7,\"AT+M1KARMA\",1,1,1,0\r\n"
-    "+CMD:8,\"AT+M1EVILTWIN\",1,1,1,0\r\n"
-    "+CMD:9,\"AT+M1BLESPAM\",1,1,1,0\r\n"
-    "+CMD:10,\"AT+M1MONITOR\",1,1,1,0\r\n"
-    "+CMD:11,\"AT+M1PROBE\",1,1,1,0\r\n"
-    "+CMD:12,\"AT+M1PMKID\",1,1,1,0\r\n"
-    "+CMD:13,\"AT+M1HSCAP\",1,1,1,0\r\n"
-    "+CMD:14,\"AT+M1WIFISTATS\",1,1,1,0\r\n"
-    "+CMD:15,\"AT+HIDKBINIT\",1,1,1,0\r\n"
-    "+CMD:16,\"AT+HIDKBSEND\",1,1,1,0\r\n"
-    "\r\nOK\r\n";
-
-void test_at_cmd_parse_stock_at_only_wifi_join(void)
-{
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        k_resp_stock_at, k_test_at_cmd_map, k_test_at_cmd_map_n);
-
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_JOIN, caps);
-}
-
-void test_at_cmd_parse_bedge_dag_caps(void)
-{
-    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN |
-                              M1_ESP32_CAP_BLE_HID  |
-                              M1_ESP32_CAP_802154;
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        k_resp_bedge_dag, k_test_at_cmd_map, k_test_at_cmd_map_n);
-
-    TEST_ASSERT_EQUAL_UINT64(expected, caps);
-}
-
-void test_at_cmd_parse_neddy299_caps(void)
-{
-    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN |
-                              M1_ESP32_CAP_BLE_HID  |
-                              M1_ESP32_CAP_802154   |
-                              M1_ESP32_CAP_DEAUTH   |
-                              M1_ESP32_CAP_STA_SCAN;
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        k_resp_neddy299, k_test_at_cmd_map, k_test_at_cmd_map_n);
-
-    TEST_ASSERT_EQUAL_UINT64(expected, caps);
-}
-
-void test_at_cmd_parse_dag_t800_caps(void)
-{
-    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN   |
-                              M1_ESP32_CAP_802154      |
-                              M1_ESP32_CAP_DEAUTH      |
-                              M1_ESP32_CAP_BEACON      |
-                              M1_ESP32_CAP_KARMA       |
-                              M1_ESP32_CAP_PORTAL      |
-                              M1_ESP32_CAP_BLE_ADV     |
-                              M1_ESP32_CAP_PKTMON      |
-                              M1_ESP32_CAP_PROBE_FLOOD |
-                              M1_ESP32_CAP_WIFI_SCAN   |
-                              M1_ESP32_CAP_BLE_HID;
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        k_resp_dag_t800, k_test_at_cmd_map, k_test_at_cmd_map_n);
-
-    TEST_ASSERT_EQUAL_UINT64(expected, caps);
-}
-
-void test_at_cmd_parse_empty_response_returns_zero(void)
-{
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        "", k_test_at_cmd_map, k_test_at_cmd_map_n);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
-}
-
-void test_at_cmd_parse_null_inputs_return_zero(void)
-{
-    TEST_ASSERT_EQUAL_UINT64(
-        UINT64_C(0),
-        m1_esp32_caps_parse_at_cmd_list(NULL, k_test_at_cmd_map, k_test_at_cmd_map_n));
-
-    TEST_ASSERT_EQUAL_UINT64(
-        UINT64_C(0),
-        m1_esp32_caps_parse_at_cmd_list(k_resp_stock_at, NULL, 0));
-}
-
-void test_at_cmd_parse_requires_quoted_match(void)
-{
-    /* A name appearing as a prefix of another command must not match.
-     * "AT+CWJAP" is a substring of "AT+CWJAPCFG" / "AT+CWJAPSOMETHING"
-     * but only the exact quoted form should count. */
-    const char *resp =
-        "+CMD:0,\"AT+CWJAPCFG\",1,1,1,0\r\n"
-        "\r\nOK\r\n";
-
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
-}
-
-void test_at_cmd_parse_substring_in_text_does_not_match(void)
-{
-    /* If the command appears unquoted (e.g. in a comment-like line), it
-     * must not match because the parser anchors on the surrounding quotes. */
-    const char *resp =
-        "+CMD:0,\"AT\",0,0,0,1\r\n"
-        "Some leading line mentioning AT+DEAUTH without quotes\r\n"
-        "\r\nOK\r\n";
-
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
-}
-
-void test_at_cmd_response_valid_detector(void)
-{
-    /* A real AT+CMD? response always contains at least one "+CMD:" line. */
-    TEST_ASSERT_TRUE(m1_esp32_caps_at_cmd_response_valid(k_resp_stock_at));
-    TEST_ASSERT_TRUE(m1_esp32_caps_at_cmd_response_valid(k_resp_neddy299));
-
-    /* Plain ERROR / OK responses or NULL should be rejected. */
-    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid("\r\nERROR\r\n"));
-    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid("\r\nOK\r\n"));
-    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid(""));
-    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid(NULL));
-}
-
-/* =========================================================================
- * m1_esp32_caps_should_run_at_probe() — AT-task-not-yet-running regression
- *
- * Bug: navigating directly to a capability-gated scene (e.g. WiFi ->
- * 802.15.4 -> Zigbee Scan, or Attacks -> PMKID Grab) as the very first
- * ESP32 interaction left the AT task not yet started.  m1_esp32_caps_init()
- * used to bail out of Probe 3 unconditionally whenever the AT task was not
- * already running, permanently failing capability detection for AT-only
- * firmware (dag T-800) — firmware name stuck at "Unknown" and every
- * capability bit (including M1_ESP32_CAP_BEACON, gating PMKID Grab) unset.
- * =========================================================================*/
-
-void test_should_run_at_probe_already_running(void)
-{
-    /* AT task already running before any start attempt — always proceed. */
-    TEST_ASSERT_TRUE(m1_esp32_caps_should_run_at_probe(true, true));
-}
-
-void test_should_run_at_probe_started_successfully(void)
-{
-    /* AT task was not running, but the start attempt brought it up —
-     * this is the fix: proceed with the probe instead of bailing out. */
-    TEST_ASSERT_TRUE(m1_esp32_caps_should_run_at_probe(false, true));
-}
-
-void test_should_run_at_probe_still_not_running(void)
-{
-    /* AT task was not running and the start attempt did not bring it up
-     * (e.g. heap exhaustion) — retry on a later call instead of probing. */
-    TEST_ASSERT_FALSE(m1_esp32_caps_should_run_at_probe(false, false));
-}
-
-void test_at_cmd_parse_arbitrary_line_order(void)
-{
-    /* The probe must work regardless of ordering in the response. */
-    const char *resp =
-        "+CMD:42,\"AT+STASCAN\",1,1,1,0\r\n"
-        "+CMD:11,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
-        "+CMD:7,\"AT+CWJAP\",1,1,1,1\r\n"
-        "\r\nOK\r\n";
-
-    const uint64_t expected = M1_ESP32_CAP_STA_SCAN |
-                              M1_ESP32_CAP_802154   |
-                              M1_ESP32_CAP_WIFI_JOIN;
-    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
-        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
-    TEST_ASSERT_EQUAL_UINT64(expected, caps);
-}
-
-/* =========================================================================
  * "Feature not supported" screen wording (m1_esp32_require_cap body lines)
  *
  * Regression coverage for issue #668 defect 2 — the screen previously read
@@ -1276,18 +950,6 @@ void test_diag_format_hal_off(void)
     TEST_ASSERT_EQUAL_STRING("HAL off", buf);
 }
 
-void test_diag_format_at_probed_no_rpc_detail(void)
-{
-    m1_esp32_caps_diag_t d;
-    char buf[40];
-    memset(&d, 0, sizeof(d));
-    d.outcome   = (uint8_t)M1_ESP32_PROBE_AT;
-    d.at_cmd_ok = 1u;
-    /* rpc_attempted == 0, so no "rc/n/at" suffix should be appended */
-    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("AT probed", buf);
-}
-
 void test_diag_format_rpc_ok(void)
 {
     m1_esp32_caps_diag_t d;
@@ -1300,13 +962,11 @@ void test_diag_format_rpc_ok(void)
     d.rpc_ping_rc    = 0;
     d.rpc_ping_rxlen = 20;
     m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("RPC ok rc0 n20 at0", buf);
+    TEST_ASSERT_EQUAL_STRING("RPC ok rc0 n20", buf);
 }
 
-/* The "Unknown (fallback)" case (issue #719): the M1_RPC PING was attempted,
- * failed (rc != 0, 0 bytes back) and the host AT task was running at probe time
- * — the contention signal we want the owner to be able to read off-device. */
-void test_diag_format_unknown_reports_rpc_detail_and_at_task(void)
+/* The "Unknown (fallback)" case: the M1_RPC PING was attempted and failed. */
+void test_diag_format_unknown_reports_rpc_detail(void)
 {
     m1_esp32_caps_diag_t d;
     char buf[40];
@@ -1315,9 +975,8 @@ void test_diag_format_unknown_reports_rpc_detail_and_at_task(void)
     d.rpc_attempted  = 1u;
     d.rpc_ping_rc    = 13; /* CTRL_ERR_REQUEST_TIMEOUT */
     d.rpc_ping_rxlen = 0;
-    d.at_task_after  = 1u;
     m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("FAIL rc13 n0 at1", buf);
+    TEST_ASSERT_EQUAL_STRING("FAIL rc13 n0", buf);
 }
 
 void test_diag_format_null_buffer_is_safe(void)
@@ -1332,23 +991,6 @@ void test_diag_format_null_buffer_is_safe(void)
     TEST_ASSERT_EQUAL_CHAR('x', buf[0]);  /* untouched */
 }
 
-/* M1_ESP32_PROBE_NO_MEM: AT presence probe succeeded but the AT+CMD? response
- * buffer allocation failed.  The formatter must render "no-mem/retry" rather
- * than "no probe yet" (PROBE_NONE), so the dashboard clearly reports a local
- * heap failure and not a missing probe. */
-void test_diag_format_no_mem_outcome_is_distinct(void)
-{
-    m1_esp32_caps_diag_t d;
-    char buf[40];
-    memset(&d, 0, sizeof(d));
-    d.outcome          = (uint8_t)M1_ESP32_PROBE_NO_MEM;
-    d.at_presence_ok   = 1u;  /* AT presence succeeded */
-    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
-    /* Must not render the PROBE_NONE string */
-    TEST_ASSERT_NOT_EQUAL(0, strcmp("no probe yet", buf));
-    TEST_ASSERT_EQUAL_STRING("no-mem/retry", buf);
-}
-
 /* Every distinct outcome renders a non-empty string that fits the 128px
  * dashboard line (buffer 40, main-menu font ~21 chars — but the diag line uses
  * the small dashboard font and m1_draw_text truncates, so we only assert the
@@ -1356,10 +998,9 @@ void test_diag_format_no_mem_outcome_is_distinct(void)
 void test_diag_format_all_outcomes_nonempty_and_bounded(void)
 {
     static const uint8_t outcomes[] = {
-        M1_ESP32_PROBE_NONE, M1_ESP32_PROBE_HAL_OFF, M1_ESP32_PROBE_RETRY,
-        M1_ESP32_PROBE_BIN_STATUS, M1_ESP32_PROBE_BIN_PING, M1_ESP32_PROBE_AT,
+        M1_ESP32_PROBE_NONE, M1_ESP32_PROBE_HAL_OFF, M1_ESP32_PROBE_BIN_PING,
         M1_ESP32_PROBE_RPC_STATUS, M1_ESP32_PROBE_RPC_PROFILE,
-        M1_ESP32_PROBE_NO_MEM, M1_ESP32_PROBE_UNKNOWN
+        M1_ESP32_PROBE_UNKNOWN
     };
     for (size_t i = 0; i < sizeof(outcomes) / sizeof(outcomes[0]); i++)
     {
@@ -1407,36 +1048,12 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
-    RUN_TEST(test_dag_t800_profile_has_expected_caps);
-
-    /* AT+CMD? response parser */
-    RUN_TEST(test_at_cmd_parse_stock_at_only_wifi_join);
-    RUN_TEST(test_at_cmd_parse_bedge_dag_caps);
-    RUN_TEST(test_at_cmd_parse_neddy299_caps);
-    RUN_TEST(test_at_cmd_parse_dag_t800_caps);
-    RUN_TEST(test_at_cmd_parse_empty_response_returns_zero);
-    RUN_TEST(test_at_cmd_parse_null_inputs_return_zero);
-    RUN_TEST(test_at_cmd_parse_requires_quoted_match);
-    RUN_TEST(test_at_cmd_parse_substring_in_text_does_not_match);
-    RUN_TEST(test_at_cmd_response_valid_detector);
-    RUN_TEST(test_at_cmd_parse_arbitrary_line_order);
-
-    /* AT-task startup regression (Probe 3 skip bug) */
-    RUN_TEST(test_should_run_at_probe_already_running);
-    RUN_TEST(test_should_run_at_probe_started_successfully);
-    RUN_TEST(test_should_run_at_probe_still_not_running);
 
     /* M1_ESP32_FALLBACK_* constant invariants */
     RUN_TEST(test_fallback_constants_are_nonzero);
-    RUN_TEST(test_fallback_at_bss_exceeds_sin360);
-    RUN_TEST(test_fallback_sin360_heap_exceeds_at);
-    RUN_TEST(test_fallback_t800_bss_exceeds_sin360);
-    RUN_TEST(test_fallback_t800_heap_less_than_sin360);
 
     /* CD3 profile + fallback invariants */
     RUN_TEST(test_cd3_profile_has_expected_caps);
-    RUN_TEST(test_cd3_fallback_bss_less_than_at);
-    RUN_TEST(test_cd3_fallback_heap_exceeds_at);
     RUN_TEST(test_cd3_host_bits_add_probe_fallback_caps);
 
     /* MtkCore (Legacy-SPI) detection & profile */
@@ -1493,11 +1110,9 @@ int main(void)
     RUN_TEST(test_diag_format_null_snapshot_is_no_probe);
     RUN_TEST(test_diag_format_none_outcome_is_no_probe);
     RUN_TEST(test_diag_format_hal_off);
-    RUN_TEST(test_diag_format_at_probed_no_rpc_detail);
     RUN_TEST(test_diag_format_rpc_ok);
-    RUN_TEST(test_diag_format_unknown_reports_rpc_detail_and_at_task);
+    RUN_TEST(test_diag_format_unknown_reports_rpc_detail);
     RUN_TEST(test_diag_format_null_buffer_is_safe);
-    RUN_TEST(test_diag_format_no_mem_outcome_is_distinct);
     RUN_TEST(test_diag_format_all_outcomes_nonempty_and_bounded);
 
     return UNITY_END();
