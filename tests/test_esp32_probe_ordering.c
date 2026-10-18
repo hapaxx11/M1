@@ -3,14 +3,8 @@
 /*
  * test_esp32_probe_ordering.c
  *
- * Source-level regression checks for issue #719 Phase 1: on real hardware the
- * Settings > Dashboard probe diagnostics (added in the Phase 0 work) read
- * back "ESP32 Unknown (fallback) - Probe Fail rcNN n0 at1 - caps 00000000 -
- * ATtask b1 a1" — the host AT task (spi_trans_control_task) was already
- * running (at_task_before == 1) by the time the brain-CD3 M1_RPC PING ran,
- * confirming the C1 hypothesis from documentation/agent/esp32-719-
- * compatibility-plan.md: SPI3 bus contention between that task and the
- * mutex-free full-duplex M1 Link transfer.
+ * Source-level regression checks for the supported ESP32 capability probes
+ * and M1 Link transaction serialization.
  *
  * Neither m1_esp32_caps_init() (m1_csrc/m1_esp32_caps.c) nor m1link_hal_xfer()
  * (Esp_spi_at/.../esp_app_main.c) can be exercised on the host: both call
@@ -18,14 +12,9 @@
  * with the existing esp32_main_deinit() heap-leak regression test, these
  * checks verify the source-code invariants of the fix directly instead:
  *
- *   1. The M1_RPC brain probe (SYS_PING) is issued BEFORE esp32_main_init()
- *      (the host AT task start) in m1_esp32_caps_init(), so a brain that only
- *      speaks M1_RPC never starts or touches the AT task at all.
- *   2. m1link_hal_xfer() takes the shared SPI3 mutex around its transfer
- *      whenever the AT task has been created, so a PING issued while the AT
- *      task is already running (e.g. started by another feature before the
- *      dashboard/caps probe ever ran, matching the field report above) can
- *      no longer race a half-duplex AT transaction on the same peripheral.
+ *   1. Capability probing uses only the SiN360 binary PING and M1_RPC; it must
+ *      not start or issue commands through the retired AT task.
+ *   2. The shared SPI mutex serializes complete M1 Link request/reply sequences.
  */
 
 #include "unity.h"
@@ -81,31 +70,17 @@ static void assert_ordered(const char *content, const char *first,
 void setUp(void)    {}
 void tearDown(void) {}
 
-/* ----- m1_esp32_caps.c: M1_RPC probe runs before the AT task starts ------ */
+/* ----- m1_esp32_caps.c: supported transports only ----------------------- */
 
-void test_rpc_ping_issued_before_at_task_start(void)
+void test_caps_probe_has_no_at_transport_path(void)
 {
     char *content = read_file("m1_csrc/m1_esp32_caps.c");
 
-    /* The M1_RPC PING transport call must precede esp32_main_init() (the
-     * host AT task start) so a brain-only device is probed without ever
-     * touching the AT task. */
-    assert_ordered(content, "s_diag.rpc_attempted = 1u;",
-                   "esp32_main_init();");
-
-    free(content);
-}
-
-void test_at_task_start_precedes_at_probes(void)
-{
-    char *content = read_file("m1_csrc/m1_esp32_caps.c");
-
-    /* The AT task must still be (re)started before the AT presence / AT+CMD?
-     * probes run, for firmware that does not answer M1_RPC. */
-    assert_ordered(content, "esp32_main_init();",
-                   "spi_AT_send_recv(\"AT\\r\\n\", at_presence,");
-    assert_ordered(content, "esp32_main_init();",
-                   "spi_AT_send_recv(\"AT+CMD?\\r\\n\", at_resp,");
+    assert_contains(content, "m1_esp32_simple_cmd(CMD_PING");
+    assert_contains(content, "spi_m1link_send_recv_bin(tx64");
+    TEST_ASSERT_NULL(strstr(content, "spi_AT_send_recv"));
+    TEST_ASSERT_NULL(strstr(content, "AT+CMD?"));
+    TEST_ASSERT_NULL(strstr(content, "esp32_main_init"));
 
     free(content);
 }
@@ -115,13 +90,13 @@ void test_caps_init_still_falls_back_to_unknown(void)
     char *content = read_file("m1_csrc/m1_esp32_caps.c");
 
     assert_contains(content, "\"Unknown (fallback)\"");
-    assert_ordered(content, "esp32_main_init();",
+    assert_ordered(content, "spi_m1link_send_recv_bin(tx64",
                    "strncpy(s_fw_name, \"Unknown (fallback)\",");
 
     free(content);
 }
 
-/* ----- esp_app_main.c: mutex held for the full abort + exchange sequence ---- */
+/* ----- esp_app_main.c: mutex held for the full M1 Link sequence ------------ */
 
 void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
 {
@@ -136,8 +111,8 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
     const char *fn_start = strstr(content, "uint8_t spi_m1link_send_recv_bin(");
     TEST_ASSERT_NOT_NULL_MESSAGE(fn_start, "spi_m1link_send_recv_bin definition not found");
 
-    /* The full-sequence lock must wrap the abort AND the timed exchange, so
-     * spi_trans_control_task cannot interpose between request and reply polls. */
+    /* The full-sequence lock must wrap the abort AND the timed exchange so
+     * another SPI user cannot interpose between request and reply polls. */
     const char *lock_call  = strstr(fn_start, "esp32_m1link_spi_lock())");
     const char *abort_call = strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);");
     const char *timed_call = strstr(fn_start, "m1_esp32_m1link_send_recv_timed(");
@@ -155,8 +130,8 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
     TEST_ASSERT_TRUE_MESSAGE(timed_call < unlock_call, "timed exchange must precede unlock");
 
     /* m1link_hal_xfer must NOT take the per-transfer lock: doing so would
-     * serialise individual SPI transactions but still allow the AT task to
-     * interpose between the request unlock and the next IDLE poll.  Search
+     * serialise individual SPI transactions but still permit another operation
+     * between the request unlock and the next IDLE poll. Search
      * only within m1link_hal_xfer's text range (between its definition and
      * the start of spi_m1link_send_recv_bin) to avoid false positives. */
     const char *xfer_fn = strstr(content, "static int m1link_hal_xfer(");
@@ -172,42 +147,11 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
     free(content);
 }
 
-/* ----- m1_wifi.c: firmware classification before AT task start ------------ */
-
-void test_wifi_do_scan_classifies_before_starting_at_task(void)
-{
-    char *content = read_file("m1_csrc/m1_wifi.c");
-
-    /* m1_esp32_caps_init() (classification) must run before esp32_main_init()
-     * (AT task start) inside wifi_do_scan(), so a brain-CD3 device is probed
-     * over M1_RPC without the AT task on SPI3. */
-    assert_ordered(content, "m1_esp32_caps_init();",
-                   "esp32_main_init();");
-
-    free(content);
-}
-
-void test_wifi_do_scan_skips_at_task_for_rpc_transport(void)
-{
-    char *content = read_file("m1_csrc/m1_wifi.c");
-
-    /* esp32_main_init() must be guarded by an ESP32_TRANSPORT_RPC check so
-     * that the AT task is not started for brain-CD3 firmware. */
-    assert_contains(content, "ESP32_TRANSPORT_RPC");
-    assert_ordered(content, "ESP32_TRANSPORT_RPC",
-                   "esp32_main_init();");
-
-    free(content);
-}
-
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_rpc_ping_issued_before_at_task_start);
-    RUN_TEST(test_at_task_start_precedes_at_probes);
+    RUN_TEST(test_caps_probe_has_no_at_transport_path);
     RUN_TEST(test_caps_init_still_falls_back_to_unknown);
     RUN_TEST(test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence);
-    RUN_TEST(test_wifi_do_scan_classifies_before_starting_at_task);
-    RUN_TEST(test_wifi_do_scan_skips_at_task_for_rpc_transport);
     return UNITY_END();
 }
