@@ -162,102 +162,16 @@ void menu_wifi_exit(void)
   * @retval Number of APs found, 0 on error
   */
 /*============================================================================*/
-/**
- * @brief  Perform AP scan using AT+CWLAP (dag/T-800 AT firmware).
- *
- * Called by wifi_do_scan() when M1_ESP32_CAP_WIFI_JOIN is present, which
- * indicates an AT-based firmware (dag/T-800, bedge117) rather than the SiN360
- * binary-SPI firmware.  The AT+CWLAP response is parsed with
- * wifi_at_cwlap_parse() and the results are stored into the shared ap_list[]/
- * ap_count globals used by the rest of the scan UI.
- *
- * @retval Number of APs found, 0 on error.
- */
-static uint16_t wifi_do_scan_at(void)
-{
-	static char resp_buf[2048];
-	wifi_at_ap_t *at_aps;
-	uint8_t at_count;
-	uint16_t i;
-
-	wifi_ap_list_free();
-
-	/* Clear any stale responses queued from the capability-probe AT exchange. */
-	(void)esp32_queue_reset_locked();
-
-	/* Ensure Station mode before scanning.  dag/T-800 may boot with WiFi
-	 * disabled or in AP mode; AT+CWLAP returns ERROR unless the radio is in
-	 * STA mode (CWMODE=1).  Mirrors the sequence in wifi_ap_scan_list()
-	 * (esp_app_main.c).  Ignore the reply — the mode may already be correct. */
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv("AT+CWLAP\r\n", resp_buf, sizeof(resp_buf),
-	                        (int)(WIFI_CMD_TIMEOUT_MS / 1000));
-
-	at_aps = (wifi_at_ap_t *)malloc(WIFI_AT_CWLAP_MAX_APS * sizeof(wifi_at_ap_t));
-	if (!at_aps)
-		return 0;
-	memset(at_aps, 0, WIFI_AT_CWLAP_MAX_APS * sizeof(wifi_at_ap_t));
-
-	at_count = wifi_at_cwlap_parse(resp_buf, at_aps, WIFI_AT_CWLAP_MAX_APS);
-	if (at_count == 0)
-	{
-		free(at_aps);
-		return 0;
-	}
-
-	ap_list = (wifi_ap_t *)malloc((uint16_t)at_count * sizeof(wifi_ap_t));
-	if (!ap_list)
-	{
-		free(at_aps);
-		ap_count = 0;
-		return 0;
-	}
-	memset(ap_list, 0, (uint16_t)at_count * sizeof(wifi_ap_t));
-	ap_count = at_count;
-
-	for (i = 0; i < at_count; i++)
-	{
-		strncpy(ap_list[i].ssid, at_aps[i].ssid, sizeof(ap_list[i].ssid) - 1);
-		ap_list[i].ssid[sizeof(ap_list[i].ssid) - 1] = '\0';
-		memcpy(ap_list[i].bssid, at_aps[i].bssid, 6);
-		wifi_bssid_fmt(at_aps[i].bssid, ap_list[i].bssid_str);
-		ap_list[i].rssi    = at_aps[i].rssi;
-		ap_list[i].channel = at_aps[i].channel;
-		/* auth_mode: AT+CWLAP ECN field not captured by wifi_at_cwlap_parse */
-		ap_list[i].auth_mode = 0;
-	}
-
-	free(at_aps);
-	wifi_ap_list_sort_rssi(ap_list, ap_count);
-	return ap_count;
-}
-
-
 static uint16_t wifi_do_scan(void)
 {
 	m1_resp_t resp;
 	int ret;
+	esp32_transport_t transport;
 
-	/* Classify firmware immediately after bringing up the SPI HAL, before
-	 * the host AT task starts — so a brain-CD3 device is probed over M1_RPC
-	 * without any AT task contention on SPI3.  esp32_main_init() below is
-	 * only called when the classification has already fallen through to the
-	 * AT path (not brain CD3), so the AT task never races the M1 Link
-	 * transfer (issue #719 Phase 1 ordering regression). */
 	m1_esp32_ensure_init();
 	if (!m1_esp32_caps_is_queried() && m1_esp32_get_init_status())
 		m1_esp32_caps_init();
-
-	/* Start the host AT RTOS task only when the detected transport actually
-	 * needs it (AT or Unknown fallback).  Brain CD3 (M1_RPC) never uses
-	 * the AT task, so skip esp32_main_init() for that path entirely. */
-	if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC) {
-		if (!get_esp32_main_init_status())
-			esp32_main_init();
-	}
+	transport = m1_esp32_active_transport();
 
 	/* brain CD3 (binary M1_RPC): use WIFI_SCAN opcode via async worker so
 	 * the calling task is not blocked for the full 10 s scan window. */
@@ -308,11 +222,8 @@ static uint16_t wifi_do_scan(void)
 		return ap_count;
 	}
 
-	/* On AT firmware (dag/T-800, bedge117), use AT+CWLAP instead of binary
-	 * SPI scan commands which are SiN360-only.  M1_ESP32_CAP_WIFI_JOIN is
-	 * set by the AT+CMD? probe for any firmware that supports AT+CWJAP. */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
-		return wifi_do_scan_at();
+	if (transport != ESP32_TRANSPORT_BINARY_SPI)
+		return 0u;
 
 	/* Free any previous results */
 	wifi_ap_list_free();
@@ -644,60 +555,6 @@ static void wifi_connect_selected_ap(void)
 		return;
 	}
 
-	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
-	{
-		static char at_resp[512];
-		/* Buffer sized for worst-case fully-escaped SSID (32*2=64) +
-		 * password (63*2=126) + AT+CWJAP="",""\r\n (18) + NUL (1) = 209 */
-		char at_cmd[256];
-		/* Escaped SSID/password buffers: each char can expand to 2 chars */
-		char ssid_esc[65];
-		char pass_esc[127];
-		bool got_ip;
-
-		at_escape_str(ap_list[ap_view_idx].ssid, ssid_esc, sizeof(ssid_esc));
-		at_escape_str(password, pass_esc, sizeof(pass_esc));
-
-		/* AT+CWJAP="ssid","password" — ESP-AT standard command.
-		 * Timeout: 20 s (connection establishment can take up to ~15 s). */
-		snprintf(at_cmd, sizeof(at_cmd),
-		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
-		         ssid_esc, pass_esc);
-
-		wifi_draw_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
-		memset(at_resp, 0, sizeof(at_resp));
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
-
-		bool timeout_or_senderr = (strstr(at_resp, "TIMEOUT(") != NULL) ||
-		                         (strstr(at_resp, "SEND_ERR=") != NULL);
-		bool has_error = (strstr(at_resp, "ERROR") != NULL);
-		bool has_fail  = (strstr(at_resp, "FAIL") != NULL) || has_error || timeout_or_senderr;
-		const char *reason = "Check password";
-		if (timeout_or_senderr) reason = "ESP32 no response";
-		else if (has_error)    reason = "AT error";
-
-		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
-		if (!got_ip || has_fail)
-		{
-			memset(password, 0, sizeof(password));
-			wifi_show_message("Connect", "Connect failed", reason);
-			return;
-		}
-
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
-			wifi_show_message("Connect", "Warning", "Credentials not saved");
-		wifi_set_connected_state(ap_list[ap_view_idx].ssid);
-#endif
-		memset(password, 0, sizeof(password));
-		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-		wifi_sync_rtc();
-#endif
-		return;
-	}
-
 	/* ---- Binary SPI path (SiN360) ---- */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
@@ -788,12 +645,6 @@ void wifi_scan_ap(void)
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
 		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
-
-	/* For capability probing on AT-based firmware, ensure the SPI-AT RTOS task
-	 * is running so AT+CMD? can be issued. No-op only when the task is already
-	 * running (e.g. repeated entry). */
-	if (!get_esp32_main_init_status())
-		esp32_main_init();
 
 	/* Show scanning status */
 	m1_u8g2_firstpage();

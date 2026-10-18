@@ -8,9 +8,9 @@
  * (0x0600..0x0605) sent to the ESP32-C6 via SPI.
  *
  * Transport dispatch:
- *   - CD3 (binary M1_RPC): Implemented here
- *   - CD3-AT: Future — AT+M1ESPNOW=... (stub for now)
- *   - SiN360: Not supported (cap bit never set)
+ *   - CD3 and supported MtkCore compatibility firmware (M1_RPC): implemented
+ *     here
+ *   - SiN360: not supported (capability bit is not set)
  *
  * M1 Project
  */
@@ -27,14 +27,8 @@
 #include "espnow_rpc_parse.h"
 #include "ff.h"
 
-/* esp_app_main.h declares get_esp32_main_init_status() / esp32_main_init().
- * The CD3 M1_RPC transport rides the same half-duplex SPI-HD command protocol
- * as the AT firmware, driven by the AT RTOS task, so that task must be running
- * before any ESP-NOW frame can be exchanged. */
-#include "esp_app_main.h"
-
 /*==========================================================================*/
-/* SPI transaction buffer size (64 bytes for SPI-HD half-duplex)             */
+/* SPI transaction buffer size                                               */
 /*==========================================================================*/
 
 #define SPI_BUF_SIZE  64
@@ -115,13 +109,8 @@ static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
 bool m1_espnow_start(uint8_t channel)
 {
     /* Bring up the SPI HAL and the AT/SPI-HD RTOS task that carries the CD3
-     * M1_RPC frames.  DELEGATE_FEATURE only guarantees the SPI HAL is up (via
-     * m1_esp32_ensure_init()); the transport task is otherwise started deep
-     * inside individual features, so start it here — mirroring the CD3
-     * detection probe in m1_esp32_caps_init(). */
+     * M1_RPC frames. */
     m1_esp32_ensure_init();
-    if (!get_esp32_main_init_status())
-        esp32_main_init();
 
     s_channel = channel;
     uint8_t payload[24];  /* ch(1) + name string */

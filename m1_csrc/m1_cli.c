@@ -34,9 +34,6 @@
 #include "m1_gpio.h"
 //#include "control.h"
 //#include "app_main.h"
-#include "spi_master.h"
-#include "ctrl_api.h"
-#include "esp_app_main.h"
 #include "m1_lcd.h"
 #include "m1_bq25896.h"
 #include "m1_bq27421.h"
@@ -947,7 +944,6 @@ void cmd_m1_mtest_subghz(char *pconsole, char *input_params[], uint8_t n_params,
 void cmd_m1_mtest_esp32(char *pconsole, char *input_params[], uint8_t n_params, uint8_t cmd_type)
 {
 	uint32_t input1_val;
-	ctrl_cmd_t app_req = CTRL_CMD_DEFAULT_REQ();
 
 	switch (cmd_type)
 	{
@@ -966,57 +962,13 @@ void cmd_m1_mtest_esp32(char *pconsole, char *input_params[], uint8_t n_params, 
     		break;
 
     	case 71:
-    		M1_LOG_N(M1_LOGDB_TAG, "CLI mtest: ESP32 - get access point list\r\n");
-    		if ( n_params < 2 )
-    		{
-    			strcpy(pconsole, "Error: missing parameter(s)!\r\n");
-    			break;
-    		}
-    		if ( m1_esp32_get_init_status() )
-    		{
-    			if ( !get_esp32_main_init_status() )
-    				esp32_main_init();
-    			if ( get_esp32_ready_status() )
-    				test_get_available_wifi();
-    			else
-    				strcpy(pconsole, "ESP32 not ready!\r\n");
-    		} // if ( m1_esp32_get_init_status() )
-    		else
-    		{
-    			strcpy(pconsole, "ESP32 not init!\r\n");
-    		}
+    		M1_LOG_N(M1_LOGDB_TAG, "CLI mtest: ESP32 AT scan retired\r\n");
+    		strcpy(pconsole, "Use the WiFi menu for supported ESP32 scans.\r\n");
     		break;
 
     	case 72:
-    		M1_LOG_N(M1_LOGDB_TAG, "CLI mtest: ESP32 - send AT command\r\n");
-    		if ( n_params < 2 )
-    		{
-    			strcpy(pconsole, "Error: missing parameter(s)!\r\n");
-    			break;
-    		}
-    		if ( m1_esp32_get_init_status() )
-    		{
-    			if ( !get_esp32_main_init_status() )
-    				esp32_main_init();
-    			strcat(input_params[1], "\r\n");
-    			{
-    				static char at_resp[512];
-    				uint8_t at_ret = spi_AT_send_recv(input_params[1], at_resp, sizeof(at_resp), 10);
-    				if (at_ret == SUCCESS)
-    				{
-    					/* Truncate to fit CLI buffer */
-    					snprintf(pconsole, 190, "SPI_AT> %s", at_resp);
-    				}
-    				else
-    				{
-    					snprintf(pconsole, 190, "SPI_AT err=%d: %s", at_ret, at_resp);
-    				}
-    			}
-    		} // if ( m1_esp32_get_init_status() )
-    		else
-    		{
-    			strcpy(pconsole, "ESP32 not init!\r\n");
-    		}
+    		M1_LOG_N(M1_LOGDB_TAG, "CLI mtest: ESP32 AT command support retired\r\n");
+    		strcpy(pconsole, "ESP32 AT commands are no longer supported.\r\n");
     		break;
 
     	case 78:

@@ -14,7 +14,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_802154.h"
@@ -149,7 +148,7 @@ static void ieee802154_add_rpc_device(const m1_esp32_rpc_zb_device_t *d,
     char proto = (d->proto == IEEE802154_PROTO_ZIGBEE ||
                   d->proto == IEEE802154_PROTO_THREAD) ? d->proto
                                                        : IEEE802154_PROTO_UNKNOWN;
-    /* Accept target protocol + unknown ('U') — mirrors parse_zigframe(). */
+    /* Accept the target protocol and unknown ('U') records. */
     if (proto != filter_proto && proto != IEEE802154_PROTO_UNKNOWN)
         return;
 

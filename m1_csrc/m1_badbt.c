@@ -26,9 +26,7 @@
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
-#include "esp_app_main.h"
 #include "m1_esp32_rpc_features.h"
-#include "ctrl_api.h"
 #include "m1_log_debug.h"
 #include <string.h>
 #include <stdlib.h>
@@ -148,10 +146,8 @@ typedef struct
 /***************************** V A R I A B L E S ******************************/
 
 static badbt_state_t badbt_state;
-static ctrl_cmd_t badbt_req;  /* initialized via CTRL_CMD_DEFAULT_REQ() before use */
 
-/* Set to true when running on SiN360 binary-SPI firmware.
- * AT path (ble_hid_*) is used when false; binary CMD_BLE_HID_* when true. */
+/* Set to true when running on SiN360 binary-SPI firmware. */
 static bool s_use_spi_hid = false;
 
 /* ASCII to HID scancode table (US keyboard layout, indices 0x20-0x7E) */
@@ -332,10 +328,8 @@ static void badbt_send_key(uint8_t modifier, uint8_t keycode)
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
         uint8_t keys[1] = { keycode };
         (void)m1_esp32_rpc_ble_hid_key(modifier, keys, keycode ? 1u : 0u);
-    } else if (s_use_spi_hid)
+    } else
         badbt_spi_hid_send_kb(modifier, keycode);
-    else
-        ble_hid_send_kb(&badbt_req, modifier, keycode);
     osDelay(BADBT_KEY_PRESS_MS);
 
     badbt_release_all();
@@ -352,10 +346,8 @@ static void badbt_release_all(void)
 {
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
         (void)m1_esp32_rpc_ble_hid_key(0u, NULL, 0u);
-    else if (s_use_spi_hid)
-        badbt_spi_hid_send_kb(0, 0);
     else
-        ble_hid_send_kb(&badbt_req, 0, 0);
+        badbt_spi_hid_send_kb(0, 0);
 }
 
 
@@ -558,85 +550,6 @@ static bool badbt_parse_line(const char *line)
     if (strncmp(line, "STRING ", 7) == 0)
     {
         badbt_type_string(line + 7);
-        return true;
-    }
-
-    /* MOUSE_MOVE <dx> <dy>  — relative pointer movement (dx dy as integers) */
-    if (strncmp(line, "MOUSE_MOVE ", 11) == 0)
-    {
-        if (!s_use_spi_hid)
-        {
-            int dx = 0, dy = 0;
-            sscanf(line + 11, "%d %d", &dx, &dy);
-            if (dx < -127) dx = -127;
-            if (dx >  127) dx =  127;
-            if (dy < -127) dy = -127;
-            if (dy >  127) dy =  127;
-            ble_hid_send_mouse(&badbt_req, 0, (int8_t)dx, (int8_t)dy, 0);
-            osDelay(BADBT_KEY_RELEASE_MS);
-        }
-        return true;
-    }
-
-    /* MOUSE_CLICK [LEFT|RIGHT|MIDDLE]  — click a mouse button */
-    if (strncmp(line, "MOUSE_CLICK", 11) == 0)
-    {
-        if (!s_use_spi_hid)
-        {
-            uint8_t btn = 0x01; /* default: left */
-            const char *arg = line + 11;
-            while (*arg == ' ') arg++;
-            if (strncmp(arg, "RIGHT",  5) == 0) btn = 0x02;
-            else if (strncmp(arg, "MIDDLE", 6) == 0) btn = 0x04;
-            ble_hid_send_mouse(&badbt_req, btn, 0, 0, 0);
-            osDelay(BADBT_KEY_PRESS_MS);
-            ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
-            osDelay(BADBT_KEY_RELEASE_MS);
-        }
-        return true;
-    }
-
-    /* MOUSE_SCROLL <amount>  — scroll wheel (+up, -down) */
-    if (strncmp(line, "MOUSE_SCROLL ", 13) == 0)
-    {
-        if (!s_use_spi_hid)
-        {
-            int wheel = atoi(line + 13);
-            if (wheel < -127) wheel = -127;
-            if (wheel >  127) wheel =  127;
-            ble_hid_send_mouse(&badbt_req, 0, 0, 0, (int8_t)wheel);
-            osDelay(BADBT_KEY_RELEASE_MS);
-            /* Release */
-            ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
-        }
-        return true;
-    }
-
-    /* MEDIA <action>  — Consumer Control HID usage */
-    if (strncmp(line, "MEDIA ", 6) == 0)
-    {
-        if (!s_use_spi_hid)
-        {
-            const char *action = line + 6;
-            uint16_t usage = 0;
-            if      (strncmp(action, "PLAY_PAUSE",  10) == 0) usage = 0x00CD;
-            else if (strncmp(action, "NEXT",         4) == 0) usage = 0x00B5;
-            else if (strncmp(action, "PREVIOUS",     8) == 0) usage = 0x00B6;
-            else if (strncmp(action, "PREV",         4) == 0) usage = 0x00B6;
-            else if (strncmp(action, "STOP",         4) == 0) usage = 0x00B7;
-            else if (strncmp(action, "MUTE",         4) == 0) usage = 0x00E2;
-            else if (strncmp(action, "VOLUME_UP",    9) == 0) usage = 0x00E9;
-            else if (strncmp(action, "VOLUME_DOWN", 11) == 0) usage = 0x00EA;
-            else if (strncmp(action, "VOL_UP",       6) == 0) usage = 0x00E9;
-            else if (strncmp(action, "VOL_DOWN",     8) == 0) usage = 0x00EA;
-            if (usage != 0)
-            {
-                ble_hid_send_media(&badbt_req, usage);
-                osDelay(BADBT_KEY_PRESS_MS);
-                ble_hid_send_media(&badbt_req, 0); /* release */
-                osDelay(BADBT_KEY_RELEASE_MS);
-            }
-        }
         return true;
     }
 
@@ -849,15 +762,10 @@ static bool badbt_wait_for_connection(void)
             osDelay(1000);
             connected_now = m1_esp32_rpc_ble_hid_is_connected();
         }
-        else if (s_use_spi_hid)
+        else
         {
             osDelay(1000);
             connected_now = badbt_spi_hid_is_connected();
-        }
-        else
-        {
-            uint8_t ret = ble_hid_wait_connect(&badbt_req, 1);
-            connected_now = (ret == SUCCESS);
         }
 
         if (connected_now)
@@ -1070,11 +978,6 @@ void badbt_run(void)
 
     /* ---- Phase 1: Init ESP32 & BLE HID ---- */
 
-    {
-        ctrl_cmd_t tmp = CTRL_CMD_DEFAULT_REQ();
-        badbt_req = tmp;
-    }
-
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
@@ -1083,24 +986,19 @@ void badbt_run(void)
     m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
     m1_u8g2_nextpage();
 
-    /* Ensure ESP32 hardware and SPI task are initialized */
+    /* Ensure ESP32 hardware is initialized */
     if ( !m1_esp32_get_init_status() )
         m1_esp32_init();
 
-    if ( !get_esp32_main_init_status() )
-        esp32_main_init();
-
-    if ( !get_esp32_main_init_status() )
+    if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC &&
+        m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI)
     {
-        m1_message_box(&m1_u8g2, "Bad-BT", "ESP32 not", "ready", " OK ");
+        m1_message_box(&m1_u8g2, "Bad-BT", "Unsupported", "ESP32 firmware", " OK ");
         m1_esp32_deinit();
         return;
     }
 
-    /* Detect firmware type using the esp32_feature_map classifier (Phase C).
-     * esp32_firmware_is_sin360() encodes: BLE_HID present AND WIFI_JOIN absent
-     * — a positive indicator that guards against a transient caps-probe failure
-     * (bitmap=0) silently routing AT firmware into the SPI HID path. */
+    /* Detect SiN360 to select its binary-SPI HID commands. */
     s_use_spi_hid = esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap());
 
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
@@ -1126,20 +1024,6 @@ void badbt_run(void)
             return;
         }
     }
-    else
-    {
-        /* AT firmware path: ble_hid_init() */
-        uint8_t init_ret = ble_hid_init(&badbt_req, m1_badbt_name);
-        if (init_ret != SUCCESS)
-        {
-            char step_msg[16];
-            snprintf(step_msg, sizeof(step_msg), "fail step %d", init_ret);
-            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
-            m1_esp32_deinit();
-            return;
-        }
-    }
-
     /* ---- Phase 2: Wait for target device to pair ---- */
 
     memset(&badbt_state, 0, sizeof(badbt_state));
@@ -1148,10 +1032,8 @@ void badbt_run(void)
     {
         if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
             (void)m1_esp32_rpc_ble_hid_deinit();
-        else if (s_use_spi_hid)
-            badbt_spi_hid_stop();
         else
-            ble_hid_deinit(&badbt_req);
+            badbt_spi_hid_stop();
         if (!badbt_state.connected)
             m1_message_box(&m1_u8g2, "Bad-BT", "Connection", "timeout", " OK ");
         m1_esp32_deinit();
@@ -1168,10 +1050,8 @@ void badbt_run(void)
     {
         if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
             (void)m1_esp32_rpc_ble_hid_deinit();
-        else if (s_use_spi_hid)
-            badbt_spi_hid_stop();
         else
-            ble_hid_deinit(&badbt_req);
+            badbt_spi_hid_stop();
         m1_message_box(&m1_u8g2, "Bad-BT", "SD card not", "available", " OK ");
         m1_esp32_deinit();
         return;
@@ -1269,10 +1149,8 @@ void badbt_run(void)
     /* ---- Phase 4: Disconnect & cleanup ---- */
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
         (void)m1_esp32_rpc_ble_hid_deinit();
-    else if (s_use_spi_hid)
-        badbt_spi_hid_stop();
     else
-        ble_hid_deinit(&badbt_req);
+        badbt_spi_hid_stop();
     m1_esp32_deinit();
 }
 
