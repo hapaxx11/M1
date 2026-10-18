@@ -164,7 +164,7 @@ Terminology used when communicating with the agent about the M1 UI.
   ```
   python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin --output build/M1_Hapax_v<VERSION>_wCRC.bin --hapax-revision 1 --verbose
   ```
-  Replace `<VERSION>` with the current version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
+  Replace `<VERSION>` with the current version from `m1_fw_update_bl.h` (e.g. `0.10.0.1`).
 - **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
 
 ### qMonstatek Desktop App Build
@@ -205,9 +205,9 @@ rules live in the skills (see the Skill Index).
 
 Full rationale: [`documentation/agent/versioning.md`](documentation/agent/versioning.md).
 
-- **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.9.0.1-Hapax.1`.
+- **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.10.0.1-Hapax.1`.
 - **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — no `-Hapax.X` suffix in filenames/tags.
-- **`FW_VERSION_MINOR`** = `9` (Hapax generation, owned by this fork).  **`FW_VERSION_MAJOR`/`FW_VERSION_BUILD`** stay `0` until Monstatek ships a breaking change.
+- **`FW_VERSION_MINOR`** = `10` (Hapax generation, owned by this fork).  **`FW_VERSION_MAJOR`/`FW_VERSION_BUILD`** stay `0` until Monstatek ships a breaking change.
 - **`FW_VERSION_RC`** maps 1:1 to **`M1_HAPAX_REVISION`** (`m1_fw_update_bl.h`); CI auto-increments both.
 - **Manual bump**: edit only `FW_VERSION_RC` and `M1_HAPAX_REVISION` — `CMakeLists.txt` is never patched (project name is derived from the four `FW_VERSION_*` macros at configure time).
 - **`Hapax` is the project codename**, not a version number.
