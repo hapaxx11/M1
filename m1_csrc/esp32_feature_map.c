@@ -157,12 +157,8 @@ esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
      * classifier bit) and the native brain CD3 is next (HANDSHAKE + an
      * RPC-only bit); both speak the m1_link binary protocol and must resolve
      * to ESP32_TRANSPORT_RPC before the SiN360 rule, then SiN360 before the
-     * generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN but NOT
-     * the brain CD3's HANDSHAKE + 802154_TX/BLE_SPAM combination nor the
-     * MtkCore bit, so it falls through to ESP32_TRANSPORT_AT and continues to
-     * be driven over AT text commands — this layer never re-routes it to
-     * M1_RPC.  An all-zero bitmap (unknown / not yet probed) yields NONE so
-     * transport-selecting callers fail closed. */
+     * generic AT fallback. Unknown and retired AT firmware profiles resolve
+     * to NONE so transport-selecting callers fail closed. */
     if (cap_bitmap == 0u)
         return ESP32_TRANSPORT_NONE;
     if (esp32_firmware_is_mtkcore(cap_bitmap))
@@ -171,5 +167,5 @@ esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
         return ESP32_TRANSPORT_RPC;
     if (esp32_firmware_is_sin360(cap_bitmap))
         return ESP32_TRANSPORT_BINARY_SPI;
-    return ESP32_TRANSPORT_AT;
+    return ESP32_TRANSPORT_NONE;
 }

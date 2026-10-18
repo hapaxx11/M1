@@ -14,7 +14,6 @@
 
 typedef enum {
     WIFI_HOTSPOT_PATH_UNSUPPORTED = 0,
-    WIFI_HOTSPOT_PATH_AT,
     WIFI_HOTSPOT_PATH_RPC
 } wifi_hotspot_path_t;
 

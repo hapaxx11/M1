@@ -19,7 +19,6 @@
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
-#include "FreeRTOS.h"
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_rpc.h"
@@ -31,11 +30,6 @@
 extern uint8_t m1_esp32_get_init_status(void);
 extern bool    get_esp32_main_init_status(void);
 extern void    esp32_main_init(void);
-extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
-                                int out_buf_size, int timeout_sec);
-extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                    uint8_t *rx_buf, int rx_buf_size,
-                                    int *out_len, int timeout_sec);
 extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                         uint8_t *rx_buf, int rx_buf_size,
                                         int *out_len, int timeout_sec);
@@ -44,27 +38,8 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 
 #define CAPS_QUERY_TIMEOUT_MS  500u   /* Brief: ESP32 is already running */
 
-/* Buffer for the AT+CMD? response.  Stock ESP-AT lists ~150-200 commands at
- * roughly 30-50 bytes per line, so ~8KB is generous enough to capture the
- * full list before spi_AT_send_recv() stops at "OK\r\n".  Allocated from the
- * FreeRTOS heap to avoid stacking ~8KB inside a caller's task stack and to
- * sidestep the newlib heap (which has been observed too small for incidental
- * allocations post-SiN360 integration). */
-#define AT_CMD_RESP_BUF_SZ     8192u
-
-/* AT+CMD? probe needs a few seconds for the ESP32 to assemble and stream the
- * full command list.  5 s is the standard "long" timeout used elsewhere in
- * the AT bridge (e.g. spi_AT_send_recv 5 s in m1_http_client / m1_802154). */
-#define AT_CMD_PROBE_TIMEOUT_S 5
-
-/* Quick AT presence probe timeout.  A bare "AT\r\n" is answered almost
- * instantly by any AT firmware; 1 s is generous.  CD3 firmware (which speaks
- * M1_RPC, not AT) will not answer, so this short timeout avoids paying the
- * full AT_CMD_PROBE_TIMEOUT_S for CD3 detection. */
-#define AT_PRESENCE_TIMEOUT_S  1
-
 /* CD3 native M1_RPC probe (PING/GET_STATUS) timeout.  CD3 is already running
- * and answers immediately over the SPI-HD transport, so a short timeout keeps
+ * and answers immediately over M1 Link, so a short timeout keeps
  * detection snappy for non-CD3 firmware (which simply never answers). */
 #define CD3_RPC_PROBE_TIMEOUT_S 2
 
@@ -140,67 +115,6 @@ static bool caps_cd3_fetch_fw_version(const char *fw_name,
     m1_esp32_rpc_format_fw_version(out, out_size, fw_name, &ver);
     return out[0] != '\0';
 }
-
-/* =========================================================================
- * AT command → capability bit mapping table
- *
- * Consulted by m1_esp32_caps_parse_at_cmd_list() against the response of a
- * stock ESP-AT `AT+CMD?` probe.  Each entry maps the full AT command name
- * (including the "AT+" prefix) to the M1_ESP32_CAP_* bit that should be set
- * when the connected ESP32 firmware advertises that command.
- *
- * Adding support for a new AT-side feature is a single-line edit to this
- * table — no curated fallback profile macros are required.
- *
- * Currently mapped commands:
- *   - "AT+CWJAP"        — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
- *   - "AT+BLEHIDINIT"   — stock ESP-AT (BLE HID example)  → CAP_BLE_HID
- *   - "AT+ZIGSNIFF"     — CD3-AT/dag/neddy299 custom      → CAP_802154
- *   - "AT+DEAUTH"       — dag/neddy299 at_custom_deauth    → CAP_DEAUTH
- *   - "AT+STASCAN"      — neddy299 at_custom_stascan       → CAP_STA_SCAN
- *   - "AT+M1DEAUTH"     — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
- *   - "AT+M1DEAUTHALL"  — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
- *   - "AT+M1DEAUTHSTOP" — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
- *   - "AT+M1BEACON"     — dag T-800 at_custom_wifi_cmd     → CAP_BEACON
- *   - "AT+M1KARMA"      — dag T-800 at_custom_wifi_cmd     → CAP_KARMA
- *   - "AT+M1EVILTWIN"   — dag T-800 at_custom_wifi_cmd     → CAP_PORTAL
- *   - "AT+M1BLESPAM"    — dag T-800 at_custom_wifi_cmd     → CAP_BLE_ADV
- *   - "AT+M1MONITOR"    — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
- *   - "AT+M1PROBE"      — dag T-800 at_custom_wifi_cmd     → CAP_PROBE_FLOOD
- *   - "AT+M1PMKID"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
- *   - "AT+M1HSCAP"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
- *   - "AT+M1WIFISTATS"  — dag T-800 at_custom_wifi_cmd     → CAP_WIFI_SCAN
- *   - "AT+HIDKBINIT"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
- *   - "AT+HIDKBSEND"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
- * =========================================================================*/
-static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
-    /* Stock ESP-AT */
-    { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
-    { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
-    /* CD3-AT (bedge117) / neddy299 custom commands */
-    { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
-    { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
-    { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
-    /* dag T-800 custom WiFi commands (at_custom_wifi_cmd.c) */
-    { "AT+M1DEAUTH",     M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1DEAUTHALL",  M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1DEAUTHSTOP", M1_ESP32_CAP_DEAUTH     },
-    { "AT+M1BEACON",     M1_ESP32_CAP_BEACON     },
-    { "AT+M1KARMA",      M1_ESP32_CAP_KARMA      },
-    { "AT+M1EVILTWIN",   M1_ESP32_CAP_PORTAL     },
-    { "AT+M1BLESPAM",    M1_ESP32_CAP_BLE_ADV    },
-    { "AT+M1MONITOR",    M1_ESP32_CAP_PKTMON     },
-    { "AT+M1PROBE",      M1_ESP32_CAP_PROBE_FLOOD},
-    { "AT+M1PMKID",      M1_ESP32_CAP_PKTMON     },
-    { "AT+M1HSCAP",      M1_ESP32_CAP_PKTMON     },
-    { "AT+M1WIFISTATS",  M1_ESP32_CAP_WIFI_SCAN  },
-    /* dag T-800 custom HID commands (at_custom_hid_cmd.c) */
-    { "AT+HIDKBINIT",    M1_ESP32_CAP_BLE_HID    },
-    { "AT+HIDKBSEND",    M1_ESP32_CAP_BLE_HID    },
-};
-
-#define S_AT_CMD_CAP_MAP_N \
-    (sizeof(s_at_cmd_cap_map) / sizeof(s_at_cmd_cap_map[0]))
 
 /*************** I N T E R N A L   H E L P E R S *****************************/
 

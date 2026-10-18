@@ -8,8 +8,6 @@
 wifi_hotspot_path_t wifi_hotspot_select_path(esp32_transport_t transport)
 {
     switch (transport) {
-    case ESP32_TRANSPORT_AT:
-        return WIFI_HOTSPOT_PATH_AT;
     case ESP32_TRANSPORT_RPC:
         return WIFI_HOTSPOT_PATH_RPC;
     default:

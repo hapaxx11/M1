@@ -16,18 +16,14 @@
  *   - the M1_RPC binary framing (magic 0x4D31) — the native "brain" CD3
  *     (bedge117/m1-esp32-brain).
  *
- * There are TWO distinct CD3 firmwares.  The legacy **CD3-AT** speaks AT text
- * commands and is handled by the existing AT path unchanged; this module does
- * not touch it (esp32_firmware_transport() classifies it as
- * ESP32_TRANSPORT_AT).  Only the newer native **brain CD3** speaks M1_RPC and
- * is what this compatibility layer targets.  Both remain fully supported.
+ * The legacy ESP-AT firmware line has been retired. This module targets the
+ * native brain CD3 M1_RPC firmware.
  *
  * Historically only ESP-NOW spoke M1_RPC; every other WiFi / BLE / 802.15.4
  * feature emitted AT text commands, so those features stayed dark against the
  * native brain CD3 firmware (which does not implement the AT command set).  This
- * module is the missing reusable M1_RPC feature layer: a single robust RPC
- * client any feature module can call, plus the canonical opcode map and the
- * transport-mode selector used to choose between the three encoders.
+ * module is the reusable M1_RPC feature layer: a single robust RPC client any
+ * feature module can call, plus the canonical opcode map for supported transports.
  *
  * The opcode enum and payload structs mirror the canonical shared header
  * `components/m1_rpc/include/m1_rpc.h` in bedge117/m1-esp32-brain.  The frame

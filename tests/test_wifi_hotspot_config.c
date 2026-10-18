@@ -23,8 +23,8 @@ void test_validate_accepts_boundary_values(void)
 
 void test_transport_dispatch_routes_only_supported_paths(void)
 {
-    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_AT,
-        wifi_hotspot_select_path(ESP32_TRANSPORT_AT));
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_UNSUPPORTED,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_NONE));
     TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_RPC,
         wifi_hotspot_select_path(ESP32_TRANSPORT_RPC));
     TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_UNSUPPORTED,

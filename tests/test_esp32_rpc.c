@@ -559,27 +559,14 @@ void test_transport_binary_spi_for_sin360(void)
                           esp32_firmware_transport(sin));
 }
 
-void test_transport_at_for_generic_at_firmware(void)
+void test_transport_none_for_unrecognized_firmware(void)
 {
-    /* AT firmware: WIFI_JOIN set but not the CD3 HANDSHAKE + 802154_TX/BLE_SPAM
-     * combination. */
-    uint64_t at = M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_DEAUTH |
-                  M1_ESP32_CAP_802154;
-    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT, esp32_firmware_transport(at));
-}
-
-void test_transport_at_for_legacy_cd3_at(void)
-{
-    /* Legacy CD3-AT: advertises WIFI_JOIN (+ BLE_HID, 802154) but NOT the
-     * brain-CD3 HANDSHAKE + 802154_TX/BLE_SPAM combination, so it must stay on
-     * the AT path — the compatibility layer never re-routes CD3-AT to M1_RPC. */
-    uint64_t cd3_at = M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_BLE_HID |
-                      M1_ESP32_CAP_802154 | M1_ESP32_CAP_DEAUTH;
-    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(cd3_at));
-    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT,
-                          esp32_firmware_transport(cd3_at));
-    g_bitmap = cd3_at;
-    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT, m1_esp32_active_transport());
+    uint64_t unknown = M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_DEAUTH |
+                       M1_ESP32_CAP_802154;
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_NONE,
+                          esp32_firmware_transport(unknown));
+    g_bitmap = unknown;
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_NONE, m1_esp32_active_transport());
 }
 
 void test_transport_self_primes_when_not_yet_queried(void)
@@ -654,8 +641,7 @@ int main(void)
     RUN_TEST(test_transport_none_for_zero_bitmap);
     RUN_TEST(test_transport_rpc_for_cd3);
     RUN_TEST(test_transport_binary_spi_for_sin360);
-    RUN_TEST(test_transport_at_for_generic_at_firmware);
-    RUN_TEST(test_transport_at_for_legacy_cd3_at);
+    RUN_TEST(test_transport_none_for_unrecognized_firmware);
     RUN_TEST(test_transport_self_primes_when_not_yet_queried);
     RUN_TEST(test_transport_none_and_no_probe_when_hal_not_initialised);
     return UNITY_END();
