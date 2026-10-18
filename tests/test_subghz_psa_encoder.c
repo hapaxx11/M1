@@ -110,13 +110,15 @@ void test_encode36_phase2_recovery_reencodes_with_phase2_key(void)
     TEST_ASSERT_EQUAL(PSA_BF_PHASE_2, recovered.phase);
     TEST_ASSERT_EQUAL_HEX32(candidate, recovered.candidate);
     TEST_ASSERT_EQUAL_HEX32(serial, recovered.serial);
-    TEST_ASSERT_EQUAL_HEX32(counter & 0x0FFFFF00u,
-                            recovered.counter & 0x0FFFFF00u);
+    TEST_ASSERT_EQUAL_HEX32(counter & 0x0FFFFF00u, recovered.counter);
 
-    uint8_t tx_frame[10];
-    subghz_psa_encode_buffer36(recovered.serial, recovered.counter + 1u,
+    uint8_t tx_frame[10], tx_frame2[10];
+    uint32_t tx_counter =
+        subghz_psa_bf_counter_advance(recovered.counter, recovered.phase);
+    subghz_psa_encode_buffer36(recovered.serial, tx_counter,
                                recovered.button, PRESERVE01,
                                recovered.candidate, recovered.phase, tx_frame);
+    TEST_ASSERT_TRUE(memcmp(frame, tx_frame, sizeof(frame)) != 0);
     key1 = 0;
     for (uint8_t i = 0; i < 8u; i++)
         key1 = (key1 << 8) | tx_frame[i];
@@ -129,8 +131,25 @@ void test_encode36_phase2_recovery_reencodes_with_phase2_key(void)
         &recovered));
     TEST_ASSERT_EQUAL(PSA_BF_PHASE_2, recovered.phase);
     TEST_ASSERT_EQUAL_HEX32(candidate, recovered.candidate);
-    TEST_ASSERT_EQUAL_HEX32((counter + 1u) & 0x0FFFFF00u,
-                            recovered.counter & 0x0FFFFF00u);
+    TEST_ASSERT_EQUAL_HEX32(tx_counter, recovered.counter);
+
+    tx_counter = subghz_psa_bf_counter_advance(tx_counter, recovered.phase);
+    subghz_psa_encode_buffer36(recovered.serial, tx_counter, recovered.button,
+                               PRESERVE01, recovered.candidate, recovered.phase,
+                               tx_frame2);
+    TEST_ASSERT_TRUE(memcmp(tx_frame, tx_frame2, sizeof(tx_frame)) != 0);
+
+    key1 = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        key1 = (key1 << 8) | tx_frame2[i];
+    const uint16_t tx_key2_2 =
+        (uint16_t)(((uint16_t)tx_frame2[8] << 8) | tx_frame2[9]);
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 1u));
+    TEST_ASSERT_TRUE(subghz_psa_bf_run_range(
+        &job, key1, tx_key2_2, PSA_BF_PHASE_2, candidate, candidate + 1u,
+        &recovered));
+    TEST_ASSERT_EQUAL_HEX32(tx_counter, recovered.counter);
 }
 
 /*============================================================================*/

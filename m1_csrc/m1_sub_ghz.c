@@ -2638,7 +2638,6 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	if (advance_proto_pirate_counter)
 		subghz_proto_pirate_counter_advance(&s_proto_pirate_counter,
 		                                    proto_pirate_counter_mask);
-	return 0;
 
 	/* ── 5. Set up datfile_info → temp .sgh ── */
 	strncpy((char *)datfile_info.dat_filename, FLIPPER_SUB_TMP_SGH,

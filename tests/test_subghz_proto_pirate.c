@@ -592,25 +592,40 @@ void test_vag_passat_builds_type2_waveform(void)
     TEST_ASSERT_EQUAL_UINT8(2u, subghz_vag_effective_type(1u, 0x00u));
 }
 
-void test_proto_pirate_counter_state_is_per_path_and_advances_once(void)
+void test_proto_pirate_counter_state_survives_capture_switches(void)
 {
     subghz_proto_pirate_counter_state_t state = {0};
     TEST_ASSERT_EQUAL_UINT32(
         12u, subghz_proto_pirate_counter_get(
-                 &state, "0:/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 12u,
+                 &state, "0:/SUBGHZ/a.sub", SubGhzProtoPirate_KiaV6, 12u,
                  0xAABBCCDDu));
-    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFu);
-    TEST_ASSERT_EQUAL_UINT32(
-        13u, subghz_proto_pirate_counter_get(
-                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 90u,
-                 0xAABBCCDDu));
+    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFFFu);
     TEST_ASSERT_EQUAL_UINT32(
         90u, subghz_proto_pirate_counter_get(
                  &state, "/SUBGHZ/b.sub", SubGhzProtoPirate_VAG, 90u,
                  0xAABBCCDDu));
+    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFu);
+    TEST_ASSERT_EQUAL_UINT32(
+        91u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/b.sub", SubGhzProtoPirate_VAG, 90u,
+                 0xAABBCCDDu));
+    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFu);
+    TEST_ASSERT_EQUAL_UINT32(
+        13u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_KiaV6, 12u,
+                 0xAABBCCDDu));
+    subghz_proto_pirate_counter_advance(&state, 0xFFFFFFFFu);
+    TEST_ASSERT_EQUAL_UINT32(
+        14u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_KiaV6, 12u,
+                 0xAABBCCDDu));
+    TEST_ASSERT_EQUAL_UINT32(
+        92u, subghz_proto_pirate_counter_get(
+                 &state, "/SUBGHZ/b.sub", SubGhzProtoPirate_VAG, 90u,
+                 0xAABBCCDDu));
     TEST_ASSERT_EQUAL_UINT32(
         20u, subghz_proto_pirate_counter_get(
-                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_VAG, 20u,
+                 &state, "/SUBGHZ/a.sub", SubGhzProtoPirate_KiaV6, 20u,
                  0x11223344u));
 }
 
@@ -748,7 +763,7 @@ int main(void)
     RUN_TEST(test_vag_encode_matches_upload_builder);
     RUN_TEST(test_vag_upstream_buttons_normalize_and_replay_counter_advances);
     RUN_TEST(test_vag_passat_builds_type2_waveform);
-    RUN_TEST(test_proto_pirate_counter_state_is_per_path_and_advances_once);
+    RUN_TEST(test_proto_pirate_counter_state_survives_capture_switches);
     RUN_TEST(test_imported_kia_v6_serial_field_overrides_packed_key_serial);
     RUN_TEST(test_vag_key2_parser_accepts_short_and_upstream_byte_lists);
 

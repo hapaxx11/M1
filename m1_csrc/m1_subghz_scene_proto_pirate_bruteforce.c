@@ -449,7 +449,8 @@ static bool pp_bf_psa_emulate(SubGhzApp *app, pp_bf_ctx_t *ctx)
     if (!ok)
         return false;
 
-    ctx->psa_tx_cnt++;
+    ctx->psa_tx_cnt =
+        subghz_psa_bf_counter_advance(ctx->psa_tx_cnt, ctx->psa.phase);
     pp_bf_handoff_to_read_raw(app, ctx);
     return true;
 }
@@ -528,8 +529,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                             pp_bf_rv1_finish(s_ctx);
                         else
                             /* The first emulated frame must advance past the
-                             * recovered counter. */
-                            s_ctx->psa_tx_cnt = s_ctx->psa.counter + 1u;
+                             * recovered counter in the active phase's layout. */
+                            s_ctx->psa_tx_cnt = subghz_psa_bf_counter_advance(
+                                s_ctx->psa.counter, s_ctx->psa.phase);
                         s_ctx->state = PP_BF_STATE_FOUND;
                         break;
                     case SUBGHZ_BRUTEFORCE_JOB_CANCELLED:

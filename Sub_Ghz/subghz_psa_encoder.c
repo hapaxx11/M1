@@ -33,6 +33,11 @@ void subghz_psa_encode_buffer36(uint32_t serial, uint32_t counter,
 {
     memset(buffer, 0, 10);
 
+    if (phase == PSA_BF_PHASE_2)
+        counter &= 0x0FFFFF00u;
+    else if (phase == PSA_BF_PHASE_1)
+        counter &= 0x0FFFFFFFu;
+
     uint32_t v0 = ((serial & 0xFFFFFFu) << 8) | (((uint32_t)button & 0xFu) << 4) |
                   ((counter >> 24) & 0xFu);
     uint32_t v1 = ((counter & 0xFFFFFFu) << 8);

@@ -193,11 +193,33 @@ void test_prepare_flipper_validates_source_and_output_pointers(void)
     free(content);
 }
 
+void test_flipper_conversion_sets_prepared_replay_path_before_success(void)
+{
+    char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    char *converter = slice_between(content,
+                                    "static uint8_t subghz_replay_flipper_to_tmp(",
+                                    "uint8_t sub_ghz_replay_prepare_flipper(");
+    char *filename = strstr(converter, "strncpy((char *)datfile_info.dat_filename");
+    char *success = strstr(converter, "return 0;");
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(filename, "converted replay path is not installed");
+    TEST_ASSERT_NOT_NULL_MESSAGE(success, "converter success return is missing");
+    TEST_ASSERT_TRUE_MESSAGE(filename < success,
+                             "converter must install datfile_info before success");
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(content, "*out_tmp_path = FLIPPER_SUB_TMP_SGH;"),
+        "prepare_flipper must return the generated replay path");
+
+    free(converter);
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_async_abort_does_not_reset_main_queue);
     RUN_TEST(test_blocking_wrapper_flushes_main_queue_before_returning);
     RUN_TEST(test_prepare_flipper_validates_source_and_output_pointers);
+    RUN_TEST(test_flipper_conversion_sets_prepared_replay_path_before_success);
     return UNITY_END();
 }

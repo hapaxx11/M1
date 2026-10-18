@@ -164,7 +164,18 @@ uint16_t subghz_psa_bf_crc16(const uint8_t *buffer, uint32_t length);
  *         decrypted 64-bit block (v0, v1) after a successful hit.
  */
 void subghz_psa_bf_extract_result(uint32_t v0, uint32_t v1, uint32_t candidate,
+                                  subghz_psa_bf_phase_t phase,
                                   subghz_psa_bf_result_t *out);
+
+static inline uint32_t subghz_psa_bf_counter_advance(
+    uint32_t counter, subghz_psa_bf_phase_t phase)
+{
+    if (phase == PSA_BF_PHASE_2)
+        return (counter + 0x100u) & 0x0FFFFF00u;
+    if (phase == PSA_BF_PHASE_1)
+        return (counter + 1u) & 0x0FFFFFFFu;
+    return counter;
+}
 
 /*============================================================================*/
 /* Search                                                                      */
