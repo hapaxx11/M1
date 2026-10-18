@@ -45,10 +45,8 @@
 #include "wifi_deauth_cmd.h"
 #include "wifi_multi_target.h"
 #include "wifi_scan_fail_msg.h"
-#include "wifi_ntp_parse.h"
 #include "wifi_hotspot_config.h"
 #include "m1_esp32_caps.h"
-#include "esp_app_main.h"
 #include "m1_esp32_rpc_features.h"
 #include "m1_system.h"
 #include "m1_settings.h"
@@ -420,28 +418,6 @@ static void wifi_wait_dismiss(void)
 }
 
 /**
- * @brief  Escape a string for use in an ESP-AT quoted parameter.
- *
- * ESP-AT treats '\', '"', and ',' as special within quoted strings.
- * Each special character is prefixed with a backslash.
- *
- * @param src   Input string (null-terminated).
- * @param dst   Output buffer (null-terminated result).
- * @param dsize Output buffer capacity in bytes (including null terminator).
- */
-static void at_escape_str(const char *src, char *dst, size_t dsize)
-{
-	size_t i = 0;
-	while (*src && i + 2 < dsize)
-	{
-		if (*src == '\\' || *src == '"' || *src == ',')
-			dst[i++] = '\\';
-		dst[i++] = *src++;
-	}
-	dst[i] = '\0';
-}
-
-/**
  * @brief  Draw a status screen and return immediately (no key wait).
  *
  * Use this for a transient "in progress" status shown right before a blocking
@@ -554,6 +530,13 @@ static void wifi_connect_selected_ap(void)
 		return;
 	}
 
+	if (m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		memset(password, 0, sizeof(password));
+		wifi_show_message("Connect", "Unsupported transport", NULL);
+		return;
+	}
+
 	/* ---- Binary SPI path (SiN360) ---- */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
@@ -606,10 +589,7 @@ static void wifi_connect_selected_ap(void)
 	}
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	/* Sync RTC via NTP if supported by the current ESP firmware.
-	 * wifi_sync_rtc() is gated by M1_APP_WIFI_CONNECT_ENABLE in m1_wifi.h;
-	 * this guard keeps the call site consistent.  With SiN360 firmware the
-	 * stub is a no-op; with AT firmware it performs the actual NTP sync. */
+	/* Sync RTC when the active transport exposes SNTP. */
 	wifi_sync_rtc();
 #endif
 }
@@ -682,10 +662,8 @@ void wifi_scan_ap(void)
 				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
 					if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 					{
-						/* CMD_WIFI_SCAN_STOP is a SiN360 binary-SPI command;
-						 * AT firmware (dag/T-800) has no equivalent because
-						 * AT+CWLAP is blocking and already complete. */
-						if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+						if (m1_esp32_active_transport() ==
+						    ESP32_TRANSPORT_BINARY_SPI)
 						{
 							m1_resp_t resp;
 							m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
@@ -1003,11 +981,17 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	uint16_t pkt_count = 0;
 	bool paused = false;
 	bool has_pkt = false;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	bool use_rpc;
 	m1_pcap_session_t cap_sess = {0};
 	uint8_t *rpc_frame = NULL;
 
 	ensure_esp32_ready();
+	use_rpc = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
+	if (!use_rpc && m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		wifi_show_message(title, "Unsupported transport", NULL);
+		return;
+	}
 
 	/* Show starting screen */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -1556,9 +1540,15 @@ void wifi_mac_track(void)
 	uint32_t packets = 0;
 	uint32_t hits = 0;
 	int spi_ret;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	bool use_rpc;
 
 	ensure_esp32_ready();
+	use_rpc = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
+	if (!use_rpc && m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		wifi_show_message("MAC Track", "Unsupported transport", NULL);
+		return;
+	}
 
 	if (!wifi_mac_track_pick_selected(target, target_label, sizeof(target_label)))
 	{
@@ -1682,9 +1672,15 @@ static uint16_t sta_do_scan(void)
 	m1_cmd_t cmd;
 	m1_resp_t resp;
 	int ret;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	esp32_transport_t transport;
+	bool use_rpc;
 
 	sta_list_free();
+	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	use_rpc = transport == ESP32_TRANSPORT_RPC;
+	if (!use_rpc && transport != ESP32_TRANSPORT_BINARY_SPI)
+		return 0u;
 
 	if (use_rpc)
 	{
@@ -2370,9 +2366,9 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport = m1_esp32_active_transport();
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* brain CD3 M1_RPC path */
 		m1_esp32_rpc_deauth_req_t req;
@@ -2392,28 +2388,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			return;
 		}
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: AT+M1DEAUTH=<bssid>,<channel> */
-		char at_cmd[48];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1DEAUTH=%02X:%02X:%02X:%02X:%02X:%02X,%d\r\n",
-			bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
-			channel);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			m1_u8g2_firstpage();
-			u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
-			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-			m1_u8g2_nextpage();
-			wifi_wait_dismiss();
-			return;
-		}
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		/* Binary SPI path — SiN360 */
 		memset(&cmd, 0, sizeof(cmd));
@@ -2434,6 +2409,11 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			wifi_wait_dismiss();
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Deauth", "Unsupported transport", NULL);
+		return;
 	}
 
 	start_tick = HAL_GetTick();
@@ -2481,14 +2461,8 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+				if (transport == ESP32_TRANSPORT_RPC)
 					(void)m1_esp32_rpc_deauth_stop();
-				else if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
 				else
 					m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
@@ -2517,7 +2491,7 @@ static void wifi_deauth_selected_run(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport = m1_esp32_active_transport();
 
 	target_count = wifi_build_selected_deauth_cmd(&cmd, ap_list, ap_count,
 		sta_list_data, sta_total, &ap_targets, &sta_targets, &selected_total);
@@ -2527,45 +2501,44 @@ static void wifi_deauth_selected_run(void)
 		return;
 	}
 
-	if (use_at)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
-		/* AT path only supports deauthing a single AP BSSID.
-		 * If the user selected only STA targets (no AP targets), the AT
-		 * command cannot be used — show a clear error instead of failing
-		 * silently with a generic "Start failed" message. */
-		if (ap_targets == 0)
+		m1_esp32_rpc_deauth_req_t req;
+		memset(&req, 0xFF, sizeof(req));
+		req.count = 0u;
+		req.interval_ms = 0u;
+		if (ap_targets > 0u)
 		{
-			wifi_show_message("Deauth", "AT: select an AP", "STA-only not supported");
-			return;
-		}
-
-		/* AT path — send AT+M1DEAUTH for first selected AP target.
-		 * Multi-target rotation is not supported via AT; the command
-		 * deauths a single AP continuously until AT+M1DEAUTHSTOP. */
-		char at_cmd[48];
-		char at_resp[64];
-		bool found = false;
-		for (uint16_t i = 0; i < ap_count && !found; i++)
-		{
-			if (ap_list[i].selected)
+			for (uint16_t i = 0; i < ap_count; i++)
 			{
-				snprintf(at_cmd, sizeof(at_cmd),
-					"AT+M1DEAUTH=%02X:%02X:%02X:%02X:%02X:%02X,%d\r\n",
-					ap_list[i].bssid[0], ap_list[i].bssid[1],
-					ap_list[i].bssid[2], ap_list[i].bssid[3],
-					ap_list[i].bssid[4], ap_list[i].bssid[5],
-					ap_list[i].channel);
-				(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-				found = true;
+				if (ap_list[i].selected)
+				{
+					memcpy(req.bssid, ap_list[i].bssid, sizeof(req.bssid));
+					req.channel = ap_list[i].channel;
+					break;
+				}
 			}
 		}
-		if (!found || strstr(at_resp, "OK") == NULL)
+		else
 		{
-			wifi_show_message("Deauth", "Start failed", "Flash ESP32 FW?");
+			for (uint16_t i = 0; i < sta_total; i++)
+			{
+				if (sta_list_data[i].selected)
+				{
+					memcpy(req.bssid, sta_list_data[i].bssid, sizeof(req.bssid));
+					memcpy(req.station, sta_list_data[i].mac, sizeof(req.station));
+					req.channel = sta_list_data[i].channel;
+					break;
+				}
+			}
+		}
+		if (m1_esp32_rpc_deauth_start(&req) != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Deauth", "Start failed", NULL);
 			return;
 		}
 	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
 		if (spi_ret != 0 || resp.status != RESP_OK)
@@ -2573,6 +2546,11 @@ static void wifi_deauth_selected_run(void)
 			wifi_show_message("Deauth", "Start failed", "Flash ESP32 FW?");
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Deauth", "Unsupported transport", NULL);
+		return;
 	}
 
 	start_tick = HAL_GetTick();
@@ -2610,12 +2588,8 @@ static void wifi_deauth_selected_run(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
+				if (transport == ESP32_TRANSPORT_RPC)
+					(void)m1_esp32_rpc_deauth_stop();
 				else
 					m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
@@ -2830,7 +2804,7 @@ static void beacon_set_flags(uint8_t flags)
 }
 
 static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_count,
-	uint8_t total_loaded, bool auto_scroll, bool use_at)
+	uint8_t total_loaded, bool auto_scroll, bool use_rpc)
 {
 	S_M1_Buttons_Status btn;
 	S_M1_Main_Q_t q_item;
@@ -2882,12 +2856,8 @@ static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1BEACON=0,0,\"\",\"\"\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
+				if (use_rpc)
+					(void)m1_esp32_rpc_beacon_stop();
 				else
 					m1_esp32_simple_cmd(CMD_BEACON_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
@@ -3141,9 +3111,10 @@ void wifi_attack_beacon(void)
 	uint8_t list_count;
 	uint8_t tx_count;
 	bool shuffle_beacons;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
 
 	if (!beacon_select_mode(&mode))
 	{
@@ -3183,7 +3154,7 @@ void wifi_attack_beacon(void)
 		shuffle_beacons = true;
 	}
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* brain CD3 M1_RPC path: beacon_file_ssids already holds the SSID data
 		 * that beacon_file_ptrs points into, so pass it directly. */
@@ -3196,26 +3167,8 @@ void wifi_attack_beacon(void)
 			return;
 		}
 		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, rpc_count, rpc_count, false, true);
-		(void)m1_esp32_rpc_beacon_stop();
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: AT+M1BEACON=1,<ch>,"<ssid>","<bssid>"
-		 * AT command supports only a single SSID; use the first from the list. */
-		char at_cmd[96];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
-			beacon_file_ptrs[0]);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			beacon_message("Beacon Spam", "Start failed!", NULL);
-			return;
-		}
-		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, 1, 1, false, true);
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		uint8_t total = beacon_batch_load(beacon_file_ptrs, tx_count, &load_diag);
 		if (total == 0)
@@ -3239,6 +3192,10 @@ void wifi_attack_beacon(void)
 		}
 
 		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, tx_count, total, false, false);
+	}
+	else
+	{
+		beacon_message("Beacon Spam", "Unsupported transport", NULL);
 	}
 }
 
@@ -3961,74 +3918,9 @@ static bool wifi_join_select_ap(void)
 
 void wifi_general_join_wifi(void)
 {
-	m1_cmd_t cmd;
-	m1_resp_t resp;
-	char password[WIFI_JOIN_PASS_MAX + 1];
-	char line[26];
-	uint8_t ssid_len;
-	uint8_t pass_len;
-	int ret;
-
 	if (!wifi_join_select_ap())
-	{
 		return;
-	}
-
-	if (!wifi_join_choose_password(password, sizeof(password)))
-	{
-		return;
-	}
-
-	ssid_len = (uint8_t)strnlen(ap_list[ap_view_idx].ssid, 32);
-	pass_len = (uint8_t)strnlen(password, WIFI_JOIN_PASS_MAX);
-	if (ssid_len == 0)
-	{
-		wifi_show_message("Join WiFi", "Hidden SSID", "not supported yet");
-		return;
-	}
-
-	ensure_esp32_ready();
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_WIFI_JOIN;
-	cmd.payload[0] = ssid_len;
-	cmd.payload[1] = pass_len;
-	memcpy(&cmd.payload[2], ap_list[ap_view_idx].ssid, ssid_len);
-	memcpy(&cmd.payload[2 + ssid_len], password, pass_len);
-	cmd.payload_len = 2 + ssid_len + pass_len;
-
-	wifi_draw_message("Join WiFi", "Connecting...", ap_list[ap_view_idx].ssid);
-	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
-	if (ret != 0 || resp.status == RESP_ERR)
-	{
-		memset(password, 0, sizeof(password));
-		wifi_show_message("Join WiFi", "Connect failed", "Check password");
-		return;
-	}
-	if (resp.status == RESP_BUSY)
-	{
-		memset(password, 0, sizeof(password));
-		wifi_show_message("Join WiFi", "Still connecting", "Try status later");
-		return;
-	}
-
-	/* Successful connect — save credentials and update state */
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
-		wifi_show_message("Join WiFi", "Warning", "Credentials not saved");
-	wifi_set_connected_state(ap_list[ap_view_idx].ssid);
-#endif
-	memset(password, 0, sizeof(password));
-
-	if (resp.payload_len >= 2)
-	{
-		snprintf(line, sizeof(line), "CH:%d RSSI:%ddBm", resp.payload[0], (int8_t)resp.payload[1]);
-		wifi_show_message("Join WiFi", "Connected", line);
-	}
-	else
-	{
-		wifi_show_message("Join WiFi", "Connected", NULL);
-	}
+	wifi_connect_selected_ap();
 }
 
 static void wifi_make_local_mac(uint8_t mac[6], uint8_t salt)
@@ -4054,11 +3946,12 @@ static bool wifi_send_set_mac(uint8_t iface, const uint8_t mac[6])
 	uint8_t out_mac[6];
 	char line[26];
 	int ret;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
 
-	if (use_rpc)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* CD3 only exposes a station MAC override via WIFI_SET_MAC; ignore
 		 * AP-MAC requests silently (the SoftAP path sets its own MAC). */
@@ -4077,6 +3970,11 @@ static bool wifi_send_set_mac(uint8_t iface, const uint8_t mac[6])
 			out_mac[0], out_mac[1], out_mac[2], out_mac[3], out_mac[4], out_mac[5]);
 		wifi_show_message("Set MACs", "STA MAC set", line);
 		return true;
+	}
+	if (transport != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		wifi_show_message("Set MACs", "Unsupported transport", NULL);
+		return false;
 	}
 
 	memset(&cmd, 0, sizeof(cmd));
@@ -4205,7 +4103,16 @@ void wifi_general_set_channel(void)
 	BaseType_t ret;
 	uint8_t channel = 6;
 	bool redraw = true;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	esp32_transport_t transport;
+
+	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	if (transport != ESP32_TRANSPORT_RPC &&
+	    transport != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		wifi_show_message("Set Channel", "Unsupported transport", NULL);
+		return;
+	}
 
 	while (1)
 	{
@@ -4254,8 +4161,7 @@ void wifi_general_set_channel(void)
 			char line[26];
 			bool ok = false;
 
-			ensure_esp32_ready();
-			if (use_rpc)
+			if (transport == ESP32_TRANSPORT_RPC)
 			{
 				/* CD3 channel override: use monitor mode on the selected
 				 * channel as the closest available primitive. */
@@ -4293,10 +4199,11 @@ void wifi_general_shutdown_wifi(void)
 {
 	m1_resp_t resp;
 	int ret;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
-	if (use_rpc)
+	transport = m1_esp32_active_transport();
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		if (m1_esp32_rpc_wifi_disconnect() != M1_ESP32_RPC_OK)
 		{
@@ -4304,7 +4211,7 @@ void wifi_general_shutdown_wifi(void)
 			return;
 		}
 	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		ret = m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 2000);
 		if (ret != 0 || resp.status != RESP_OK)
@@ -4312,6 +4219,11 @@ void wifi_general_shutdown_wifi(void)
 			wifi_show_message("Shutdown WiFi", "Command failed", "Flash ESP32 FW?");
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Shutdown WiFi", "Unsupported transport", NULL);
+		return;
 	}
 
 	wifi_show_message("Shutdown WiFi", "WiFi radio idle", "STA mode restored");
@@ -4480,24 +4392,20 @@ static bool wifi_hotspot_config_save(const char *ssid, const char *password)
 	       bytes_written == (UINT)text_len;
 }
 
-/* General: editable, persisted WiFi Hotspot configuration.  Native M1_RPC
- * firmware handles AP+STA mode and NAT passthrough; the legacy AT transport
- * retains its existing SoftAP path without claiming NAT support. */
+/* General: editable, persisted WiFi Hotspot configuration over M1_RPC. */
 void wifi_general_hotspot(void)
 {
 	char ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 1u] = "M1-Hotspot";
 	char pwd[WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u] = "";
-	char cmd_buf[160];
-	char resp_buf[256];
 	uint8_t choice;
-	wifi_hotspot_path_t hotspot_path =
-		wifi_hotspot_select_path(m1_esp32_active_transport());
-	bool use_rpc = (hotspot_path == WIFI_HOTSPOT_PATH_RPC);
+	wifi_hotspot_path_t hotspot_path;
 	uint8_t clients = 0u;
 	bool internet_shared = false;
 	char status_line[32];
 	const char *internet_line = "NAT unavailable";
 
+	ensure_esp32_ready();
+	hotspot_path = wifi_hotspot_select_path(m1_esp32_active_transport());
 	if (hotspot_path == WIFI_HOTSPOT_PATH_UNSUPPORTED)
 	{
 		wifi_show_message("WiFi Hotspot", "Unsupported transport", NULL);
@@ -4522,67 +4430,22 @@ void wifi_general_hotspot(void)
 		return;
 	}
 
-	if (!use_rpc)
+	if (m1_esp32_rpc_softap_start(ssid, pwd, 6u) != M1_ESP32_RPC_OK)
 	{
-		/* Keep quoted ESP-AT parameters safe on legacy firmware. */
-		for (size_t i = 0; ssid[i]; i++)
-		{
-			char ch = ssid[i];
-			if (ch == '"' || ch == '\\' || ch == ',')
-			{
-				wifi_show_message("WiFi Hotspot", "Invalid SSID", "Unsafe AT character");
-				return;
-			}
-		}
-		for (size_t i = 0; pwd[i]; i++)
-		{
-			char ch = pwd[i];
-			if (ch == '"' || ch == '\\' || ch == ',')
-			{
-				wifi_show_message("WiFi Hotspot", "Invalid password", "Unsafe AT character");
-				return;
-			}
-		}
+		wifi_show_message("WiFi Hotspot", "Start failed", "Check ESP32 firmware");
+		return;
 	}
-
-	if (use_rpc)
+	m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
+	if (m1_esp32_rpc_softap_status(&clients, &internet_shared) == M1_ESP32_RPC_OK)
 	{
-		if (m1_esp32_rpc_softap_start(ssid, pwd, 6u) != M1_ESP32_RPC_OK)
-		{
-			wifi_show_message("WiFi Hotspot", "Start failed", "Check ESP32 firmware");
-			return;
-		}
-		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
-		if (m1_esp32_rpc_softap_status(&clients, &internet_shared) == M1_ESP32_RPC_OK)
-		{
-			snprintf(status_line, sizeof(status_line), "%u clients, %s", clients,
-			         internet_shared ? "Internet shared" : "NAT inactive");
-			internet_line = internet_shared ? "Internet shared" : "NAT inactive";
-		}
-		else
-		{
-			snprintf(status_line, sizeof(status_line), "%s", "Status unavailable");
-			internet_line = "NAT status unavailable";
-		}
+		snprintf(status_line, sizeof(status_line), "%u clients, %s", clients,
+		         internet_shared ? "Internet shared" : "NAT inactive");
+		internet_line = internet_shared ? "Internet shared" : "NAT inactive";
 	}
 	else
 	{
-		ensure_esp32_ready();
-		memset(resp_buf, 0, sizeof(resp_buf));
-		(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
-
-		snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
-		         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
-		memset(resp_buf, 0, sizeof(resp_buf));
-		(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
-		if (strstr(resp_buf, "OK") == NULL)
-		{
-			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-			wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
-			return;
-		}
-		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
-		snprintf(status_line, sizeof(status_line), "%s", "NAT unavailable");
+		snprintf(status_line, sizeof(status_line), "%s", "Status unavailable");
+		internet_line = "NAT status unavailable";
 	}
 
 	if (!wifi_hotspot_config_save(ssid, pwd))
@@ -4592,34 +4455,18 @@ void wifi_general_hotspot(void)
 	                                "Stop\nKeep");
 	if (choice == 1)
 	{
-		if (use_rpc)
+		if (m1_esp32_rpc_softap_stop() == M1_ESP32_RPC_OK)
 		{
-			if (m1_esp32_rpc_softap_stop() == M1_ESP32_RPC_OK)
-			{
-				m1_esp32_background_owner_set(
-					M1_ESP32_BG_OWNER_HOTSPOT, false);
-				wifi_show_message("WiFi Hotspot", "Stopped", internet_line);
-			}
-			else
-				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
+			m1_esp32_background_owner_set(
+				M1_ESP32_BG_OWNER_HOTSPOT, false);
+			wifi_show_message("WiFi Hotspot", "Stopped", internet_line);
 		}
 		else
 		{
-			memset(resp_buf, 0, sizeof(resp_buf));
-			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-			if (strstr(resp_buf, "OK") != NULL)
-			{
-				m1_esp32_background_owner_set(
-					M1_ESP32_BG_OWNER_HOTSPOT, false);
-				wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
-			}
-			else
-			{
-				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
-			}
+			wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
 		}
 	}
-	else if (use_rpc)
+	else
 	{
 		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
 	}
@@ -4701,9 +4548,12 @@ void wifi_evil_portal(void)
 	char ln[26];
 	uint32_t start_tick, last_poll;
 	const char *portal_ssid = wifi_portal_ssid;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_rpc;
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	use_rpc = transport == ESP32_TRANSPORT_RPC;
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	m1_u8g2_firstpage();
@@ -4713,25 +4563,16 @@ void wifi_evil_portal(void)
 		M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
 	m1_u8g2_nextpage();
 
-	if (use_at)
+	if (use_rpc)
 	{
-		/* AT path — dag T-800: AT+M1EVILTWIN=1,"<ssid>",<ch> */
-		char at_cmd[64];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1EVILTWIN=1,\"%.32s\",6\r\n", portal_ssid);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
+		if (m1_esp32_rpc_captive_start(6u, portal_ssid, "M1 Login")
+		    != M1_ESP32_RPC_OK)
 		{
-			m1_u8g2_firstpage();
-			u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
-			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-			m1_u8g2_nextpage();
-			wifi_wait_dismiss();
+			wifi_show_message("Evil Portal", "Start failed", NULL);
 			return;
 		}
 	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		/* Binary SPI path — SiN360 */
 		memset(&cmd, 0, sizeof(cmd));
@@ -4752,6 +4593,11 @@ void wifi_evil_portal(void)
 			return;
 		}
 	}
+	else
+	{
+		wifi_show_message("Evil Portal", "Unsupported transport", NULL);
+		return;
+	}
 
 	ep_cred_count = 0;
 	ep_view_idx = 0;
@@ -4763,7 +4609,7 @@ void wifi_evil_portal(void)
 		uint32_t now = HAL_GetTick();
 		uint32_t elapsed = (now - start_tick) / 1000;
 
-		if (!use_at && now - last_poll >= EP_POLL_MS)
+		if (!use_rpc && now - last_poll >= EP_POLL_MS)
 		{
 			ep_poll_creds();
 			last_poll = now;
@@ -4781,11 +4627,11 @@ void wifi_evil_portal(void)
 		snprintf(ln, sizeof(ln), "SSID: %s", portal_ssid);
 		u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 
-		if (use_at)
+		if (use_rpc)
 		{
-			snprintf(ln, sizeof(ln), "Time:%lus (AT mode)", elapsed);
+			snprintf(ln, sizeof(ln), "Time:%lus", elapsed);
 			u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-			u8g2_DrawStr(&m1_u8g2, 2, y, "No cred polling on AT");
+			u8g2_DrawStr(&m1_u8g2, 2, y, "Portal active");
 		}
 		else
 		{
@@ -4815,12 +4661,8 @@ void wifi_evil_portal(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1EVILTWIN=0,\"\",0\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
+				if (use_rpc)
+					(void)m1_esp32_rpc_captive_stop();
 				else
 				{
 					ep_save_creds_to_sd();
@@ -4829,12 +4671,12 @@ void wifi_evil_portal(void)
 				xQueueReset(main_q_hdl);
 				break;
 			}
-			else if (!use_at && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_rpc && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_view_idx > 0) ep_view_idx--;
 				else if (ep_cred_count > 0) ep_view_idx = ep_cred_count - 1;
 			}
-			else if (!use_at && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_rpc && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_cred_count > 0)
 				{
@@ -4860,11 +4702,13 @@ void wifi_probe_flood(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	bool use_rpc;
+	esp32_transport_t transport;
 	const uint8_t flood_channel = 6u;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	use_rpc = transport == ESP32_TRANSPORT_RPC;
 
 	if (use_rpc)
 	{
@@ -4883,26 +4727,7 @@ void wifi_probe_flood(void)
 			return;
 		}
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: AT+M1PROBE=<start>,<ch>
-		 * Use channel 6 as the default 2.4 GHz channel for probe flooding. */
-		char at_cmd[24];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd), "AT+M1PROBE=1,6\r\n");
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			m1_u8g2_firstpage();
-			u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
-			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-			m1_u8g2_nextpage();
-			wifi_wait_dismiss();
-			return;
-		}
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		spi_ret = m1_esp32_simple_cmd(CMD_PROBE_FLOOD_START, &resp, SNIFF_CMD_TIMEOUT);
 		if (spi_ret != 0 || resp.status != RESP_OK)
@@ -4915,6 +4740,11 @@ void wifi_probe_flood(void)
 			wifi_wait_dismiss();
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Probe Flood", "Unsupported transport", NULL);
+		return;
 	}
 
 	start_tick = HAL_GetTick();
@@ -4950,15 +4780,6 @@ void wifi_probe_flood(void)
 			{
 				if (use_rpc)
 					(void)m1_esp32_rpc_probe_stop();
-				else if (use_at)
-				{
-					/* Stop probe flood: AT+M1PROBE=0,<ch> (matching start channel) */
-					char at_stop_cmd[24];
-					char at_stop_resp[32];
-					snprintf(at_stop_cmd, sizeof(at_stop_cmd), "AT+M1PROBE=0,6\r\n");
-					(void)spi_AT_send_recv(at_stop_cmd,
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
 				else
 					m1_esp32_simple_cmd(CMD_PROBE_FLOOD_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
@@ -4981,11 +4802,14 @@ void wifi_attack_karma(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_rpc;
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	use_rpc = transport == ESP32_TRANSPORT_RPC;
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (use_rpc)
 	{
 		/* brain CD3 M1_RPC path: channel 0 = auto-select */
 		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK)
@@ -4994,19 +4818,7 @@ void wifi_attack_karma(void)
 			return;
 		}
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: AT+M1KARMA=1,"" (empty SSID = respond to all probes) */
-		char at_resp[64];
-		(void)spi_AT_send_recv("AT+M1KARMA=1,\"\"\r\n",
-			at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
-			return;
-		}
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		spi_ret = m1_esp32_simple_cmd(CMD_KARMA_START, &resp, SNIFF_CMD_TIMEOUT);
 		if (spi_ret != 0 || resp.status != RESP_OK)
@@ -5014,6 +4826,11 @@ void wifi_attack_karma(void)
 			wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Karma", "Unsupported transport", NULL);
+		return;
 	}
 
 	start_tick = HAL_GetTick();
@@ -5025,7 +4842,7 @@ void wifi_attack_karma(void)
 		uint32_t now = HAL_GetTick();
 		elapsed = (now - start_tick) / 1000;
 
-		if (!use_at && now - last_poll >= 1000)
+		if (!use_rpc && now - last_poll >= 1000)
 		{
 			spi_ret = m1_esp32_simple_cmd(CMD_KARMA_STATUS, &resp, 1000);
 			if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 6)
@@ -5053,9 +4870,9 @@ void wifi_attack_karma(void)
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP");
-		if (use_at)
+		if (use_rpc)
 		{
-			snprintf(ln, sizeof(ln), "Time: %lus (AT)", elapsed);
+			snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Active");
 		}
@@ -5083,14 +4900,8 @@ void wifi_attack_karma(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+				if (use_rpc)
 					(void)m1_esp32_rpc_karma_stop();
-				else if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
 				else
 				{
 					m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
@@ -5119,11 +4930,14 @@ void wifi_attack_karma_portal(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_rpc;
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	use_rpc = transport == ESP32_TRANSPORT_RPC;
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (use_rpc)
 	{
 		/* brain CD3 M1_RPC path: Karma + captive portal on channel 0 (auto). */
 		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK)
@@ -5138,20 +4952,7 @@ void wifi_attack_karma_portal(void)
 			return;
 		}
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: no combined karma+portal, degrade to basic karma.
-		 * AT+M1KARMA=1,"" starts karma; credential polling is unavailable. */
-		char at_resp[64];
-		(void)spi_AT_send_recv("AT+M1KARMA=1,\"\"\r\n",
-			at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
-			return;
-		}
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		spi_ret = m1_esp32_simple_cmd(CMD_KARMA_PORTAL_START, &resp, SNIFF_CMD_TIMEOUT);
 		if (spi_ret != 0 || resp.status != RESP_OK)
@@ -5159,6 +4960,11 @@ void wifi_attack_karma_portal(void)
 			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
 			return;
 		}
+	}
+	else
+	{
+		wifi_show_message("Karma Portal", "Unsupported transport", NULL);
+		return;
 	}
 
 	ep_cred_count = 0;
@@ -5172,7 +4978,7 @@ void wifi_attack_karma_portal(void)
 		uint32_t now = HAL_GetTick();
 		elapsed = (now - start_tick) / 1000;
 
-		if (!use_at && now - last_poll >= 1000)
+		if (!use_rpc && now - last_poll >= 1000)
 		{
 			spi_ret = m1_esp32_simple_cmd(CMD_KARMA_STATUS, &resp, 1000);
 			if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 6)
@@ -5196,17 +5002,15 @@ void wifi_attack_karma_portal(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 2, 10,
-			use_at ? "KARMA (degraded)" : "KARMA PORTAL");
+		u8g2_DrawStr(&m1_u8g2, 2, 10, "KARMA PORTAL");
 		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		if (use_at)
+		if (use_rpc)
 		{
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP (AT)");
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Portal active");
 			snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "No portal on AT FW");
 		}
 		else
 		{
@@ -5251,12 +5055,6 @@ void wifi_attack_karma_portal(void)
 					(void)m1_esp32_rpc_captive_stop();
 					(void)m1_esp32_rpc_karma_stop();
 				}
-				else if (use_at)
-				{
-					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
-						at_stop_resp, sizeof(at_stop_resp), 3);
-				}
 				else
 				{
 					m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
@@ -5266,12 +5064,12 @@ void wifi_attack_karma_portal(void)
 				xQueueReset(main_q_hdl);
 				break;
 			}
-			else if (!use_at && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_rpc && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_view_idx > 0) ep_view_idx--;
 				else if (ep_cred_count > 0) ep_view_idx = ep_cred_count - 1;
 			}
-			else if (!use_at && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_rpc && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_cred_count > 0)
 				{
@@ -5321,9 +5119,10 @@ void wifi_attack_ap_clone(void)
 	const char *clone_ssids[32];
 	uint8_t cloned = 0;
 	bool selected_only = false;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
 
 	/* Need cached AP results to clone */
 	if (!ap_list || ap_count == 0)
@@ -5367,28 +5166,19 @@ void wifi_attack_ap_clone(void)
 		return;
 	}
 
-	if (use_at)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
-		/* AT path — dag T-800: single SSID only via AT+M1BEACON */
-		char at_cmd[80];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
-			clone_ssids[0]);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
+		char rpc_ssids[1][33] = {{0}};
+		strncpy(rpc_ssids[0], clone_ssids[0], sizeof(rpc_ssids[0]) - 1u);
+		if (m1_esp32_rpc_beacon_start((const char (*)[33])rpc_ssids, 1u)
+		    != M1_ESP32_RPC_OK)
 		{
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			m1_u8g2_firstpage();
-			u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
-			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-			m1_u8g2_nextpage();
-			wifi_wait_dismiss();
+			beacon_message("AP Clone", "Start failed!", NULL);
 			return;
 		}
 		beacon_run_loop("AP CLONE", clone_ssids, 1, 1, false, true);
 	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		uint8_t total = beacon_batch_load(clone_ssids, cloned, &load_diag);
 		if (total == 0)
@@ -5417,6 +5207,10 @@ void wifi_attack_ap_clone(void)
 		}
 
 		beacon_run_loop("AP CLONE", clone_ssids, cloned, total, false, false);
+	}
+	else
+	{
+		beacon_message("AP Clone", "Unsupported transport", NULL);
 	}
 }
 
@@ -5485,9 +5279,13 @@ void wifi_target_deauth(void)
 /* Target group: EAPOL/handshake capture (PMKID auto-saved when present). */
 void wifi_target_handshake(void)
 {
+	esp32_transport_t transport;
+
 	if (!wifi_target_valid())
 		return;
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* brain CD3 path: send HS_START with the selected AP's BSSID + channel. */
 		m1_esp32_rpc_status_t st =
@@ -5502,7 +5300,10 @@ void wifi_target_handshake(void)
 		wifi_show_message("Handshake", "Capture started", "Use HS Status to check");
 		return;
 	}
-	wifi_sniff_eapol();
+	if (transport == ESP32_TRANSPORT_BINARY_SPI)
+		wifi_sniff_eapol();
+	else
+		wifi_show_message("Handshake", "Unsupported transport", NULL);
 }
 
 /* Target group: clone (beacon) the highlighted SSID. */
@@ -5513,7 +5314,7 @@ void wifi_target_beacon(void)
 	int spi_ret;
 	beacon_load_diag_t load_diag;
 	const char *clone_ssids[1];
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport;
 
 	if (!wifi_target_valid() || ap_list[ap_view_idx].ssid[0] == '\0')
 	{
@@ -5522,9 +5323,10 @@ void wifi_target_beacon(void)
 	}
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
 	clone_ssids[0] = ap_list[ap_view_idx].ssid;
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* brain CD3 M1_RPC path. */
 		char rpc_ssid[1][33];
@@ -5537,25 +5339,8 @@ void wifi_target_beacon(void)
 			return;
 		}
 		beacon_run_loop("BEACON", clone_ssids, 1, 1, false, true);
-		(void)m1_esp32_rpc_beacon_stop();
 	}
-	else if (use_at)
-	{
-		/* AT path — dag T-800: single SSID via AT+M1BEACON */
-		char at_cmd[80];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
-			clone_ssids[0]);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
-		{
-			wifi_show_message("Beacon", "Start failed!", NULL);
-			return;
-		}
-		beacon_run_loop("BEACON", clone_ssids, 1, 1, false, true);
-	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		uint8_t total = beacon_batch_load(clone_ssids, 1, &load_diag);
 		if (total == 0)
@@ -5579,6 +5364,10 @@ void wifi_target_beacon(void)
 		}
 
 		beacon_run_loop("BEACON", clone_ssids, 1, total, false, false);
+	}
+	else
+	{
+		wifi_show_message("Beacon", "Unsupported transport", NULL);
 	}
 }
 
@@ -5636,32 +5425,24 @@ void wifi_attack_rickroll(void)
 	m1_resp_t resp;
 	m1_cmd_t cmd;
 	beacon_load_diag_t load_diag;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	esp32_transport_t transport;
 
 	ensure_esp32_ready();
+	transport = m1_esp32_active_transport();
 
-	if (use_at)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
-		/* AT path — dag T-800: single SSID only via AT+M1BEACON */
-		char at_cmd[80];
-		char at_resp[64];
-		snprintf(at_cmd, sizeof(at_cmd),
-			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
-			rickroll_ssids[0]);
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
-		if (strstr(at_resp, "OK") == NULL)
+		char rpc_ssids[1][33] = {{0}};
+		strncpy(rpc_ssids[0], rickroll_ssids[0], sizeof(rpc_ssids[0]) - 1u);
+		if (m1_esp32_rpc_beacon_start((const char (*)[33])rpc_ssids, 1u)
+		    != M1_ESP32_RPC_OK)
 		{
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			m1_u8g2_firstpage();
-			u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
-			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-			m1_u8g2_nextpage();
-			wifi_wait_dismiss();
+			wifi_show_message("Rickroll", "Start failed!", NULL);
 			return;
 		}
 		beacon_run_loop("RICKROLL", rickroll_ssids, 1, 1, true, true);
 	}
-	else
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
 		uint8_t total = beacon_batch_load(rickroll_ssids, RICKROLL_SSID_COUNT, &load_diag);
 		if (total == 0)
@@ -5691,13 +5472,13 @@ void wifi_attack_rickroll(void)
 
 		beacon_run_loop("RICKROLL", rickroll_ssids, RICKROLL_SSID_COUNT, total, true, false);
 	}
+	else
+	{
+		wifi_show_message("Rickroll", "Unsupported transport", NULL);
+	}
 }
 
-/*==========================================================================*/
-/* Legacy AT-layer stubs — remain compilable for callers in m1_menu.c,     */
-/* m1_system.c, m1_http_client.c, m1_app_api.c while AT firmware is not    */
-/* used. These will be removed once binary SPI NTP/connect support lands.  */
-/*==========================================================================*/
+/* WiFi connection state and M1_RPC SNTP support. */
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 
@@ -5713,8 +5494,6 @@ return s_wifi_stub_ssid;
 
 uint8_t wifi_sync_rtc(void)
 {
-	static char ntp_buf[256];
-	clock_time_t ct;
 	m1_time_t    mt;
 	uint32_t start_ms;
 	bool first_poll;
@@ -5722,10 +5501,10 @@ uint8_t wifi_sync_rtc(void)
 	if (!s_wifi_stub_connected)
 		return 1;
 
-	/* brain CD3 (binary M1_RPC): use SYS_SNTP_SYNC opcode.
+	/* brain CD3: use SYS_SNTP_SYNC opcode.
 	 * The brain firmware fetches the time from pool.ntp.org internally;
 	 * poll with 500 ms retries for up to 5 s to allow NTP convergence on
-	 * slow connections, matching the AT firmware poll budget below. */
+	 * slow connections. */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
 		start_ms  = HAL_GetTick();
@@ -5754,50 +5533,7 @@ uint8_t wifi_sync_rtc(void)
 		return 3;  /* Timeout waiting for SNTP sync */
 	}
 
-	/* AT firmware: send SNTP config, then poll for time.
-	 * Binary SPI (SiN360) does not yet support NTP — return silently. */
-	if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
-		return 1;
-
-	/* Configure SNTP — enable, UTC timezone, two NTP servers */
-	memset(ntp_buf, 0, sizeof(ntp_buf));
-	(void)spi_AT_send_recv(
-		"AT+CIPSNTPCFG=1,0,\"pool.ntp.org\",\"time.google.com\"\r\n",
-		ntp_buf, sizeof(ntp_buf), 3);
-	if (!strstr(ntp_buf, "OK"))
-		return 2;
-
-	/* Poll AT+CIPSNTPTIME? until a valid (non-1970) time is returned.
-	 * Mirrors the ssl_ensure_configured() pattern in m1_http_client.c. */
-	start_ms = HAL_GetTick();
-	first_poll = true;
-	while ((HAL_GetTick() - start_ms) < 5000u)
-	{
-		if (!first_poll)
-			vTaskDelay(pdMS_TO_TICKS(500));
-		first_poll = false;
-		m1_wdt_reset();
-
-		memset(ntp_buf, 0, sizeof(ntp_buf));
-		(void)spi_AT_send_recv("AT+CIPSNTPTIME?\r\n",
-		                        ntp_buf, sizeof(ntp_buf), 2);
-
-		if (wifi_ntp_parse_time(ntp_buf, &ct))
-		{
-			/* clock_time_t and m1_time_t have identical layout */
-			mt.year    = ct.year;
-			mt.month   = ct.month;
-			mt.day     = ct.day;
-			mt.hour    = ct.hour;
-			mt.minute  = ct.minute;
-			mt.second  = ct.second;
-			mt.weekday = ct.weekday;
-			m1_set_datetime(&mt);
-			return 0;
-		}
-	}
-
-	return 3;  /* Timeout waiting for SNTP sync */
+	return 1;  /* This transport has no supported SNTP operation. */
 }
 
 void wifi_ntp_background_sync(void)
@@ -5824,13 +5560,8 @@ void wifi_ntp_background_sync(void)
  * Connect to a network using stored credentials (no password prompt).
  * Called from wifi_saved_networks() when user selects a saved entry.
  *
- * Dispatches to the correct transport based on the detected ESP32 firmware:
- *   - AT firmware (dag/T-800, bedge117): uses AT+CWJAP text command via
- *     spi_AT_send_recv(), mirroring the wifi_connect_selected_ap() AT path.
- *   - Binary SPI firmware (SiN360): uses CMD_WIFI_JOIN binary command.
- *
- * Credentials are stored on the SD card and are therefore portable across
- * all ESP32 firmware variants.
+ * Dispatches only to supported M1_RPC and binary-SPI transports. Credentials
+ * are stored on the SD card and are therefore portable across firmware variants.
  */
 /*============================================================================*/
 static bool wifi_connect_from_saved(const wifi_credential_t *cred,
@@ -5859,20 +5590,6 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 
 	ensure_esp32_ready();
 
-	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
-	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
-	{
-		m1_resp_t ping_resp;
-		const bool is_binary_spi =
-		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
-		     ping_resp.status == RESP_OK &&
-		     ping_resp.payload_len == 4 &&
-		     memcmp(ping_resp.payload, "PONG", 4) == 0);
-
-		if (!is_binary_spi && !get_esp32_main_init_status())
-			esp32_main_init();
-	}
-
 	/* ---- brain CD3 M1_RPC path ---- */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
@@ -5895,53 +5612,13 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 		return true;
 	}
 
-	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
-	{
-		static char at_resp[512];
-		char at_cmd[256];
-		char ssid_esc[65];
-		char pass_esc[127];
-		bool got_ip;
-
-		at_escape_str(cred->ssid, ssid_esc, sizeof(ssid_esc));
-		at_escape_str(cred->password, pass_esc, sizeof(pass_esc));
-
-		snprintf(at_cmd, sizeof(at_cmd),
-		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
-		         ssid_esc, pass_esc);
-
-		if (show_status)
-			wifi_draw_message("Connect", "Connecting...", cred->ssid);
-		memset(at_resp, 0, sizeof(at_resp));
-		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
-
-		bool timeout_or_senderr = (strstr(at_resp, "TIMEOUT(") != NULL) ||
-		                         (strstr(at_resp, "SEND_ERR=") != NULL);
-		bool has_error = (strstr(at_resp, "ERROR") != NULL);
-		bool has_fail  = (strstr(at_resp, "FAIL") != NULL) || has_error || timeout_or_senderr;
-		const char *reason = "Check password";
-		if (timeout_or_senderr) reason = "ESP32 no response";
-		else if (has_error)    reason = "AT error";
-
-		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
-		if (!got_ip || has_fail)
-		{
-			if (show_status)
-				wifi_show_message("Connect", "Connect failed", reason);
-			return false;
-		}
-
-		/* Success — update connected state */
-		wifi_set_connected_state(cred->ssid);
-		if (show_status)
-			wifi_show_message("Connect", "Connected!", cred->ssid);
-		if (sync_clock)
-			wifi_sync_rtc();
-		return true;
-	}
-
 	/* ---- Binary SPI path (SiN360) ---- */
+	if (m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI)
+	{
+		if (show_status)
+			wifi_show_message("Connect", "Unsupported transport", NULL);
+		return false;
+	}
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
 	cmd.cmd_id = CMD_WIFI_JOIN;
@@ -6198,37 +5875,23 @@ void wifi_show_status(void)
 
 void wifi_disconnect(void)
 {
-	m1_resp_t resp;
+	esp32_transport_t transport = m1_esp32_active_transport();
 
-	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
-	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
-	{
-		m1_resp_t ping_resp;
-		const bool is_binary_spi =
-		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
-		     ping_resp.status == RESP_OK &&
-		     ping_resp.payload_len == 4 &&
-		     memcmp(ping_resp.payload, "PONG", 4) == 0);
-
-		if (!is_binary_spi && !get_esp32_main_init_status())
-			esp32_main_init();
-	}
-
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (transport == ESP32_TRANSPORT_RPC)
 	{
 		/* Native brain CD3 firmware */
 		(void)m1_esp32_rpc_wifi_disconnect();
 	}
-	else if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	else if (transport == ESP32_TRANSPORT_BINARY_SPI)
 	{
-		/* AT firmware (dag/T-800, bedge117) — send AT+CWQAP */
-		static char at_resp[64];
-		(void)spi_AT_send_recv("AT+CWQAP\r\n", at_resp, sizeof(at_resp), 3);
+		/* Binary SPI firmware (SiN360) */
+		m1_resp_t resp;
+		m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
 	}
 	else
 	{
-		/* Binary SPI firmware (SiN360) */
-		m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
+		wifi_show_message("Disconnect", "Unsupported transport", NULL);
+		return;
 	}
 
 	wifi_set_connected_state(NULL);

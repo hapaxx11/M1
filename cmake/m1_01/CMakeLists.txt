@@ -745,7 +745,6 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/wifi_ap_record.c
     ../../m1_csrc/wifi_ap_cycle.c
     ../../m1_csrc/wifi_ch_analysis.c
-    ../../m1_csrc/wifi_ntp_parse.c
     ../../m1_csrc/wifi_hotspot_config.c
     ../../m1_csrc/wifi_status_msg.c
     ../../m1_csrc/wifi_mac_utils.c
