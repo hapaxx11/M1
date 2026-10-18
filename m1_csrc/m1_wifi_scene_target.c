@@ -11,7 +11,7 @@
  * The menu separates the two precondition groups called out in the plan:
  *   - Connect group (needs auth)     → "Connect" → Connected menu on success.
  *   - Target group  (needs an SSID)  → per-AP Deauth, Handshake/EAPOL capture,
- *                                      Beacon clone, PMKID, plus "Cycle AP" to
+ *                                      Beacon clone, plus "Cycle AP" to
  *                                      iterate the known BSSIDs of the SSID.
  *
  * Every action operates on the AP currently highlighted in the scan list, so
@@ -23,7 +23,6 @@
  *   WifiSceneTargetDeauth     — per-AP Deauth delegate
  *   WifiSceneTargetHandshake  — Handshake / EAPOL capture delegate
  *   WifiSceneTargetBeacon     — Beacon (clone SSID) delegate
- *   WifiSceneTargetPmkid      — PMKID capture delegate
  *   WifiSceneTargetCycle      — Cycle AP delegate (advance BSSID, redraw)
  *
  * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
@@ -87,14 +86,13 @@ const M1SceneHandlers wifi_scene_target_cycle_handlers     = { .on_enter = targe
 /* Target sub-menu (Connect group + Target group)                           */
 /*==========================================================================*/
 
-#define TARGET_ITEM_COUNT  6
+#define TARGET_ITEM_COUNT  5
 
 static const char *const target_labels[TARGET_ITEM_COUNT] = {
     "Connect",     /* Connect group — needs auth */
     "Deauth",      /* Target group — needs a specific AP */
     "Handshake",
     "Beacon",
-    "PMKID",
     "Cycle AP",
 };
 
@@ -103,7 +101,6 @@ static const uint8_t target_targets[TARGET_ITEM_COUNT] = {
     WifiSceneTargetDeauth,
     WifiSceneTargetHandshake,
     WifiSceneTargetBeacon,
-    WifiSceneTargetPmkid,
     WifiSceneTargetCycle,
 };
 

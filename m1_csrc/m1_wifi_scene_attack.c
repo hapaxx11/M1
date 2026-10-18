@@ -14,7 +14,6 @@
  *   WifiSceneAttackProbeFlood   — Probe Flood delegate
  *   WifiSceneAttackKarma        — Karma delegate (with portal-toggle prompt, §3.7)
  *   WifiSceneAttackKarmaPortal  — retained in registry (append-only), not in menu
- *   WifiSceneAttackPmkidAt      — PMKID Grab (dag T-800 AT path)
  *
  * Phase 4 change: 'Karma+Portal' item removed from the menu.  "Karma" now
  * prompts "Serve portal? [Yes] [No]" via wifi_attack_karma_with_portal(),
@@ -75,18 +74,18 @@ const M1SceneHandlers wifi_scene_attack_pmkid_at_handlers    = { .on_enter = att
 /* Attacks sub-menu (Phase 4: 8 items — Karma+Portal collapsed into Karma)  */
 /*==========================================================================*/
 
-#define ATTACK_ITEM_COUNT  8
+#define ATTACK_ITEM_COUNT  7
 
 static const char *const attack_labels[ATTACK_ITEM_COUNT] = {
     "Deauth", "Beacon Spam", "AP Clone",
     "Rickroll", "Evil Portal", "Probe Flood",
-    "Karma", "PMKID Grab",
+    "Karma",
 };
 
 static const uint8_t attack_targets[ATTACK_ITEM_COUNT] = {
     WifiSceneAttackDeauth, WifiSceneAttackBeacon, WifiSceneAttackClone,
     WifiSceneAttackRickroll, WifiSceneAttackEvilPortal, WifiSceneAttackProbeFlood,
-    WifiSceneAttackKarma, WifiSceneAttackPmkidAt,
+    WifiSceneAttackKarma,
 };
 
 static subghz_submenu_model_t s_attack_model;
@@ -123,4 +122,3 @@ const M1SceneHandlers wifi_scene_attack_menu_handlers = {
     .on_exit  = NULL,
     .draw     = attack_menu_draw,
 };
-
