@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "subghz_key_encoder.h"   /* SubGhzKeyParams, SubGhzRawPair */
 
 #ifdef __cplusplus
@@ -57,6 +58,10 @@ typedef enum {
     SubGhzProtoPirate_KiaV5,
     SubGhzProtoPirate_FiatV1,
 
+    /* --- Keystore-gated (AES / AUT64) --- */
+    SubGhzProtoPirate_KiaV6,
+    SubGhzProtoPirate_VAG,
+
     SubGhzProtoPirate_Count,
     SubGhzProtoPirate_Unknown = -1,
 } SubGhzProtoPirateId;
@@ -84,6 +89,7 @@ SubGhzProtoPirateId subghz_proto_pirate_find_by_name(const char *name);
 
 /** Return true if the protocol is implemented in this dispatcher. */
 bool subghz_proto_pirate_is_supported(const char *name);
+bool subghz_proto_pirate_parse_serial_line(const char *line, uint32_t *serial);
 
 /**
  * Encode a keyfob signal into raw timing pairs.
@@ -105,6 +111,95 @@ uint32_t subghz_proto_pirate_encode(const SubGhzKeyParams *params,
  */
 uint32_t subghz_proto_pirate_required_pairs(const SubGhzKeyParams *params,
                                              uint8_t                repetitions);
+
+#define SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE 8u
+
+typedef struct {
+    uint32_t capture_hash;
+    uint32_t counter;
+} subghz_proto_pirate_counter_entry_t;
+
+typedef struct {
+    subghz_proto_pirate_counter_entry_t
+        entries[SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE];
+    uint8_t active_index;
+    uint8_t next_replace;
+} subghz_proto_pirate_counter_state_t;
+
+static inline uint32_t subghz_proto_pirate_counter_capture_hash(
+    const char *path, uint8_t protocol, uint64_t key_signature)
+{
+    if (path == NULL)
+        return 0;
+    if (path[0] == '0' && path[1] == ':')
+        path += 2;
+    uint32_t hash = 2166136261u;
+    while (*path != '\0')
+    {
+        hash ^= (uint8_t)*path++;
+        hash *= 16777619u;
+    }
+    hash ^= protocol;
+    hash *= 16777619u;
+    for (uint8_t i = 0; i < 8u; i++)
+    {
+        hash ^= (uint8_t)(key_signature >> (i * 8u));
+        hash *= 16777619u;
+    }
+    if (hash == 0)
+        hash = 1u;
+    return hash;
+}
+
+static inline uint32_t subghz_proto_pirate_counter_get(
+    subghz_proto_pirate_counter_state_t *state, const char *path,
+    uint8_t protocol, uint32_t initial_counter, uint64_t key_signature)
+{
+    const uint32_t capture_hash =
+        subghz_proto_pirate_counter_capture_hash(path, protocol, key_signature);
+    if (state == NULL)
+        return initial_counter;
+
+    for (uint8_t i = 0; i < SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE; i++)
+    {
+        if (state->entries[i].capture_hash == capture_hash &&
+            capture_hash != 0u)
+        {
+            state->active_index = i;
+            return state->entries[i].counter;
+        }
+    }
+
+    for (uint8_t i = 0; i < SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE; i++)
+    {
+        if (state->entries[i].capture_hash == 0u)
+        {
+            state->active_index = i;
+            state->entries[i].capture_hash = capture_hash;
+            state->entries[i].counter = initial_counter;
+            return initial_counter;
+        }
+    }
+
+    state->active_index = state->next_replace;
+    state->next_replace =
+        (uint8_t)((state->next_replace + 1u) %
+                  SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE);
+    state->entries[state->active_index].capture_hash = capture_hash;
+    state->entries[state->active_index].counter = initial_counter;
+    return initial_counter;
+}
+
+static inline void subghz_proto_pirate_counter_advance(
+    subghz_proto_pirate_counter_state_t *state, uint32_t mask)
+{
+    if (state != NULL)
+    {
+        subghz_proto_pirate_counter_entry_t *entry =
+            &state->entries[state->active_index];
+        entry->counter = (entry->counter + 1u) & mask;
+    }
+}
 
 #ifdef __cplusplus
 }

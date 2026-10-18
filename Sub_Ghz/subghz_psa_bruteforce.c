@@ -156,6 +156,7 @@ uint16_t subghz_psa_bf_crc16(const uint8_t *buffer, uint32_t length)
 /*============================================================================*/
 
 void subghz_psa_bf_extract_result(uint32_t v0, uint32_t v1, uint32_t candidate,
+                                  subghz_psa_bf_phase_t phase,
                                   subghz_psa_bf_result_t *out)
 {
     /* Unpack the decrypted block back into wire-buffer byte positions:
@@ -172,10 +173,19 @@ void subghz_psa_bf_extract_result(uint32_t v0, uint32_t v1, uint32_t candidate,
     out->button = (uint8_t)((b5 >> 4) & 0x0Fu);
     out->serial = ((uint32_t)b3 << 8) | ((uint32_t)b2 << 16) | (uint32_t)b4;
     out->counter = ((uint32_t)b7 << 8) | ((uint32_t)b6 << 16) |
-                   (uint32_t)b8 | (((uint32_t)b5 & 0x0Fu) << 24);
-    out->crc = (uint16_t)b9;
+                   (((uint32_t)b5 & 0x0Fu) << 24);
+    if (phase == PSA_BF_PHASE_1)
+    {
+        out->counter |= b8;
+        out->crc = b9;
+    }
+    else
+    {
+        out->crc = (uint16_t)v1;
+    }
     out->seed = out->serial;
     out->candidate = candidate;
+    out->phase = phase;
     out->type = PSA_BF_RESULT_TYPE;
 }
 
@@ -309,8 +319,10 @@ bool subghz_psa_bf_run_range(subghz_bruteforce_job_t *job, uint64_t key1,
             if (job->status == SUBGHZ_BRUTEFORCE_JOB_FOUND)
             {
                 if (out != NULL)
+                {
                     subghz_psa_bf_extract_result(dec_v0, dec_v1, candidate,
-                                                 out);
+                                                 phase, out);
+                }
                 return true;
             }
             return false;  /* cancelled or exhausted */

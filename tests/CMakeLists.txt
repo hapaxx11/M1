@@ -924,18 +924,25 @@ add_executable(test_subghz_key_encoder
     test_subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_vag_encoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
+    ${STUBS_DIR}/protopirate_keys_test_data.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
     ${STUBS_DIR}            # HAL stubs
     ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
 )
 target_link_libraries(test_subghz_key_encoder PRIVATE unity)
 if(TARGET sanitizers)
@@ -1079,6 +1086,31 @@ endif()
 add_test(NAME subghz_renault_v1_encoder COMMAND test_subghz_renault_v1_encoder)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_psa_encoder (PSA TX after recovery, types
+# 0x23/0x36).  Round-trips: 0x36 encode → brute-force crack; 0x23 encode →
+# decoder parse.  No real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_psa_encoder
+    test_subghz_psa_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_psa_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_subghz_psa_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_subghz_psa_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_psa_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_psa_encoder COMMAND test_subghz_psa_encoder)
+
+# ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
 # Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
 # and full Manchester pulse-array decode.
@@ -1169,6 +1201,32 @@ endif()
 add_test(NAME vag_decode COMMAND test_vag_decode)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_vag_encoder (VAG TX path) + AUT64 encrypt port.
+# AUT64 encrypt is validated against the existing decrypt (round-trip and
+# known vector); the type-2 path is checked end-to-end through the real
+# subghz_decode_vag() waveform decoder.  Synthetic key material only.
+# ------------------------------------------------------------------
+add_executable(test_vag_encoder
+    test_vag_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_vag_encoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_vag_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protopirate_keys_builtin.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_vag_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_vag_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_vag_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME vag_encoder COMMAND test_vag_encoder)
+
+# ------------------------------------------------------------------
 # Module under test: m1_kia_v6_decode (ProtoPirate Kia V6 AES-128 decoder)
 # Covers keystore-derived AES key parsing, CRC validation, and waveform decode.
 # ------------------------------------------------------------------
@@ -1190,6 +1248,31 @@ if(TARGET sanitizers)
     target_link_libraries(test_kia_v6_decode PRIVATE sanitizers)
 endif()
 add_test(NAME kia_v6_decode COMMAND test_kia_v6_decode)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_kia_v6_encoder (Kia V6 TX path).
+# Round-trip: encoder upload waveform must decode through the real
+# subghz_decode_kia_v6() with intact fields.  Synthetic keystore.
+# ------------------------------------------------------------------
+add_executable(test_kia_v6_encoder
+    test_subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v6_decode.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v6_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_kia_v6_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v6_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v6_encoder COMMAND test_kia_v6_encoder)
 
 # ------------------------------------------------------------------
 # Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)
@@ -3427,24 +3510,45 @@ add_test(NAME proto_pirate_timing COMMAND test_proto_pirate_timing)
 add_executable(test_subghz_proto_pirate
     test_subghz_proto_pirate.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_vag_encoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
+    ${STUBS_DIR}/protopirate_keys_test_data.c
 )
 target_include_directories(test_subghz_proto_pirate PRIVATE
     ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
 )
 target_link_libraries(test_subghz_proto_pirate PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_subghz_proto_pirate PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_proto_pirate COMMAND test_subghz_proto_pirate)
+
+# ---------- subghz_raw_pairs_writer (Flipper replay pair serialization) ----------
+add_executable(test_subghz_raw_pairs_writer
+    test_subghz_raw_pairs_writer.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_pairs_writer.c
+)
+target_include_directories(test_subghz_raw_pairs_writer PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_pairs_writer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_pairs_writer PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_pairs_writer COMMAND test_subghz_raw_pairs_writer)
 
 # IR UX Polish — source-level regression checks
 add_executable(test_ir_ux_polish

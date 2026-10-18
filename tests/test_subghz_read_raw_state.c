@@ -222,6 +222,26 @@ void test_display_count_catches_up_when_signal_returns(void)
     TEST_ASSERT_EQUAL_UINT32(2048u, displayed);
 }
 
+static void assert_proto_pirate_handoff_loads_the_waveform(void)
+{
+    bool resume_from_child = true;
+    TEST_ASSERT_TRUE(subghz_read_raw_consume_resume(&resume_from_child));
+    TEST_ASSERT_FALSE(resume_from_child);
+    TEST_ASSERT_TRUE(
+        subghz_read_raw_should_load_preloaded(resume_from_child, true));
+    TEST_ASSERT_FALSE(subghz_read_raw_should_load_preloaded(true, true));
+}
+
+void test_psa_handoff_returns_to_fresh_raw_load_path(void)
+{
+    assert_proto_pirate_handoff_loads_the_waveform();
+}
+
+void test_renault_v1_handoff_returns_to_fresh_raw_load_path(void)
+{
+    assert_proto_pirate_handoff_loads_the_waveform();
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -240,5 +260,7 @@ int main(void)
     RUN_TEST(test_display_count_freezes_when_no_signal_seen);
     RUN_TEST(test_display_count_freezes_across_many_noise_chunks);
     RUN_TEST(test_display_count_catches_up_when_signal_returns);
+    RUN_TEST(test_psa_handoff_returns_to_fresh_raw_load_path);
+    RUN_TEST(test_renault_v1_handoff_returns_to_fresh_raw_load_path);
     return UNITY_END();
 }
