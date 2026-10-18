@@ -3,8 +3,8 @@
  *
  * IEEE 802.15.4 (Zigbee/Thread) scanning for M1
  *
- * Sends AT+ZIGSNIFF commands to ESP32-C6 and parses +ZIGFRAME responses.
- * Builds a deduplicated device list and displays it on the LCD.
+ * Scans for 802.15.4 devices through the native M1_RPC transport, builds a
+ * deduplicated device list, and displays it on the LCD.
  * Two scan entry points: zigbee_scan() and thread_scan() — same logic,
  * different protocol filter ('Z' vs 'T').  ieee802154_flood() transmits
  * 802.15.4 frames across channels 11-26 until BACK is pressed.
@@ -14,13 +14,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
 #include "m1_esp32_rpc.h"
 #include "m1_esp32_rpc_features.h"
-#include "esp_app_main.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -32,8 +32,6 @@
 
 #define SCAN_DWELL_TIME_MS      2000   /* Time per channel in ms */
 #define SCAN_POLL_INTERVAL_MS   50     /* How often to poll SPI for frames */
-#define AT_RESP_BUF_SIZE        512    /* Buffer for AT responses */
-
 #define LIST_START_Y            13
 #define LIST_VISIBLE            ((uint8_t)(39 / m1_menu_item_h()))
 
@@ -88,16 +86,8 @@ static void show_message(const char *title, const char *line1, const char *line2
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
 }
 
-/*
- * Parse a +ZIGFRAME line and add/update device list.
- * Format: +ZIGFRAME:<proto>,<ftype>,<len>,<ch>,<rssi>,<lqi>,<dst_pan>,<dst_addr>,<src_pan>,<src_addr>,<hex>
- */
-/*
- * Insert or update a device in the deduplicated list, keyed on
- * (src_pan, src_addr).  Shared by the AT +ZIGFRAME text parser and the
- * M1_RPC (brain CD3) binary device decoder so both transports feed the same
- * display list.
- */
+/* Insert or update a device in the deduplicated list, keyed on
+ * (src_pan, src_addr). */
 static void ieee802154_store_device(char proto,
                                     const char *src_pan, const char *src_addr,
                                     const char *dst_pan, const char *ftype,
@@ -150,11 +140,7 @@ static void ieee802154_store_device(char proto,
     s_device_count++;
 }
 
-/*
- * Fold one M1_RPC (brain CD3) 802.15.4 device record into the display list.
- * Formats the binary address / PAN into the same hex-string representation the
- * AT +ZIGFRAME parser produces, then reuses ieee802154_store_device().
- */
+/* Fold one M1_RPC 802.15.4 device record into the display list. */
 static void ieee802154_add_rpc_device(const m1_esp32_rpc_zb_device_t *d,
                                       char filter_proto)
 {
@@ -183,114 +169,6 @@ static void ieee802154_add_rpc_device(const m1_esp32_rpc_zb_device_t *d,
 
     ieee802154_store_device(proto, src_pan, src_addr, "", ftype,
                             d->channel, d->rssi, d->lqi);
-}
-
-static void parse_zigframe(const char *line, char filter_proto)
-{
-    const char *p = strstr(line, "+ZIGFRAME:");
-    if (!p) return;
-    p += 10; /* skip "+ZIGFRAME:" */
-
-    /* Parse proto (single char) */
-    char proto = *p;
-    /* Accept target protocol + unknown ('U') — many encrypted frames can't be classified */
-    if (proto != filter_proto && proto != 'U') return;
-    if (*++p != ',') return;
-    p++;
-
-    /* Parse ftype (up to comma) */
-    char ftype[8] = {0};
-    const char *comma = strchr(p, ',');
-    if (!comma || (comma - p) >= (int)sizeof(ftype)) return;
-    memcpy(ftype, p, comma - p);
-    ftype[comma - p] = '\0';
-    p = comma + 1;
-
-    /* Parse len */
-    /* uint8_t frame_len = (uint8_t)strtol(p, NULL, 10); */ /* unused */
-    comma = strchr(p, ',');
-    if (!comma) return;
-    p = comma + 1;
-
-    /* Parse channel */
-    uint8_t channel = (uint8_t)strtol(p, NULL, 10);
-    comma = strchr(p, ',');
-    if (!comma) return;
-    p = comma + 1;
-
-    /* Parse RSSI */
-    int8_t rssi = (int8_t)strtol(p, NULL, 10);
-    comma = strchr(p, ',');
-    if (!comma) return;
-    p = comma + 1;
-
-    /* Parse LQI */
-    uint8_t lqi = (uint8_t)strtol(p, NULL, 10);
-    comma = strchr(p, ',');
-    if (!comma) return;
-    p = comma + 1;
-
-    /* Parse dst_pan */
-    char dst_pan[IEEE802154_PAN_STR_SIZE] = {0};
-    comma = strchr(p, ',');
-    if (!comma) return;
-    int len = (comma - p < (int)sizeof(dst_pan) - 1) ? (int)(comma - p) : (int)sizeof(dst_pan) - 1;
-    memcpy(dst_pan, p, len);
-    dst_pan[len] = '\0';
-    p = comma + 1;
-
-    /* Parse dst_addr */
-    comma = strchr(p, ',');
-    if (!comma) return;
-    /* skip dst_addr — we dedup on src_addr */
-    p = comma + 1;
-
-    /* Parse src_pan */
-    char src_pan[IEEE802154_PAN_STR_SIZE] = {0};
-    comma = strchr(p, ',');
-    if (!comma) return;
-    len = (comma - p < (int)sizeof(src_pan) - 1) ? (int)(comma - p) : (int)sizeof(src_pan) - 1;
-    memcpy(src_pan, p, len);
-    src_pan[len] = '\0';
-    p = comma + 1;
-
-    /* Parse src_addr */
-    char src_addr[IEEE802154_ADDR_STR_SIZE] = {0};
-    comma = strchr(p, ',');
-    if (!comma) return;
-    len = (comma - p < (int)sizeof(src_addr) - 1) ? (int)(comma - p) : (int)sizeof(src_addr) - 1;
-    memcpy(src_addr, p, len);
-    src_addr[len] = '\0';
-
-    /* Skip frames with no source address (ACKs) */
-    if (src_addr[0] == '\0')
-        return;
-
-    ieee802154_store_device(proto, src_pan, src_addr, dst_pan, ftype,
-                            channel, rssi, lqi);
-}
-
-/*
- * Process a buffer that may contain multiple +ZIGFRAME lines.
- */
-static void process_response_buffer(const char *buf, char filter_proto)
-{
-    const char *p = buf;
-    while ((p = strstr(p, "+ZIGFRAME:")) != NULL)
-    {
-        /* Find end of this line */
-        const char *eol = strchr(p, '\n');
-        if (!eol) eol = p + strlen(p);
-
-        /* Copy line for parsing */
-        char line[400];
-        int llen = (eol - p < (int)sizeof(line) - 1) ? (int)(eol - p) : (int)sizeof(line) - 1;
-        memcpy(line, p, llen);
-        line[llen] = '\0';
-
-        parse_zigframe(line, filter_proto);
-        p = eol;
-    }
 }
 
 /********************* D E T A I L   S C R E E N *****************************/
@@ -367,27 +245,22 @@ static void ieee802154_scan(char filter_proto)
     bool redraw = true;
     bool scan_done = false;
     char page_info[20];
-    char resp_buf[AT_RESP_BUF_SIZE];
     const char *title = (filter_proto == 'Z') ? "Zigbee Scan" : "Thread Scan";
-
-    /* Brain CD3 speaks binary M1_RPC; every other build (incl. legacy CD3-AT)
-     * stays on the AT+ZIGSNIFF text path.  Resolved once per scan. */
     esp32_transport_t xport = m1_esp32_active_transport();
 
     s_device_count = 0;
     memset(s_devices, 0, sizeof(s_devices));
 
+    if (xport != ESP32_TRANSPORT_RPC)
+    {
+        show_message(title, "Unsupported ESP32", "Use M1_RPC firmware", 0);
+        return;
+    }
+
     /* Init ESP32 if needed */
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     if (!m1_esp32_get_init_status())
-    {
         m1_esp32_init();
-    }
-    if (!get_esp32_main_init_status())
-    {
-        show_message(title, "Initializing...", NULL, 0);
-        esp32_main_init();
-    }
 
     /* Drain stale button events accumulated during ESP32 init.
      * Check if BACK was pressed — if so, exit immediately. */
@@ -405,20 +278,11 @@ static void ieee802154_scan(char filter_proto)
         }
     }
 
-    if (!get_esp32_main_init_status())
-    {
-        show_message(title, "ESP32 not ready!", "Press Back", 0);
-        goto wait_exit;
-    }
-
     int total_poll_bytes = 0;  /* diagnostic: total bytes received from polls */
 
     /* Scan all 16 channels (11-26) */
     for (uint8_t ch = 11; ch <= 26; ch++)
     {
-        char cmd[24];
-        snprintf(cmd, sizeof(cmd), "AT+ZIGSNIFF=1,%u\r\n", ch);
-
         /* Show scanning progress */
         m1_u8g2_firstpage();
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -438,7 +302,6 @@ static void ieee802154_scan(char filter_proto)
         m1_u8g2_nextpage();
 
         /* Start/switch channel */
-        if (xport == ESP32_TRANSPORT_RPC)
         {
             m1_esp32_rpc_status_t rpc_st = m1_esp32_rpc_zb_sniff_start(ch);
             if (ch == 11 && rpc_st != M1_ESP32_RPC_OK)
@@ -449,32 +312,12 @@ static void ieee802154_scan(char filter_proto)
                 goto wait_exit;
             }
         }
-        else
-        {
-            spi_AT_send_recv(cmd, resp_buf, sizeof(resp_buf), 5);
-
-            /* Check first channel response for errors (AT text path only) */
-            if (ch == 11)
-            {
-                if (strstr(resp_buf, "ERROR") || strstr(resp_buf, "TIMEOUT") || strstr(resp_buf, "SEND_ERR"))
-                {
-                    char err_msg[44];
-                    strncpy(err_msg, resp_buf, 40);
-                    err_msg[40] = '\0';
-                    for (int i = 0; err_msg[i]; i++)
-                        if (err_msg[i] == '\r' || err_msg[i] == '\n') err_msg[i] = ' ';
-                    show_message(title, "ZIGSNIFF error:", err_msg, 0);
-                    goto wait_exit;
-                }
-            }
-        }
 
         /* Dwell on this channel and collect frames */
         uint32_t dwell_start = HAL_GetTick();
         while ((HAL_GetTick() - dwell_start) < SCAN_DWELL_TIME_MS)
         {
             /* Poll for discovered devices */
-            if (xport == ESP32_TRANSPORT_RPC)
             {
                 m1_esp32_rpc_zb_device_t rpc_devices[8];
                 uint8_t rpc_n = 0u;
@@ -485,17 +328,6 @@ static void ieee802154_scan(char filter_proto)
                     total_poll_bytes += 1 + (int)rpc_n * (int)sizeof(m1_esp32_rpc_zb_device_t);
                     for (uint8_t i = 0; i < rpc_n; i++)
                         ieee802154_add_rpc_device(&rpc_devices[i], filter_proto);
-                }
-            }
-            else
-            {
-                /* AT firmware: poll for unsolicited +ZIGFRAME text responses. */
-                resp_buf[0] = '\0';
-                spi_AT_send_recv("AT\r\n", resp_buf, sizeof(resp_buf), 1);
-                if (resp_buf[0])
-                {
-                    total_poll_bytes += strlen(resp_buf);
-                    process_response_buffer(resp_buf, filter_proto);
                 }
             }
             vTaskDelay(pdMS_TO_TICKS(SCAN_POLL_INTERVAL_MS));
@@ -512,10 +344,7 @@ static void ieee802154_scan(char filter_proto)
                      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
                     {
                         /* Stop sniffer and exit */
-                        if (xport == ESP32_TRANSPORT_RPC)
-                            m1_esp32_rpc_zb_sniff_stop();
-                        else
-                            spi_AT_send_recv("AT+ZIGSNIFF=0\r\n", resp_buf, sizeof(resp_buf), 5);
+                        m1_esp32_rpc_zb_sniff_stop();
                         xQueueReset(main_q_hdl);
                         m1_esp32_deinit();
                         return;
@@ -526,10 +355,7 @@ static void ieee802154_scan(char filter_proto)
     }
 
     /* Stop sniffer */
-    if (xport == ESP32_TRANSPORT_RPC)
-        m1_esp32_rpc_zb_sniff_stop();
-    else
-        spi_AT_send_recv("AT+ZIGSNIFF=0\r\n", resp_buf, sizeof(resp_buf), 5);
+    m1_esp32_rpc_zb_sniff_stop();
     scan_done = true;
 
     if (!scan_done || s_device_count == 0)
@@ -635,10 +461,7 @@ wait_exit:
         }
     }
     /* Stop sniffer just in case */
-    if (xport == ESP32_TRANSPORT_RPC)
-        m1_esp32_rpc_zb_sniff_stop();
-    else
-        spi_AT_send_recv("AT+ZIGSNIFF=0\r\n", resp_buf, sizeof(resp_buf), 5);
+    m1_esp32_rpc_zb_sniff_stop();
     xQueueReset(main_q_hdl);
     m1_esp32_deinit();
 }
@@ -657,33 +480,26 @@ void thread_scan(void)
 
 /*
  * 802.15.4 Flood — continuously transmits 802.15.4 frames, cycling channels
- * 11-26, until BACK is pressed.  Sends AT+ZIGFLOOD=1,<ch> to start on a
- * channel and AT+ZIGFLOOD=0 to stop.  Capability-gated by the scene layer on
- * ESP32_FEATURE_802154, so firmwares without 802.15.4 support show the
- * standard "not supported" screen instead of reaching this function.
+ * 11-26, until BACK is pressed. The operation uses M1_RPC.
  */
 void ieee802154_flood(void)
 {
     S_M1_Buttons_Status this_button_status;
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
-    char resp_buf[AT_RESP_BUF_SIZE];
     const char *title = "802.15.4 Flood";
     uint8_t ch = 11;
-
-    /* Brain CD3 uses binary M1_RPC; all other builds stay on AT+ZIGFLOOD. */
     esp32_transport_t xport = m1_esp32_active_transport();
+
+    if (xport != ESP32_TRANSPORT_RPC)
+    {
+        show_message(title, "Unsupported ESP32", "Use M1_RPC firmware", 0);
+        return;
+    }
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     if (!m1_esp32_get_init_status())
-    {
         m1_esp32_init();
-    }
-    if (!get_esp32_main_init_status())
-    {
-        show_message(title, "Initializing...", NULL, 0);
-        esp32_main_init();
-    }
 
     /* Drain stale button events accumulated during ESP32 init.
      * Check if BACK was pressed — if so, exit immediately. */
@@ -701,17 +517,8 @@ void ieee802154_flood(void)
         }
     }
 
-    if (!get_esp32_main_init_status())
-    {
-        show_message(title, "ESP32 not ready!", "Press Back", 0);
-        goto wait_exit;
-    }
-
     for (;;)
     {
-        char cmd[24];
-        snprintf(cmd, sizeof(cmd), "AT+ZIGFLOOD=1,%u\r\n", ch);
-
         /* Show flooding progress */
         m1_u8g2_firstpage();
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -726,31 +533,12 @@ void ieee802154_flood(void)
         m1_u8g2_nextpage();
 
         /* Start/switch flood channel */
-        resp_buf[0] = '\0';
-        if (xport == ESP32_TRANSPORT_RPC)
         {
             m1_esp32_rpc_status_t rpc_st = m1_esp32_rpc_zb_flood_start(ch);
             if (ch == 11 && rpc_st != M1_ESP32_RPC_OK)
             {
                 char err_msg[32];
                 snprintf(err_msg, sizeof(err_msg), "RPC NAK %d", (int)rpc_st);
-                show_message(title, "ZIGFLOOD error:", err_msg, 0);
-                goto wait_exit;
-            }
-        }
-        else
-        {
-            spi_AT_send_recv(cmd, resp_buf, sizeof(resp_buf), 5);
-
-            /* Check first channel response for errors (AT text path only) */
-            if (ch == 11 && (strstr(resp_buf, "ERROR") || strstr(resp_buf, "TIMEOUT")
-                          || strstr(resp_buf, "SEND_ERR")))
-            {
-                char err_msg[44];
-                strncpy(err_msg, resp_buf, 40);
-                err_msg[40] = '\0';
-                for (int i = 0; err_msg[i]; i++)
-                    if (err_msg[i] == '\r' || err_msg[i] == '\n') err_msg[i] = ' ';
                 show_message(title, "ZIGFLOOD error:", err_msg, 0);
                 goto wait_exit;
             }
@@ -772,10 +560,7 @@ void ieee802154_flood(void)
                      || this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
                      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
                     {
-                        if (xport == ESP32_TRANSPORT_RPC)
-                            m1_esp32_rpc_zb_flood_stop();
-                        else
-                            spi_AT_send_recv("AT+ZIGFLOOD=0\r\n", resp_buf, sizeof(resp_buf), 5);
+                        m1_esp32_rpc_zb_flood_stop();
                         xQueueReset(main_q_hdl);
                         m1_esp32_deinit();
                         return;
@@ -802,10 +587,7 @@ wait_exit:
         }
     }
     /* Stop flood just in case */
-    if (xport == ESP32_TRANSPORT_RPC)
-        m1_esp32_rpc_zb_flood_stop();
-    else
-        spi_AT_send_recv("AT+ZIGFLOOD=0\r\n", resp_buf, sizeof(resp_buf), 5);
+    m1_esp32_rpc_zb_flood_stop();
     xQueueReset(main_q_hdl);
     m1_esp32_deinit();
 }
