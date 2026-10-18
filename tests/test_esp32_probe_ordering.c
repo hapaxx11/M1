@@ -7,14 +7,12 @@
  * and M1 Link transaction serialization.
  *
  * Neither m1_esp32_caps_init() (m1_csrc/m1_esp32_caps.c) nor m1link_hal_xfer()
- * (Esp_spi_at/.../esp_app_main.c) can be exercised on the host: both call
- * concrete HAL/FreeRTOS/hardware entry points with no injectable seam. As
- * with the existing esp32_main_deinit() heap-leak regression test, these
- * checks verify the source-code invariants of the fix directly instead:
+ * (m1_csrc/m1_esp32_m1link.c) can be exercised on the host: both call concrete
+ * HAL/FreeRTOS/hardware entry points with no injectable seam. These checks
+ * verify the source-code invariants directly instead:
  *
- *   1. Capability probing uses only the SiN360 binary PING and M1_RPC; it must
- *      not start or issue commands through the retired AT task.
- *   2. The shared SPI mutex serializes complete M1 Link request/reply sequences.
+ *   1. Capability probing uses only the SiN360 binary PING and M1_RPC.
+ *   2. The RPC transaction mutex serializes capability probes and feature RPCs.
  */
 
 #include "unity.h"
@@ -96,55 +94,28 @@ void test_caps_init_still_falls_back_to_unknown(void)
     free(content);
 }
 
-/* ----- esp_app_main.c: mutex held for the full M1 Link sequence ------------ */
+/* ----- Shared transaction mutex protects M1 Link callers ------------------- */
 
-void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
+void test_m1link_callers_use_shared_rpc_transaction_mutex(void)
 {
-    char *content = read_file(
-        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+    char *rpc = read_file("m1_csrc/m1_esp32_rpc.c");
+    char *caps = read_file("m1_csrc/m1_esp32_caps.c");
+    char *transport = read_file("m1_csrc/m1_esp32_m1link.c");
 
-    /* Anchor all checks to the body of spi_m1link_send_recv_bin so that
-     * the HAL_SPI_Abort call inside m1link_hal_xfer (earlier in the file)
-     * and any mention of m1_esp32_m1link_send_recv_timed in comments do not
-     * pollute the ordered checks.  Anchor to the C function definition (which
-     * has a return type) rather than the comment references to the name. */
-    const char *fn_start = strstr(content, "uint8_t spi_m1link_send_recv_bin(");
-    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start, "spi_m1link_send_recv_bin definition not found");
+    const char *rpc_fn = strstr(rpc, "m1_esp32_rpc_status_t m1_esp32_rpc_call(");
+    const char *caps_fn = strstr(caps, "void m1_esp32_caps_init(void)");
+    TEST_ASSERT_NOT_NULL(rpc_fn);
+    TEST_ASSERT_NOT_NULL(caps_fn);
+    assert_ordered(rpc_fn, "if (!m1_esp32_rpc_transaction_lock())",
+                   "m1_esp32_rpc_call_unlocked(");
+    assert_ordered(caps_fn, "if (!m1_esp32_rpc_transaction_lock())",
+                   "m1_esp32_caps_init_locked();");
+    assert_contains(transport, "m1_esp32_m1link_send_recv_timed(");
+    assert_contains(transport, "!m1_esp32_get_init_status()");
 
-    /* The full-sequence lock must wrap the abort AND the timed exchange so
-     * another SPI user cannot interpose between request and reply polls. */
-    const char *lock_call  = strstr(fn_start, "esp32_m1link_spi_lock())");
-    const char *abort_call = strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);");
-    const char *timed_call = strstr(fn_start, "m1_esp32_m1link_send_recv_timed(");
-    const char *unlock_call= timed_call != NULL
-                                 ? strstr(timed_call, "esp32_m1link_spi_unlock();")
-                                 : NULL;
-
-    TEST_ASSERT_NOT_NULL(lock_call);
-    TEST_ASSERT_NOT_NULL(abort_call);
-    TEST_ASSERT_NOT_NULL(timed_call);
-    TEST_ASSERT_NOT_NULL(unlock_call);
-
-    TEST_ASSERT_TRUE_MESSAGE(lock_call  < abort_call,  "lock must precede abort");
-    TEST_ASSERT_TRUE_MESSAGE(abort_call < timed_call,  "abort must precede timed exchange");
-    TEST_ASSERT_TRUE_MESSAGE(timed_call < unlock_call, "timed exchange must precede unlock");
-
-    /* m1link_hal_xfer must NOT take the per-transfer lock: doing so would
-     * serialise individual SPI transactions but still permit another operation
-     * between the request unlock and the next IDLE poll. Search
-     * only within m1link_hal_xfer's text range (between its definition and
-     * the start of spi_m1link_send_recv_bin) to avoid false positives. */
-    const char *xfer_fn = strstr(content, "static int m1link_hal_xfer(");
-    TEST_ASSERT_NOT_NULL(xfer_fn);
-    TEST_ASSERT_TRUE_MESSAGE(fn_start > xfer_fn,
-        "spi_m1link_send_recv_bin must come after m1link_hal_xfer");
-    const char *xfer_lock = strstr(xfer_fn, "esp32_m1link_spi_lock())");
-    /* If the call is found at all, it must be in spi_m1link_send_recv_bin
-     * (at or after fn_start), not inside m1link_hal_xfer (before fn_start). */
-    TEST_ASSERT_TRUE_MESSAGE(xfer_lock == NULL || xfer_lock >= fn_start,
-        "m1link_hal_xfer must not take per-transfer SPI mutex");
-
-    free(content);
+    free(transport);
+    free(caps);
+    free(rpc);
 }
 
 int main(void)
@@ -152,6 +123,6 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_caps_probe_has_no_at_transport_path);
     RUN_TEST(test_caps_init_still_falls_back_to_unknown);
-    RUN_TEST(test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence);
+    RUN_TEST(test_m1link_callers_use_shared_rpc_transaction_mutex);
     return UNITY_END();
 }

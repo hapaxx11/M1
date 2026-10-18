@@ -13,9 +13,8 @@
  * directions, with one m1_rpc frame at the head of the buffer.  The slave
  * pipelines its reply onto a LATER transaction, so the host must issue follow-up
  * IDLE transactions and scan for the matching response — see
- * m1_esp32_m1link_send_recv() below.  This is NOT the ESP-AT half-duplex
- * `spi_slave_hd` command protocol driven by spi_AT_send_recv_bin(), and it is
- * NOT the fixed 64-byte full-duplex transfer used by the SiN360 binary protocol.
+ * m1_esp32_m1link_send_recv() below. This is separate from the fixed 64-byte
+ * full-duplex transfer used by the SiN360 binary protocol.
  *
  * M1 Project
  */
@@ -26,21 +25,7 @@
 #include <string.h>
 
 #include "m1_esp32_rpc.h"
-
-/* Binary-safe half-duplex SPI-HD send/receive (Esp_spi_at master driver).
- * Declared extern exactly as in m1_esp32_caps.c / m1_espnow_hal.c.
- * Retained for the AT presence/AT+CMD? probes; NOT used for M1_RPC. */
-extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                    uint8_t *rx_buf, int rx_buf_size,
-                                    int *out_len, int timeout_sec);
-
-/* Full-duplex "M1 Link" master transport for the native brain CD3 firmware
- * (Esp_spi_at master driver).  Clocks fixed 512-byte transactions on hspi_esp
- * with manual CS/HANDSHAKE handling and reassembles the pipelined reply.  This
- * is the transport the M1_RPC client must use to reach the brain. */
-extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                        uint8_t *rx_buf, int rx_buf_size,
-                                        int *out_len, int timeout_sec);
+#include "m1_esp32_m1link.h"
 
 /* Declared extern exactly as in m1_esp32_caps.c, rather than pulling in all of
  * m1_esp32_hal.h (FreeRTOS/SPI/UART handles) just for this one status check --
@@ -48,7 +33,7 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 extern uint8_t m1_esp32_get_init_status(void);
 
 /* Wall-clock milliseconds spent in the most recent spi_m1link_send_recv_bin()
- * poll loop (implemented in esp_app_main.c via HAL_GetTick()), regardless of
+ * poll loop (implemented in m1_esp32_m1link.c via HAL_GetTick()), regardless of
  * whether it matched a reply. Used only for the "no-reply" diagnostic line --
  * see the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
  * (issue #719 Phase 6). */

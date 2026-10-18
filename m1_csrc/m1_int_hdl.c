@@ -22,8 +22,6 @@
 #include "m1_cli.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
-//#include "spi_drv.h"
-#include "spi_master.h"
 #include "m1_rfid.h"
 #include "lfrfid.h"
 
@@ -124,62 +122,6 @@ void EXTI15_IRQHandler(void)
 	HAL_EXTI_IRQHandler(&sdcard_exti_hdl);
 
 } // void EXTI15_IRQHandler(void)
-
-
-/**
-  *
-  * @brief EXTI line detection callback, used as SPI handshake GPIO
-  * /*
-  * This function is called when the handshake line goes high.
-  * There are two ways to trigger the GPIO interrupt:
-  * 1. Master sends data, slave has received successfully
-  * 2. Slave has data want to transmit
-  *
-  */
-void ESP32_GPIO_EXTI_Callback(void)
-{
-	portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-    //Give the semaphore.
-    spi_master_msg_t spi_msg = {
-        .slave_notify_flag = true,
-    };
-    if (esp_spi_msg_queue)
-    {
-    	xQueueSendFromISR(esp_spi_msg_queue, (void*)&spi_msg, &xHigherPriorityTaskWoken ); // notify master to do next transaction
-    	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-    }
-} // void ESP32_GPIO_EXTI_Callback(void)
-
-
-
-/*============================================================================*/
-/*
- * This function handles EXTI1 global interrupt for ESP32 DATAREADY
- *
- */
-/*============================================================================*/
-void EXTI1_IRQHandler(void)
-{
-	ESP32_GPIO_EXTI_Callback();
-	HAL_EXTI_IRQHandler(&esp32_exti_dataready);
-
-} // void EXTI1_IRQHandler(void)
-
-
-
-/*============================================================================*/
-/*
- * This function handles EXTI7 global interrupt for ESP32 HANDSHAKE
- *
- */
-/*============================================================================*/
-void EXTI7_IRQHandler(void)
-{
-	ESP32_GPIO_EXTI_Callback();
-	HAL_EXTI_IRQHandler(&esp32_exti_handshake);
-
-} // void EXTI1_IRQHandler(void)
-
 
 
 /*============================================================================*/

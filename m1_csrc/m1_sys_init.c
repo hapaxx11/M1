@@ -25,7 +25,6 @@
 #include "m1_sdcard.h"
 #include "m1_wdt_hw.h"
 #include "m1_esp32_hal.h"
-#include "esp_app_main.h"
 #include "battery.h"
 #include "m1_gpio.h"
 #include "m1_log_debug.h"

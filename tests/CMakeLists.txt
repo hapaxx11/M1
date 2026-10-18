@@ -107,13 +107,11 @@ endif()
 add_test(NAME battery_text_width COMMAND test_battery_text_width)
 
 # ------------------------------------------------------------------
-# Module under test: m1_esp32_caps (parse payload + capability bits + AT+CMD? parser)
+# Module under test: m1_esp32_caps payload parser and capability bits.
 #
 # Tests the static-inline helpers in m1_esp32_caps.h which have zero hardware
 # dependencies:
 #   - m1_esp32_caps_parse_payload(): raw bytes → M1_ESP32_CAP_* bitmap + fw_name
-#   - m1_esp32_caps_parse_at_cmd_list(): AT+CMD? response → M1_ESP32_CAP_* bits
-#   - m1_esp32_caps_at_cmd_response_valid(): sanity-checks the AT+CMD? response
 # No firmware source file is compiled — only the header is exercised.
 # Verifies:
 #   - Valid SiN360 payload parses correctly via binary path
@@ -122,9 +120,6 @@ add_test(NAME battery_text_width COMMAND test_battery_text_width)
 #   - All cap bit constants are unique powers-of-two
 #   - Composite profile macros contain the expected bit sets
 #   - Bitmap is decoded little-endian
-#   - AT+CMD? response parsing: stock/bedge-dag/neddy299 responses,
-#     quoted-substring anchoring, empty/NULL inputs, unordered commands,
-#     validity detector
 # ------------------------------------------------------------------
 add_executable(test_esp32_caps
     test_esp32_caps.c
@@ -143,12 +138,12 @@ add_test(NAME esp32_caps COMMAND test_esp32_caps)
 #
 # Pure-logic module: given a capability bitmap (uint64_t), classifies
 # which firmware features are available and identifies the firmware class
-# (SiN360 vs. AT).  Zero HAL / RTOS / display dependencies.
+# (SiN360 vs. supported M1_RPC profiles).  Zero HAL / RTOS / display dependencies.
 # Verifies:
 #   - esp32_feature_required_caps(): each feature ID maps to correct M1_ESP32_CAP_* bit
 #   - esp32_feature_label(): non-empty labels for all valid feature IDs
 #   - esp32_feature_supported(): zero bitmap, all-ones, exact-required, missing-bit
-#   - esp32_firmware_is_sin360(): SiN360 profile, AT profile, edge bitmaps
+#   - esp32_firmware_is_sin360(): SiN360 profile and edge bitmaps
 #   - ESP32_FEATURE_COUNT equals the current table size (regression guard)
 # ------------------------------------------------------------------
 add_executable(test_esp32_feature_map
@@ -167,15 +162,15 @@ add_test(NAME esp32_feature_map COMMAND test_esp32_feature_map)
 # ------------------------------------------------------------------
 # Module under test: m1_esp32_rpc (CD3 M1_RPC compatibility layer)
 #
-# Reusable M1_RPC client + transport classifier.  The SPI-HD transport
-# (spi_AT_send_recv_bin) and capability cache (m1_esp32_caps_get_bitmap) are
+# Reusable M1_RPC client + transport classifier. The M1 Link transport
+# and capability cache (m1_esp32_caps_get_bitmap) are
 # stubbed in the test so the pure request/response + framing logic runs on the
 # host.  Verifies:
 #   - m1_esp32_rpc_call(): REQ build -> RESP/NAK decode, payload copy/truncation,
 #     transport failure, msg_id mismatch, oversize-request guard
 #   - m1_esp32_rpc_decode_resp(): bad magic/CRC/short-buffer, empty-NAK status
 #   - esp32_firmware_transport() / m1_esp32_active_transport(): NONE / RPC (brain
-#     CD3) / BINARY_SPI (SiN360) / AT (generic AT + legacy CD3-AT) classification
+#     CD3) / BINARY_SPI (SiN360) classification
 # ------------------------------------------------------------------
 add_executable(test_esp32_rpc
     test_esp32_rpc.c
@@ -761,31 +756,24 @@ endif()
 add_test(NAME submenu_widget_rollout COMMAND test_submenu_widget_rollout)
 
 # ------------------------------------------------------------------
-# Source invariant: esp32_main_deinit() releases all heap held by the
-# legacy AT-over-SPI plumbing (task stack, trans_data, stream buffer,
-# semaphores, device handle).
-# Bug context: Sub-GHz Read Raw failed after any ESP32-dependent feature
-# (Bad-BT, Zigbee scan, FW update) because esp32_main_init() allocated
-# ~17 KB that was never freed, leaving insufficient heap for the 128 KB
-# capture buffer + 28 KB SD-writer reserve.
+# Source invariant: retired ESP-AT transport/task code is not part of the
+# firmware build; supported M1 Link and 64-byte binary-SPI transports remain.
 # ------------------------------------------------------------------
-add_executable(test_esp32_main_deinit_releases_legacy_task
-    test_esp32_main_deinit_releases_legacy_task.c
+add_executable(test_esp32_at_retired
+    test_esp32_at_retired.c
 )
-target_compile_definitions(test_esp32_main_deinit_releases_legacy_task PRIVATE
+target_compile_definitions(test_esp32_at_retired PRIVATE
     M1_ROOT="${M1_ROOT}"
 )
-target_link_libraries(test_esp32_main_deinit_releases_legacy_task PRIVATE unity)
+target_link_libraries(test_esp32_at_retired PRIVATE unity)
 if(TARGET sanitizers)
-    target_link_libraries(test_esp32_main_deinit_releases_legacy_task PRIVATE sanitizers)
+    target_link_libraries(test_esp32_at_retired PRIVATE sanitizers)
 endif()
-add_test(NAME esp32_main_deinit_releases_legacy_task
-    COMMAND test_esp32_main_deinit_releases_legacy_task)
+add_test(NAME esp32_at_retired COMMAND test_esp32_at_retired)
 
 # ------------------------------------------------------------------
-# Source invariant: issue #719 Phase 1 — the brain-CD3 M1_RPC probe runs
-# before the host AT task is started, and m1link_hal_xfer() takes the shared
-# SPI3 mutex so it can never race spi_trans_control_task on SPI3.
+# Source invariant: capability probes and M1_RPC requests share the RPC
+# transaction mutex; the transport no longer depends on the retired AT task.
 # ------------------------------------------------------------------
 add_executable(test_esp32_probe_ordering
     test_esp32_probe_ordering.c
@@ -1976,28 +1964,22 @@ endif()
 add_test(NAME file_browser COMMAND test_file_browser)
 
 # ------------------------------------------------------------------
-# Module under test: http_client URL parser (parse_url)
-# Tests URL decomposition into host, port, path, and is_https flag.
-# The is_https flag is critical for OTA: it triggers the SSL connection
-# path (AT+CIPSTART="SSL") which requires SNTP + CIPSSLCCONF setup.
-# Uses a standalone copy (http_client_parse_impl.c) because the
-# production m1_http_client.c has ESP32 SPI and HAL dependencies.
-# Bug context: OTA download "Connection failed" — SSL handshake failed
-# because tcp_connect() did not configure SNTP or SSL cert verification.
+# Module under test: retired ESP-AT-only HTTP client compatibility shim.
+# The supported firmware transports do not expose HTTP/HTTPS.
 # ------------------------------------------------------------------
-add_executable(test_http_client_parse
-    test_http_client_parse.c
-    ${STUBS_DIR}/http_client_parse_impl.c
+add_executable(test_http_client_unsupported
+    test_http_client_unsupported.c
+    ${M1_ROOT}/m1_csrc/m1_http_client.c
 )
-target_include_directories(test_http_client_parse PRIVATE
+target_include_directories(test_http_client_unsupported PRIVATE
     ${M1_ROOT}/m1_csrc
     ${STUBS_DIR}
 )
-target_link_libraries(test_http_client_parse PRIVATE unity)
+target_link_libraries(test_http_client_unsupported PRIVATE unity)
 if(TARGET sanitizers)
-    target_link_libraries(test_http_client_parse PRIVATE sanitizers)
+    target_link_libraries(test_http_client_unsupported PRIVATE sanitizers)
 endif()
-add_test(NAME http_client_parse COMMAND test_http_client_parse)
+add_test(NAME http_client_unsupported COMMAND test_http_client_unsupported)
 
 # ------------------------------------------------------------------
 # Module under test: settings_parse_hex_color

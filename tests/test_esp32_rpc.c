@@ -7,10 +7,10 @@
  *   - m1_esp32_rpc_call(): REQ build -> transport -> RESP/NAK decode, payload
  *     copy + truncation, transport failure, oversize guard.
  *   - m1_esp32_rpc_decode_resp(): RESP vs NAK vs framing errors.
- *   - esp32_firmware_transport() / m1_esp32_active_transport(): AT / binary-SPI
- *     / RPC / none classification.
+ *   - esp32_firmware_transport() / m1_esp32_active_transport(): binary-SPI /
+ *     RPC / none classification.
  *
- * The client's SPI-HD transport (spi_AT_send_recv_bin) and the capability cache
+ * The client's M1 Link transport and capability cache
  * (m1_esp32_caps_get_bitmap) are stubbed here so the pure request/response
  * logic runs without hardware.
  */
@@ -43,18 +43,6 @@ void m1_esp32_caps_init(void)
     g_caps_init_calls++;
     g_bitmap  = g_caps_init_bitmap;
     g_queried = true;
-}
-
-/* The default transport pointer references this symbol; provide a stub so the
- * module links.  Tests install a fake via m1_esp32_rpc_set_transport(). */
-uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                             uint8_t *rx_buf, int rx_buf_size,
-                             int *out_len, int timeout_sec)
-{
-    (void)tx_buf; (void)tx_len; (void)rx_buf; (void)rx_buf_size;
-    (void)timeout_sec;
-    if (out_len) *out_len = 0;
-    return 1; /* non-zero == transport error */
 }
 
 /* The default transport is now the full-duplex M1 Link path; stub it too so the

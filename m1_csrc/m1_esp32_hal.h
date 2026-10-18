@@ -22,14 +22,11 @@
 #define ESP32_UART_HIGH_BAUDRATE			921600
 
 #define ESP32_UART_DISABLE
-//#define ESP32_DATAREADY_DISABLE
 
 extern UART_HandleTypeDef huart_esp;
 extern SPI_HandleTypeDef hspi_esp;
 extern DMA_HandleTypeDef hgpdma1_channel5_tx;
 extern DMA_HandleTypeDef hgpdma1_channel4_rx;
-extern EXTI_HandleTypeDef esp32_exti_handshake;
-extern EXTI_HandleTypeDef esp32_exti_dataready;
 extern SemaphoreHandle_t sem_esp32_trans;
 
 extern S_M1_RingBuffer esp32_rb_hdl;

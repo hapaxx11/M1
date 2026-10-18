@@ -3,12 +3,8 @@
 /*
  * m1_http_client.h
  *
- * Reusable HTTP client module for M1.
- * Uses ESP32-C6 AT commands for HTTP/HTTPS communication.
- *
- * Both http_get and http_download_to_file use the raw TCP/SSL path
- * (AT+CIPSTART / AT+CIPSEND / AT+CIPRECVDATA) — not AT+HTTPCLIENT — so
- * there is no 2 KB receive-buffer limit from the ESP32 AT HTTP layer.
+ * HTTP client API retained for callers that can be backed by a supported
+ * transport. HTTP(S) is currently unavailable on the supported ESP32 firmware.
  *
  * M1 Project
  */
@@ -18,7 +14,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "ff.h"
 
 /* HTTP client status codes */
 typedef enum {
@@ -37,6 +32,7 @@ typedef enum {
 	HTTP_ERR_CANCELLED,         /* Operation cancelled by user */
 	HTTP_ERR_INVALID_ARG,       /* Invalid argument */
 	HTTP_ERR_PARSE_FAIL,        /* Failed to parse response */
+	HTTP_ERR_UNSUPPORTED_TRANSPORT,
 } http_status_t;
 
 /* Progress callback for download operations.
@@ -47,10 +43,6 @@ typedef bool (*http_progress_cb_t)(uint32_t downloaded, uint32_t total);
 
 /*
  * Perform an HTTP GET for API-style responses.
- * Uses raw TCP/SSL (same path as http_download_to_file) to avoid the 2 KB
- * AT+HTTPCLIENT receive-buffer limit in the ESP32 AT firmware.
- * Response body is stored in response_buf, null-terminated.
- * Includes User-Agent and Accept: application/json headers automatically.
  *
  * url:          Full URL (http:// or https://)
  * response_buf: Buffer for response body
@@ -63,8 +55,6 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 /*
  * Download a file via HTTP(S) and save to SD card.
- * Uses AT+CIPSTART for streaming large files.
- * Follows up to 3 HTTP redirects.
  *
  * url:          Full URL to download
  * sd_path:      Destination path on SD card (e.g., "0:/Firmware/file.bin")
@@ -77,17 +67,9 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
                                      http_progress_cb_t progress_cb, uint8_t timeout_sec);
 
 /*
- * Check if WiFi is connected and ESP32 is ready for HTTP operations.
+ * Check if an HTTP-capable transport is available.
  */
 bool http_is_ready(void);
-
-/*
- * Reset cached SSL configuration state.
- * Must be called when the ESP32 is deinitialized or reset, because a
- * hardware reset wipes all ESP32-side AT config (SNTP, CIPSSLCCONF).
- * The next SSL connection will re-send the configuration commands.
- */
-void http_ssl_reset(void);
 
 /*
  * Return a human-readable error string for an http_status_t value.

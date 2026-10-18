@@ -22,19 +22,14 @@
 #include "m1_esp32_rpc.h"
 #include "esp32_idle.h"
 #include "m1_esp32_caps.h"
-#include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
-#include "esp_app_main.h"
 
 /*************************** D E F I N E S ************************************/
 
 #define ESP32_UART_IRQn				UART4_IRQn
 #define ESP32_UART_DMA_Tx_IRQn		GPDMA1_Channel5_IRQn
 #define ESP32_UART_DMA_Rx_IRQn		GPDMA1_Channel4_IRQn
-
-#define ESP32_DATAREADY_EXTI_IRQn   EXTI1_IRQn
-#define ESP32_HANDSHAKE_EXTI_IRQn   EXTI7_IRQn
 
 #define ESP32_DMA_RX_BUFFER_LEN 	128
 #define ESP32_RX_BUFFER_LEN			4096
@@ -66,9 +61,6 @@ DMA_HandleTypeDef hgpdma1_channel5_tx;
 
 SPI_HandleTypeDef hspi_esp;
 UART_HandleTypeDef huart_esp;
-EXTI_HandleTypeDef esp32_exti_handshake;
-EXTI_HandleTypeDef esp32_exti_dataready;
-
 static uint8_t esp32_init_done = FALSE;
 static uint8_t esp32_uart_init_done = FALSE;
 static volatile uint8_t esp32_background_owners;
@@ -129,44 +121,19 @@ void m1_esp32_init(void)
 #endif // #ifndef ESP32_UART_DISABLE
 		esp32_SPI3_init();
 
-#ifndef ESP32_DATAREADY_DISABLE
-		/* Configure Interrupt mode for DATAREADY pin */
-		gpio_init_structure.Pin = ESP32_DATAREADY_Pin;
-		gpio_init_structure.Pull = GPIO_PULLDOWN;
-		gpio_init_structure.Speed = GPIO_SPEED_FREQ_HIGH;
-		gpio_init_structure.Mode = GPIO_MODE_IT_RISING;
-		HAL_GPIO_Init(ESP32_DATAREADY_GPIO_Port, &gpio_init_structure);
-
-		/* Enable DATAREADY EXTI Interrupt */
-		HAL_NVIC_SetPriority((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn), configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
-		HAL_NVIC_EnableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-#else
-		/* Configure Interrupt mode for DATAREADY pin */
+		/* DATAREADY is unused by the supported binary transports. */
 		gpio_init_structure.Pin = ESP32_DATAREADY_Pin;
 		gpio_init_structure.Pull = GPIO_PULLDOWN;
 		gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;
 		gpio_init_structure.Mode = GPIO_MODE_ANALOG;
 		HAL_GPIO_Init(ESP32_DATAREADY_GPIO_Port, &gpio_init_structure);
-#endif // #ifndef ESP32_DATAREADY_DISABLE
 
-		/* Configure Interrupt mode for HANDSHAKE pin */
+		/* M1 Link polls HANDSHAKE directly; no EXTI task is required. */
 		gpio_init_structure.Pin = ESP32_HANDSHAKE_Pin;
 		gpio_init_structure.Pull = GPIO_PULLDOWN;
-		gpio_init_structure.Speed = GPIO_SPEED_FREQ_HIGH;
-		gpio_init_structure.Mode = GPIO_MODE_IT_RISING;
+		gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;
+		gpio_init_structure.Mode = GPIO_MODE_INPUT;
 		HAL_GPIO_Init(ESP32_HANDSHAKE_GPIO_Port, &gpio_init_structure);
-
-		/* Enable HANDSHAKE EXTI Interrupt */
-		HAL_NVIC_SetPriority((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn), configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
-		HAL_NVIC_EnableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-#ifndef ESP32_DATAREADY_DISABLE
-		esp32_exti_dataready.Line = EXTI_LINE_1;
-		esp32_exti_dataready.RisingCallback = NULL;
-		esp32_exti_dataready.FallingCallback = NULL;
-#endif // #ifndef ESP32_DATAREADY_DISABLE
-		esp32_exti_handshake.Line = EXTI_LINE_7;
-		esp32_exti_handshake.RisingCallback = NULL;
-		esp32_exti_handshake.FallingCallback = NULL;
 
 		esp32_enable();
 	} // if ( !esp32_init_done )
@@ -455,26 +422,9 @@ void m1_esp32_deinit(void)
 
 	if (esp32_init_done && !background_owned)
 	{
-		/* Disable and clear the EXTI lines that feed esp_spi_msg_queue from the
-		 * ISR (ESP32_GPIO_EXTI_Callback).  Do this FIRST, before any task or
-		 * queue teardown, so the ISR cannot enqueue into a queue handle that is
-		 * about to be freed. */
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-
 #ifndef ESP32_UART_DISABLE
-		/* UART next: prevents UART-driven DMA callbacks from firing into
-		 * the semaphores that esp32_main_deinit() is about to free. */
 		esp32_UART_deinit();
 #endif // #ifndef ESP32_UART_DISABLE
-
-		/* Stop and join the legacy AT-over-SPI task BEFORE tearing down
-		 * the SPI3 peripheral it uses (spi_device_polling_transmit /
-		 * hspi_esp).  No-op if esp32_main_init() was never called. */
-		if (get_esp32_main_init_status())
-			esp32_main_deinit();
 
 		HAL_NVIC_DisableIRQ(SPI3_IRQn);
 		HAL_NVIC_ClearPendingIRQ(SPI3_IRQn);
@@ -512,20 +462,8 @@ void m1_esp32_deinit(void)
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;
 
-		/* NOTE: capability cache is intentionally NOT reset here.
-		 * ESP32 capabilities are a property of the firmware variant
-		 * installed on the coprocessor and cannot change across a
-		 * routine deinit/init cycle within a single STM32 power-up.
-		 * Probing once per STM32 boot avoids a ~5 s AT+CMD? timeout
-		 * every time the user enters a WiFi/BT/IEEE scene against
-		 * AT firmware.  The cache is cleared automatically on STM32
-		 * reset; an OTA reflash of the ESP32 requires a manual STM32
-		 * reboot (or an explicit call to m1_esp32_caps_reset()) to
-		 * re-probe. */
-
-		/* ESP32 reset wipes all AT config — force SSL reconfiguration
-		 * (SNTP + CIPSSLCCONF) on the next HTTPS connection. */
-		http_ssl_reset();
+		/* Capability cache describes the installed firmware and survives routine
+		 * transport deinitialization. */
 	} // if ( esp32_init_done )
 
 	m1_esp32_rpc_transaction_unlock();
@@ -571,7 +509,7 @@ bool m1_esp32_background_owner_active(void)
 * high) but its transport has been idle (deinitialised) for at least
 * ESP32_IDLE_POWER_OFF_MS, the enable line is dropped to save battery.  The next
 * WiFi/BT/802.15.4 feature re-enables and re-boots the C6 through the normal
-* m1_esp32_init() / esp32_main_init() path, so this is transparent to callers.
+* m1_esp32_init() path, so this is transparent to callers.
 *
 * @param  None
 * @retval None

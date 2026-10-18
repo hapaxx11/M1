@@ -35,7 +35,6 @@
 #include "m1_bt.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
-#include "esp_app_main.h"
 #include "m1_compile_cfg.h"
 
 #ifdef M1_APP_FILE_IMPORT_ENABLE

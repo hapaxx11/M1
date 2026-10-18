@@ -31,7 +31,6 @@
 #include "m1_display.h"
 #include "m1_scene.h"
 #include "battery.h"
-/* #include "esp_app_main.h"  -- replaced by binary SPI protocol (m1_esp32_cmd.h) */
 
 /*************************** D E F I N E S ************************************/
 

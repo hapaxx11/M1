@@ -22,15 +22,13 @@
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_rpc.h"
+#include "m1_esp32_m1link.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 
-/* Forward declarations — implemented in m1_esp32_hal.c and esp_app_main.c */
+/* Forward declaration — implemented in m1_esp32_hal.c. */
 extern uint8_t m1_esp32_get_init_status(void);
-extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                        uint8_t *rx_buf, int rx_buf_size,
-                                        int *out_len, int timeout_sec);
 
 /*************************** D E F I N E S ************************************/
 

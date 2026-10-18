@@ -266,20 +266,18 @@ void test_message_box_choice_uses_rounded_corners(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 12. Deauth/probe flood have AT command fallback paths (#626-6)           */
+/* 12. WiFi actions use supported transports and have no AT fallback         */
 /*--------------------------------------------------------------------------*/
 
-void test_deauth_has_at_fallback(void)
+void test_wifi_at_fallbacks_are_retired(void)
 {
     char *c = read_file("m1_csrc/m1_wifi.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1DEAUTH="),
-        "Deauth must have AT command fallback for dag firmware (#626-6)");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1DEAUTHSTOP"),
-        "Deauth stop must have AT command fallback (#626-6)");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1PROBE"),
-        "Probe flood must have AT command fallback (#626-6)");
+    TEST_ASSERT_NULL(strstr(c, "spi_AT_send_recv"));
+    TEST_ASSERT_NULL(strstr(c, "AT+M1"));
+    TEST_ASSERT_NOT_NULL(strstr(c, "ESP32_TRANSPORT_RPC"));
+    TEST_ASSERT_NOT_NULL(strstr(c, "ESP32_TRANSPORT_BINARY_SPI"));
 
     free(c);
 }
@@ -302,100 +300,6 @@ void test_connected_ap_shows_scan_button(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 14. Beacon spam has AT+M1BEACON fallback (#626-7)                        */
-/*--------------------------------------------------------------------------*/
-
-void test_beacon_has_at_fallback(void)
-{
-    char *c = read_file("m1_csrc/m1_wifi.c");
-    TEST_ASSERT_NOT_NULL(c);
-
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1BEACON="),
-        "Beacon spam must have AT+M1BEACON command for dag firmware (#626-7)");
-
-    free(c);
-}
-
-/*--------------------------------------------------------------------------*/
-/* 15. Evil portal has AT+M1EVILTWIN fallback (#626-7)                      */
-/*--------------------------------------------------------------------------*/
-
-void test_evil_portal_has_at_fallback(void)
-{
-    char *c = read_file("m1_csrc/m1_wifi.c");
-    TEST_ASSERT_NOT_NULL(c);
-
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1EVILTWIN="),
-        "Evil portal must have AT+M1EVILTWIN command for dag firmware (#626-7)");
-
-    free(c);
-}
-
-/*--------------------------------------------------------------------------*/
-/* 16. Karma has AT+M1KARMA fallback (#626-7)                               */
-/*--------------------------------------------------------------------------*/
-
-void test_karma_has_at_fallback(void)
-{
-    char *c = read_file("m1_csrc/m1_wifi.c");
-    TEST_ASSERT_NOT_NULL(c);
-
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1KARMA="),
-        "Karma attack must have AT+M1KARMA command for dag firmware (#626-7)");
-
-    free(c);
-}
-
-/*--------------------------------------------------------------------------*/
-/* 17. AP clone uses AT+M1BEACON for AT firmware (#626-7)                   */
-/*--------------------------------------------------------------------------*/
-
-void test_ap_clone_has_at_fallback(void)
-{
-    char *c = read_file("m1_csrc/m1_wifi.c");
-    TEST_ASSERT_NOT_NULL(c);
-
-    /* Scope the search to wifi_attack_ap_clone() so later AT+M1BEACON uses
-     * (e.g. Rickroll) can't produce a false-positive. */
-    const char *fn_start = strstr(c, "void wifi_attack_ap_clone(");
-    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start,
-        "wifi_attack_ap_clone() must exist (#626-7)");
-
-    const char *fn_end = strstr(fn_start, "void wifi_attack_rickroll(");
-    TEST_ASSERT_NOT_NULL_MESSAGE(fn_end,
-        "wifi_attack_ap_clone() end marker not found");
-
-    size_t slice_len = (size_t)(fn_end - fn_start);
-    char *slice = (char *)malloc(slice_len + 1);
-    TEST_ASSERT_NOT_NULL(slice);
-    memcpy(slice, fn_start, slice_len);
-    slice[slice_len] = '\0';
-
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(slice, "AT+M1BEACON="),
-        "AP clone must use AT+M1BEACON for AT firmware (#626-7)");
-
-    free(slice);
-    free(c);
-}
-
-/*--------------------------------------------------------------------------*/
-/* 18. Rickroll uses AT+M1BEACON for AT firmware (#626-7)                   */
-/*--------------------------------------------------------------------------*/
-
-void test_rickroll_has_at_fallback(void)
-{
-    char *c = read_file("m1_csrc/m1_wifi.c");
-    TEST_ASSERT_NOT_NULL(c);
-
-    const char *fn_start = strstr(c, "wifi_attack_rickroll(");
-    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start,
-        "wifi_attack_rickroll() must exist (#626-7)");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn_start, "AT+M1BEACON="),
-        "Rickroll must use AT+M1BEACON for AT firmware (#626-7)");
-
-    free(c);
-}
-
 /*--------------------------------------------------------------------------*/
 /* 19. Station Scan / Station Wardrive are capability-gated                 */
 /*                                                                          */
@@ -805,13 +709,8 @@ int main(void)
     RUN_TEST(test_general_menu_no_connected_item);
     RUN_TEST(test_deauth_uses_deauth_label);
     RUN_TEST(test_message_box_choice_uses_rounded_corners);
-    RUN_TEST(test_deauth_has_at_fallback);
+    RUN_TEST(test_wifi_at_fallbacks_are_retired);
     RUN_TEST(test_connected_ap_shows_scan_button);
-    RUN_TEST(test_beacon_has_at_fallback);
-    RUN_TEST(test_evil_portal_has_at_fallback);
-    RUN_TEST(test_karma_has_at_fallback);
-    RUN_TEST(test_ap_clone_has_at_fallback);
-    RUN_TEST(test_rickroll_has_at_fallback);
     RUN_TEST(test_station_scan_is_capability_gated);
     RUN_TEST(test_wardrive_is_top_level_menu);
     RUN_TEST(test_wardrive_absorbs_list_mgmt);

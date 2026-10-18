@@ -37,14 +37,6 @@ target_include_directories(m1_01 INTERFACE
     ../../Esp32_serial_flasher/port
     ../../Esp32_serial_flasher/app/common
     ../../Esp32_serial_flasher/private_include
-    ../../Esp_spi_at/build/include/
-    ../../Esp_spi_at/esp-idf/components/esp_common/include
-    ../../Esp_spi_at/esp-idf/components/esp_driver_spi/include/driver
-    ../../Esp_spi_at/esp-idf/components/hal/include/hal
-    ../../Esp_spi_at/esp-idf/components/log/include/hal
-    ../../Esp_spi_at/esp-idf/components/soc/esp32c6/include/soc
-    ../../Esp_spi_at/esp-idf/components/soc/esp32c6/register/soc
-    ../../Esp_spi_at/examples/at_spi_master/spi/stm32/main
     ../../Drivers/BSP/Components/ST25R3916/
     ../../NFC
     ../../NFC/Middlewares/ST/rfal/Inc
@@ -268,10 +260,6 @@ target_sources(m1_01 INTERFACE
     ../../Esp32_serial_flasher/src/protocol_serial.c
     ../../Esp32_serial_flasher/src/protocol_uart.c
     ../../Esp32_serial_flasher/src/slip.c
-    ../../Esp_spi_at/esp-idf/components/esp_driver_spi/src/gpspi/spi_master.c
-    ../../Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c
-    ../../Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_queue.c
-    ../../Esp_spi_at/examples/at_spi_master/spi/stm32/main/m1_at_response_parser.c
     ../../FatFs/diskio.c
     ../../FatFs/ff.c
     ../../FatFs/ff_gen_drv.c
@@ -599,6 +587,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_esp32_hal.c
     ../../m1_csrc/m1_esp32_cmd.c
     ../../m1_csrc/m1_esp32_caps.c
+    ../../m1_csrc/m1_esp32_m1link.c
     ../../m1_csrc/m1_esp32_rpc.c
     ../../m1_csrc/m1_esp32_rpc_features.c
     ../../m1_csrc/m1_esp32_native.c

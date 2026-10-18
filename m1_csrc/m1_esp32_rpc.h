@@ -7,16 +7,14 @@
  *
  * Background
  * ----------
- * The M1 speaks three mutually-exclusive command protocols to its ESP32-C6
- * coprocessor over the same SPI-HD hardware:
+ * The M1 supports two mutually-exclusive command protocols to its ESP32-C6
+ * coprocessor over SPI:
  *
- *   - AT text commands ("AT+...\r\n") — bedge117 / neddy299 / dag builds and
- *     the legacy CD3-AT firmware,
  *   - the 64-byte binary CMD_* protocol (m1_esp32_cmd.c) — SiN360,
  *   - the M1_RPC binary framing (magic 0x4D31) — the native "brain" CD3
  *     (bedge117/m1-esp32-brain).
  *
- * The legacy ESP-AT firmware line has been retired. This module targets the
+ * Legacy ESP-AT firmware support has been retired. This module targets the
  * native brain CD3 M1_RPC firmware.
  *
  * Historically only ESP-NOW spoke M1_RPC; every other WiFi / BLE / 802.15.4
@@ -392,8 +390,7 @@ m1_esp32_rpc_decode_resp(const uint8_t *buf, uint16_t buf_len,
  * =========================================================================*/
 
 /**
- * Transport function signature — matches spi_m1link_send_recv_bin() /
- * spi_AT_send_recv_bin().
+ * Transport function signature — matches spi_m1link_send_recv_bin().
  * @return 0 (SUCCESS) on success, non-zero on transport error.
  */
 typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
@@ -413,10 +410,8 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
  * `spi_slave` (NOT `spi_slave_hd`) device: every SPI transaction clocks EXACTLY
  * M1_ESP32_M1LINK_MTU bytes in BOTH directions at once (master frame on MOSI,
  * slave frame on MISO), with one m1_rpc frame at the head of each fixed buffer
- * and zero padding after it.  This is fundamentally different from the ESP-AT
- * `spi_slave_hd` command/address/dummy protocol that spi_AT_send_recv_bin()
- * drives — sending AT-style HD command frames to a full-duplex slave yields no
- * reply, which is why every brain feature (and capability detection) failed.
+ * and zero padding after it. This is a full-duplex M1 Link exchange and is not
+ * the SiN360 64-byte binary CMD_* protocol.
  *
  * The slave pipelines its reply: it consumes the request on transaction N and
  * presents the response on a LATER transaction (it prepares the outgoing buffer

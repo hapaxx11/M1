@@ -45,9 +45,8 @@
  * Capability bits — one bit per named feature
  *
  * The cap_bitmap in CMD_GET_STATUS carries these bits.  Each bit signals
- * that the ESP32 firmware supports the named capability, regardless of
- * whether it is implemented via binary SPI commands or AT text commands.
- * Flag names are transport-agnostic: there is no AT vs. binary distinction.
+ * that the ESP32 firmware supports the named capability. Flag names are
+ * transport-agnostic; transport selection is handled separately.
  *
  * Call sites use these directly.  Example:
  *
@@ -496,8 +495,7 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
  * M1_RPC binary SPI protocol helpers (CD3 / bedge117/m1-esp32-brain)
  *
  * The CD3 firmware (bedge117/m1-esp32-brain) uses a structured binary RPC
- * protocol over the same SPI-HD transport as the AT firmware, but with a
- * distinct frame format:
+ * protocol over full-duplex M1 Link, with this frame format:
  *
  *   [ magic:2 ][ version:1 ][ msg_type:1 ][ msg_id:2 LE ][ payload_len:2 LE ]
  *   [ payload:0..N ][ CRC16:2 ]

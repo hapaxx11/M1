@@ -117,7 +117,7 @@ const char *esp32_feature_label(esp32_feature_id_t fid)
 bool esp32_firmware_is_sin360(uint64_t cap_bitmap)
 {
     /* SiN360 binary-SPI firmware: BLE_HID present (SiN360 feature) AND
-     * WIFI_JOIN absent (AT-firmware feature).  All-zero bitmaps (unknown
+     * WIFI_JOIN absent. All-zero bitmaps (unknown
      * firmware) correctly return false. */
     return (cap_bitmap & M1_ESP32_CAP_BLE_HID) != 0u &&
            (cap_bitmap & M1_ESP32_CAP_WIFI_JOIN) == 0u;
@@ -129,15 +129,12 @@ bool esp32_firmware_is_cd3(uint64_t cap_bitmap)
      *
      * The shipped brain firmware's self-reported M1_FW_CAPS (main.c) advertises
      * HANDSHAKE but deliberately OMITS OTA ("intentionally omitted until
-     * implemented").  Keying detection on OTA therefore mis-classified a real
-     * brain device as ESP32_TRANSPORT_AT, routing every WiFi/BLE/802.15.4
-     * feature back down the AT path — which the brain does not implement — so
-     * nothing worked.  Detect instead on HANDSHAKE (an RPC-only capability
+     * implemented"). Keying detection on OTA therefore mis-classified a real
+     * brain device as unsupported. Detect instead on HANDSHAKE (an RPC-only capability
      * dispatched via M1_RPC_OFF_HS_*) combined with a second canonical CD3-only
      * bit (802.15.4 TX or BLE spam).  Requiring the second bit keeps the rule
-     * from colliding with any hypothetical AT firmware that maps a lone
-     * handshake command.  Neither SiN360 nor any AT variant sets this
-     * combination.  All-zero bitmaps (unknown / fallback) return false. */
+     * from colliding with SiN360. All-zero bitmaps (unknown / fallback) return
+     * false. */
     return (cap_bitmap & M1_ESP32_CAP_HANDSHAKE) != 0u &&
            (cap_bitmap & (M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_BLE_SPAM)) != 0u;
 }
@@ -156,8 +153,7 @@ esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
     /* Order matters: MtkCore is the most specific (a dedicated host-only
      * classifier bit) and the native brain CD3 is next (HANDSHAKE + an
      * RPC-only bit); both speak the m1_link binary protocol and must resolve
-     * to ESP32_TRANSPORT_RPC before the SiN360 rule, then SiN360 before the
-     * generic AT fallback. Unknown and retired AT firmware profiles resolve
+     * to ESP32_TRANSPORT_RPC before the SiN360 rule. Unknown profiles resolve
      * to NONE so transport-selecting callers fail closed. */
     if (cap_bitmap == 0u)
         return ESP32_TRANSPORT_NONE;

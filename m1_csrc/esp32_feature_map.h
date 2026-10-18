@@ -78,7 +78,7 @@ typedef enum {
     /** Evil captive portal (Karma+Portal combined) */
     ESP32_FEATURE_PORTAL,
 
-    /* ----- WiFi connect — AT-layer stubs (bedge117/neddy299) ------------- */
+    /* ----- WiFi connection ----------------------------------------------- */
     /** Station join / disconnect / status.  Absent from SiN360. */
     ESP32_FEATURE_WIFI_JOIN,
 
@@ -175,7 +175,7 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
 /* =========================================================================
  * Firmware-class classifier
  *
- * Derives the firmware transport class (SiN360 binary-SPI vs. AT text)
+ * Derives the firmware transport class
  * from the capability bitmap.  Pure logic — no global state, no HAL calls.
  * =========================================================================*/
 
@@ -216,7 +216,7 @@ typedef enum {
  *   3. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
  *   4. any other bitmap                            -> ESP32_TRANSPORT_NONE
  *
- * Unknown firmware profiles fail closed; AT-command firmware is not supported.
+ * Unknown firmware profiles fail closed.
  *
  * Pure logic — no HAL calls, no global state.  Safe to call before
  * m1_esp32_caps_init() completes (an all-zero bitmap yields NONE).
@@ -226,9 +226,7 @@ esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap);
 /**
  * @brief  Return true when the bitmap indicates a SiN360 binary-SPI firmware.
  *
- * Discriminator: BLE_HID present (SiN360-only bit) AND WIFI_JOIN absent
- * (AT-firmware-only bit).  This is the same rule used in m1_badbt.c to
- * select the CMD_BLE_HID_START path vs. the AT+BLEHIDINIT path.
+ * Discriminator: BLE_HID present (SiN360-only bit) AND WIFI_JOIN absent.
  *
  * Returns false for all-zero bitmaps (fallback / unknown firmware) — safe
  * to call before m1_esp32_caps_init() completes.
@@ -243,8 +241,7 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
  * HANDSHAKE is an RPC-only capability (dispatched via M1_RPC_OFF_HS_*); the
  * shipped brain firmware advertises it but deliberately omits OTA, so OTA can
  * NOT be used as a discriminator.  Requiring a second canonical CD3-only bit
- * (802.15.4 TX or BLE spam) keeps the rule from colliding with SiN360 or any
- * AT variant, none of which set this combination.
+ *  (802.15.4 TX or BLE spam) keeps the rule from colliding with SiN360.
  *
  * Returns false for all-zero bitmaps (fallback / unknown firmware) — safe
  * to call before m1_esp32_caps_init() completes.
