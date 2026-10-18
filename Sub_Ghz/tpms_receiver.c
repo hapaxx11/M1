@@ -126,3 +126,15 @@ bool tpms_activation_expired(uint32_t started_ms, uint32_t now_ms)
 {
     return (uint32_t)(now_ms - started_ms) >= TPMS_ACTIVATION_DURATION_MS;
 }
+
+bool tpms_lfrfid_worker_init_needed(bool returning_from_child,
+                                   bool worker_available)
+{
+    return !returning_from_child && !worker_available;
+}
+
+bool tpms_lfrfid_worker_deinit_needed(bool worker_owned,
+                                     bool returning_from_child)
+{
+    return worker_owned && !returning_from_child;
+}

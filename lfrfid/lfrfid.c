@@ -26,6 +26,7 @@
 #include "privateprofilestring.h"
 #include "m1_wdt_hw.h"
 #include "lfrfid.h"
+#include "lfrfid_tpms_power.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -58,7 +59,7 @@ StaticStreamBuffer_t sb_ctrl;
 uint8_t sb_storage[LFR_SBUF_BYTES];
 StreamBufferHandle_t lfrfid_sb_hdl;
 static int lfrfid_lock = 0;
-static bool lfrfid_tpms_activation_active = false;
+static lfrfid_tpms_power_state_t lfrfid_tpms_activation_state = 0U;
 static uint32_t lfrfid_tpms_activation_started_ms = 0U;
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -344,11 +345,12 @@ bool lfrfid_tpms_activation_request(bool active)
 
 static void lfrfid_tpms_activation_cleanup(void)
 {
-	if(!lfrfid_tpms_activation_active)
+	if(!lfrfid_tpms_power_is_active(lfrfid_tpms_activation_state))
 		return;
 
-	lfrfid_tpms_activation_stop();
-	lfrfid_tpms_activation_active = false;
+	lfrfid_tpms_activation_stop(
+		lfrfid_tpms_power_was_enabled(lfrfid_tpms_activation_state));
+	lfrfid_tpms_activation_state = 0U;
 	lfrfid_tpms_activation_started_ms = 0U;
 	lfrfid_lock = 0;
 	if(lfrfid_state == LFRFID_STATE_EMULATE)
@@ -546,7 +548,7 @@ void lfrfidThread(void *param)
 	while(1)
 	{
 		TickType_t wait_ticks = portMAX_DELAY;
-		if(lfrfid_tpms_activation_active)
+		if(lfrfid_tpms_power_is_active(lfrfid_tpms_activation_state))
 		{
 			uint32_t elapsed_ms = HAL_GetTick() - lfrfid_tpms_activation_started_ms;
 			if(elapsed_ms >= LFRFID_TPMS_ACTIVATION_MAX_MS)
@@ -623,12 +625,14 @@ void lfrfidThread(void *param)
 			}
 			else if(q_item.q_evt_type==Q_EVENT_UI_LFRFID_TPMS_ACTIVATE_START)
 			{
-				if(!lfrfid_tpms_activation_active &&
+				bool supply_was_enabled;
+				if(!lfrfid_tpms_power_is_active(lfrfid_tpms_activation_state) &&
 				   !lfrfid_lock &&
 				   lfrfid_state == LFRFID_STATE_IDLE &&
-				   lfrfid_tpms_activation_start())
+				   lfrfid_tpms_activation_start(&supply_was_enabled))
 				{
-					lfrfid_tpms_activation_active = true;
+					lfrfid_tpms_activation_state =
+						lfrfid_tpms_power_started(supply_was_enabled);
 					lfrfid_tpms_activation_started_ms = HAL_GetTick();
 					lfrfid_lock = 1;
 					lfrfid_state = LFRFID_STATE_EMULATE;
@@ -721,7 +725,7 @@ void lfrfidThread(void *param)
 				task_suspend_safe(lfrfid_rx_task_hdl);
 			}
 		} // if (ret==pdTRUE)
-		else if(lfrfid_tpms_activation_active)
+		else if(lfrfid_tpms_power_is_active(lfrfid_tpms_activation_state))
 		{
 			lfrfid_tpms_activation_cleanup();
 		}

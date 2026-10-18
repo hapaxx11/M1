@@ -122,6 +122,22 @@ void test_activation_duration_is_bounded_and_handles_tick_wrap(void)
         TPMS_ACTIVATION_DURATION_MS / 2U));
 }
 
+void test_lfrfid_worker_initializes_only_for_fresh_unavailable_worker(void)
+{
+    TEST_ASSERT_TRUE(tpms_lfrfid_worker_init_needed(false, false));
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_init_needed(false, true));
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_init_needed(true, false));
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_init_needed(true, true));
+}
+
+void test_lfrfid_worker_is_retained_for_config_return_and_owned_worker_stops(void)
+{
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_deinit_needed(true, true));
+    TEST_ASSERT_TRUE(tpms_lfrfid_worker_deinit_needed(true, false));
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_deinit_needed(false, false));
+    TEST_ASSERT_FALSE(tpms_lfrfid_worker_deinit_needed(false, true));
+}
+
 void test_history_rejects_null_and_checks_indices(void)
 {
     tpms_history_t history;
@@ -221,6 +237,8 @@ int main(void)
     RUN_TEST(test_history_selection_tracks_identity_and_falls_back_if_evicted);
     RUN_TEST(test_age_saturates_and_handles_tick_wrap);
     RUN_TEST(test_activation_duration_is_bounded_and_handles_tick_wrap);
+    RUN_TEST(test_lfrfid_worker_initializes_only_for_fresh_unavailable_worker);
+    RUN_TEST(test_lfrfid_worker_is_retained_for_config_return_and_owned_worker_stops);
     RUN_TEST(test_history_rejects_null_and_checks_indices);
     RUN_TEST(test_schrader_gg4_parses_momentum_example);
     RUN_TEST(test_schrader_gg4_converts_other_sample_and_temperature_offset);

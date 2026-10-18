@@ -94,6 +94,12 @@ static void scene_on_enter(SubGhzApp *app)
     }
 
     tpms_receiver_app_state_t *state = app->tpms_state;
+    if (tpms_lfrfid_worker_init_needed(
+            resume_from_child, lfrfid_q_hdl != NULL))
+    {
+        lfrfid_Init();
+        state->lfrfid_worker_owned = true;
+    }
     if (!resume_from_child)
     {
         state->saved_custom_frequency_hz = subghz_get_user_custom_freq_ext();
@@ -244,6 +250,13 @@ static void scene_on_exit(SubGhzApp *app)
     if (state != NULL)
         stop_rx(state);
     subghz_decenc_set_tpms_only(false);
+    if (state != NULL &&
+        tpms_lfrfid_worker_deinit_needed(
+            state->lfrfid_worker_owned, app->resume_from_child))
+    {
+        lfrfid_DeInit();
+        state->lfrfid_worker_owned = false;
+    }
 
     if (!app->resume_from_child && state != NULL)
     {
