@@ -6,7 +6,7 @@
  *
  * Shows full decoded signal details. Navigation:
  *   OK    = Send (transmit static-code signal)
- *   DOWN  = Save (push SaveName scene)
+ *   DOWN  = Update a matched saved capture, or Save as a new file
  *   BACK  = Return to Read scene
  */
 
@@ -20,9 +20,12 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_saved_capture.h"
 
 extern bool subghz_protocol_is_static_ext(uint16_t protocol);
 extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry);
+
+#define RECEIVER_INFO_STATE_HAS_MATCH 1u
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -30,6 +33,18 @@ extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entr
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    app->file_path[0] = '\0';
+    bool has_match = false;
+    const SubGHz_History_Entry_t *e =
+        subghz_history_get(&app->history, app->history_sel);
+    if (e)
+    {
+        has_match = subghz_saved_capture_find_match(
+            "/SUBGHZ", &e->info, protocol_text[e->info.protocol],
+            app->file_path, sizeof(app->file_path));
+    }
+    subghz_scene_set_state(app, SubGhzSceneReceiverInfo,
+                           has_match ? RECEIVER_INFO_STATE_HAS_MATCH : 0u);
     app->need_redraw = true;
 }
 
@@ -54,9 +69,40 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         }
 
         case SubGhzEventDown:
-            /* Save signal */
-            subghz_scene_push(app, SubGhzSceneSaveName);
+        {
+            const SubGHz_History_Entry_t *e =
+                subghz_history_get(&app->history, app->history_sel);
+            const bool has_match =
+                subghz_scene_get_state(app, SubGhzSceneReceiverInfo) ==
+                RECEIVER_INFO_STATE_HAS_MATCH;
+            if (has_match && e)
+            {
+                bool m1_native = false;
+                char preset[FLIPPER_SUBGHZ_PRESET_MAX_LEN];
+                flipper_subghz_key_capture_t capture;
+                if (subghz_saved_capture_get_format(
+                        app->file_path, &m1_native, preset, sizeof(preset)))
+                {
+                    subghz_saved_capture_from_history(
+                        e, protocol_text[e->info.protocol], &capture);
+                    capture.preset = preset;
+                    if (flipper_subghz_save_key_capture(
+                            app->file_path, m1_native, &capture))
+                    {
+                        subghz_scene_push(app, SubGhzSceneSaveSuccess);
+                        return true;
+                    }
+                }
+                subghz_scene_set_state(app, SubGhzSceneReceiverInfo, 0u);
+                app->file_path[0] = '\0';
+                app->need_redraw = true;
+            }
+            else
+            {
+                subghz_scene_push(app, SubGhzSceneSaveName);
+            }
             return true;
+        }
 
         default:
             break;
@@ -128,8 +174,11 @@ static void draw(SubGhzApp *app)
 
     /* Bottom bar */
     bool can_send = subghz_protocol_is_static_ext(e->info.protocol);
+    const bool has_match =
+        subghz_scene_get_state(app, SubGhzSceneReceiverInfo) ==
+        RECEIVER_INFO_STATE_HAS_MATCH;
     subghz_button_bar_draw(
-        arrowdown_8x8, "Save",
+        arrowdown_8x8, has_match ? "Update" : "Save",
         NULL, can_send ? "Send" : NULL,
         NULL, NULL);
 

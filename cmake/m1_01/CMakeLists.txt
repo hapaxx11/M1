@@ -393,6 +393,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_kia_v6_encoder.c
     ../../Sub_Ghz/subghz_vag_encoder.c
     ../../Sub_Ghz/subghz_proto_pirate_timing.c
+    ../../Sub_Ghz/subghz_saved_match.c
     ../../Sub_Ghz/subghz_raw_pairs_writer.c
     ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/subghz_weather_parse.c
@@ -686,6 +687,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_read.c
     ../../m1_csrc/m1_subghz_scene_read_raw.c
     ../../m1_csrc/subghz_autosave.c
+    ../../m1_csrc/subghz_saved_capture.c
     ../../m1_csrc/m1_subghz_scene_receiver_info.c
     ../../m1_csrc/subghz_config_cycle.c
     ../../m1_csrc/m1_subghz_scene_config.c

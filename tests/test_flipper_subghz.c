@@ -1551,6 +1551,81 @@ void test_save_kia_v6_key_capture_preserves_native_fields(void)
 	remove(path);
 }
 
+void test_save_decoded_key_capture_preserves_identity_fields(void)
+{
+	const char *path = "/tmp/test_decoded_capture.sub";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Renault V1",
+		.bit_count = 104,
+		.key = 0x123A445566778899ULL,
+		.key_2 = 0xA1B2C3,
+		.key_2_len = 3,
+		.te = 250,
+		.serial = 0x12345678,
+		.button = 2,
+		.counter = 0x4321,
+	};
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, false, &capture));
+
+	char text[768];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: A1 B2 C3"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 17185"));
+	remove(path);
+}
+
+void test_save_decoded_native_capture_preserves_identity_fields(void)
+{
+	const char *path = "/tmp/test_decoded_capture.sgh";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Fiat V2",
+		.bit_count = 112,
+		.key = 0x123A445566778899ULL,
+		.te = 210,
+		.serial = 0x12345678,
+		.button = 3,
+		.counter = 0x2345,
+	};
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, true, &capture));
+
+	char text[768];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 3"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 9029"));
+	remove(path);
+}
+
+void test_save_kia_v6_flipper_derives_identity_fields(void)
+{
+	const char *path = "/tmp/test_kia_v6_capture.sub";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Kia V6",
+		.bit_count = 144,
+		.key = 0x123456003CF089ULL,
+		.te = 200,
+		.button = 2,
+		.fx = 0x34,
+	};
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, false, &capture));
+
+	char text[768];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 1193046"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 3993737"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Fx: 52"));
+	remove(path);
+}
+
 void test_load_vag_legacy_key2_field_aliases(void)
 {
 	const char *flipper_path = "/tmp/test_vag_legacy_key2.sub";
@@ -1862,6 +1937,9 @@ int main(void)
 	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
 	RUN_TEST(test_save_vag_key_capture_preserves_native_fields);
 	RUN_TEST(test_save_kia_v6_key_capture_preserves_native_fields);
+	RUN_TEST(test_save_decoded_key_capture_preserves_identity_fields);
+	RUN_TEST(test_save_decoded_native_capture_preserves_identity_fields);
+	RUN_TEST(test_save_kia_v6_flipper_derives_identity_fields);
 	RUN_TEST(test_load_vag_legacy_key2_field_aliases);
 	RUN_TEST(test_load_flipper_key_renault_key2_8byte_field);
 	RUN_TEST(test_save_key_with_key2_three_bytes_roundtrip);

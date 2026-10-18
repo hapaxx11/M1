@@ -7,7 +7,7 @@ M1 firmware, recording its current emulation capability, the technical reason fo
 any limitation, and where to look for new information that might unlock emulation
 in the future.
 
-**Last reviewed:** 2026-06-05
+**Last reviewed:** 2026-10-17
 
 ---
 
@@ -57,6 +57,43 @@ and waveform decoders under `Sub_Ghz/protocols/`: Fiat V2
 (`m1_kia_v6_decode.c`), and VAG (`m1_vag_decode.c`). These handle frame
 recognition and the protocol-specific fields documented by each decoder; they
 are separate from the generic job lifecycle in `subghz_bruteforce_job.c`.
+
+## Remaining ProtoPirate parity programme
+
+Evaluated against RocketGod-git/ProtoPirate commit `dc3446b9` on 2026-10-17.
+The remaining items are not equivalent blockers: the app helpers and all 19
+placeholder automotive protocols have upstream source, while the Renault V1
+full-key path still lacks a public key source.
+
+| Item | Assessment | M1 implementation boundary |
+|------|------------|----------------------------|
+| Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
+| Models DB | **Portable with radio adaptation** | Parse the public v2 database, but translate AM/FM and the published Honda custom profile to SI4463 settings; never write the database's CC1101 register blobs to M1 hardware. |
+| Remote Analyzer | **Portable with radio/UI redesign** | Reuse the detection concepts, not the CC1101 worker or Flipper plugin UI. Implement an asynchronous SI4463 scene with existing M1 scan/RSSI infrastructure and hardware validation. |
+| Name-only automotive decoders | **Portable as RX decoders** | Replace all 18 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. |
+| Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
+
+Implementation phases (each requires host tests, a firmware build, and a RAM
+headroom check):
+
+1. **Saved-capture match/update — implemented in this branch.** Pure matching
+   helpers, dual-format storage scan, Serial/Btn/Cnt persistence, and Receiver
+   Info Update flow; targeted host tests and the firmware build pass.
+2. **Honda decoders** — Static, V1, and V2.
+3. **Ford decoders** — V0, V1, and V2, including FM/Manchester variants.
+4. **Kia decoders** — V0, V1, V2, shared V3/V4, V5, and V7.
+5. **Fiat/Renault decoders** — Fiat V0/V1 and Renault V0; no new key-dependent
+   TX claim and no Renault V1 full-key work.
+6. **Remaining automotive decoders** — Mazda V0, Subaru, and Chrysler V0.
+7. **Models DB** — bounded parser, preset mapping, receiver integration, and SD
+   installation documentation.
+8. **Remote Analyzer** — pure classification helpers, asynchronous SI4463 scene,
+   and on-device detection validation.
+9. **Closeout** — full host/firmware validation, RAM review, and documentation
+   inventory updates.
+
+The working phase checklist is tracked in `PHASE_CHECKLIST.md` on the
+`feature/protopirate-parity` branch until the final PR is prepared.
 
 ## PSA TEA-mode brute-force key recovery
 

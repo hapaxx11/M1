@@ -1167,8 +1167,18 @@ bool flipper_subghz_save_kia_v6(const char *path,
 	if (result && te > 0)
 		result = ff_write_kv_uint32(&ff, "TE", te);
 
-	if (result)
+	if (result && (uint32_t)(key >> 32) != 0)
+	{
+		result = ff_write_kv_uint32(&ff, "Serial", (uint32_t)(key >> 32));
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Btn", button);
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Cnt", (uint32_t)key);
+	}
+	else if (result)
+	{
 		result = ff_write_kv_uint32(&ff, "Btn", button);
+	}
 
 	if (result)
 		result = ff_write_kv_uint32(&ff, "Fx", fx);
@@ -1473,15 +1483,17 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	if (result && te > 0)
 		result = ff_write_kv_uint32(&ff, "BT", te);
 
-	if (result && is_vag)
+	if (result && capture && (is_vag || capture->serial != 0))
+	{
 		result = ff_write_kv_uint32(&ff, "Serial", capture->serial);
-	if (result && is_vag)
-		result = ff_write_kv_uint32(&ff, "Btn", capture->button);
-	if (result && is_vag)
-		result = ff_write_kv_uint32(&ff, "Cnt", capture->counter);
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Btn", capture->button);
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Cnt", capture->counter);
+	}
 	if (result && is_vag)
 		result = ff_write_kv_uint32(&ff, "Type", capture->type);
-	if (result && is_kia_v6)
+	if (result && is_kia_v6 && capture->serial == 0)
 		result = ff_write_kv_uint32(&ff, "Btn", capture->button);
 	if (result && is_kia_v6)
 		result = ff_write_kv_uint32(&ff, "Fx", capture->fx);
@@ -1505,6 +1517,62 @@ bool flipper_subghz_save_m1native_key_with_key2(
 {
 	return subghz_save_m1native_key(path, frequency, preset, protocol,
 	                                bit_count, key, key_2, key_2_len, te, NULL);
+}
+
+static bool subghz_save_flipper_key_capture(
+    const char *path, const flipper_subghz_key_capture_t *capture)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", capture->frequency);
+	if (result && capture->preset && capture->preset[0] != '\0')
+		result = ff_write_kv_str(&ff, "Preset", capture->preset);
+	if (result)
+		result = ff_write_kv_str(&ff, "Protocol", capture->protocol);
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", capture->bit_count);
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((capture->key >> 56) & 0xFF),
+		         (unsigned int)((capture->key >> 48) & 0xFF),
+		         (unsigned int)((capture->key >> 40) & 0xFF),
+		         (unsigned int)((capture->key >> 32) & 0xFF),
+		         (unsigned int)((capture->key >> 24) & 0xFF),
+		         (unsigned int)((capture->key >> 16) & 0xFF),
+		         (unsigned int)((capture->key >>  8) & 0xFF),
+		         (unsigned int)( capture->key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+	if (result && capture->key_2_len > 0)
+	{
+		subghz_format_key_2(key_str, sizeof(key_str), capture->key_2,
+		                    capture->key_2_len);
+		result = ff_write_kv_str(&ff, "Key_2", key_str);
+	}
+	if (result && capture->te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", capture->te);
+	if (result && capture->serial != 0)
+	{
+		result = ff_write_kv_uint32(&ff, "Serial", capture->serial);
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Btn", capture->button);
+		if (result)
+			result = ff_write_kv_uint32(&ff, "Cnt", capture->counter);
+	}
+
+	ff_close(&ff);
+	return result;
 }
 
 bool flipper_subghz_save_key_capture(
@@ -1531,14 +1599,7 @@ bool flipper_subghz_save_key_capture(
 		return flipper_subghz_save_kia_v6(
 		    path, capture->frequency, capture->preset, capture->bit_count,
 		    capture->key, capture->te, (uint8_t)capture->button, capture->fx);
-	if (capture->key_2_len > 0)
-		return flipper_subghz_save_key_with_key2(
-		    path, capture->frequency, capture->preset, capture->protocol,
-		    capture->bit_count, capture->key, capture->key_2,
-		    capture->key_2_len, capture->te);
-	return flipper_subghz_save_key(
-	    path, capture->frequency, capture->preset, capture->protocol,
-	    capture->bit_count, capture->key, capture->te);
+	return subghz_save_flipper_key_capture(path, capture);
 }
 
 /*============================================================================*/

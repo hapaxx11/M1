@@ -50,13 +50,51 @@ typedef struct {
 	FILE *f;
 } FIL;
 
-/* FILINFO for directory listing */
+/* FILINFO and DIR for directory listing */
 typedef struct {
 	BYTE fattrib;
+	char fname[256];
 } FILINFO;
+
+typedef struct {
+	void *context;
+} DIR;
 
 /* File attribute flags */
 #define AM_DIR   0x10
+
+#include "fatfs_dir_posix.h"
+
+static inline FRESULT f_opendir(DIR *dp, const char *path)
+{
+	if (!dp || !path) return FR_DISK_ERR;
+	dp->context = ff_stub_dir_open(path);
+	return dp->context ? FR_OK : FR_NO_PATH;
+}
+
+static inline FRESULT f_readdir(DIR *dp, FILINFO *fno)
+{
+	if (!dp || !dp->context || !fno) return FR_DISK_ERR;
+	bool is_directory = false;
+	if (!ff_stub_dir_next(dp->context, fno->fname, sizeof(fno->fname),
+	                      &is_directory))
+	{
+		fno->fname[0] = '\0';
+		return FR_OK;
+	}
+	fno->fattrib = is_directory ? AM_DIR : 0;
+	return FR_OK;
+}
+
+static inline FRESULT f_closedir(DIR *dp)
+{
+	if (dp && dp->context)
+	{
+		ff_stub_dir_close(dp->context);
+		dp->context = NULL;
+	}
+	return FR_OK;
+}
 
 /* Sector size constants used by m1_file_util.c */
 #ifndef FF_MAX_SS

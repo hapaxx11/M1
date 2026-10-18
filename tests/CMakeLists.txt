@@ -1006,6 +1006,27 @@ endif()
 add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate saved-capture identity matching and storage
+# ------------------------------------------------------------------
+add_executable(test_subghz_saved_capture
+    test_subghz_saved_capture.c
+    ${M1_ROOT}/Sub_Ghz/subghz_saved_match.c
+    ${M1_ROOT}/m1_csrc/subghz_saved_capture.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${STUBS_DIR}/fatfs_dir_posix.c
+)
+target_include_directories(test_subghz_saved_capture PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_saved_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_saved_capture PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_saved_capture COMMAND test_subghz_saved_capture)
+
+# ------------------------------------------------------------------
 # Module under test: synthetic ProtoPirate brute-force lifecycle contract
 # Exercises match/no-match, progress, cancellation, and empty-range behavior
 # without real protocol data or key-search logic.
