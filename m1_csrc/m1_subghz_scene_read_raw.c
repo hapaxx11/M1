@@ -240,8 +240,7 @@ static void scene_on_enter(SubGhzApp *app)
      * fresh from the Menu.  The flag is set by event handlers before they push
      * a child scene; it ensures we don't reset state on return.
      * Consume the flag immediately so it does not persist to future entries. */
-    bool is_resume = app->resume_from_child;
-    app->resume_from_child = false;
+    bool is_resume = subghz_read_raw_consume_resume(&app->resume_from_child);
 
     /* ------------------------------------------------------------------ */
     /* Resume path: returning from a child scene (Config).                 */
@@ -288,7 +287,8 @@ static void scene_on_enter(SubGhzApp *app)
      * RAW file from the Saved browser and wants to review / replay it.
      * raw_load_path is consumed here and cleared so subsequent scene
      * entries start fresh. */
-    if (app->raw_load_path[0] != '\0')
+    if (subghz_read_raw_should_load_preloaded(
+            is_resume, app->raw_load_path[0] != '\0'))
     {
         strncpy(raw_filepath, app->raw_load_path, RAW_FILEPATH_MAX);
         raw_filepath[RAW_FILEPATH_MAX] = '\0';

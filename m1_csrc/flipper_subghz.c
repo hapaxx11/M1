@@ -235,7 +235,8 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 				out->key = (out->key << 8) | key_bytes[i];
 			}
 		}
-		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0)
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0 ||
+		         subghz_strcasecmp(ff_get_key(ctx), "Key2") == 0)
 		{
 			/* Accept 2â€“8-byte values, retaining the low four bytes. */
 			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
@@ -388,7 +389,8 @@ static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out
 			/* M1 uses "BT:" (bit time) where Flipper uses "TE:" */
 			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
 		}
-		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0)
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0 ||
+		         subghz_strcasecmp(ff_get_key(ctx), "Key2") == 0)
 		{
 			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
 				out->has_key_2 = true;
@@ -1018,12 +1020,171 @@ bool flipper_subghz_save_psa_recovered(const char *path,
 
 /*============================================================================*/
 /**
+ * @brief  Save a VAG capture with the ProtoPirate field set needed to
+ *         re-encrypt frames for TX (Sub_Ghz/subghz_vag_encoder.c): Key (the
+ *         logical Key1, whose top byte is the manufacturer tag), `Key2:`
+ *         (note: not `Key_2:` ï¿½ upstream VAG uses the no-underscore name),
+ *         plus Serial/Btn/Cnt/Type.
+ */
+bool flipper_subghz_save_vag(const char *path,
+                              uint32_t    frequency,
+                              const char *preset,
+                              uint32_t    bit_count,
+                              uint64_t    key1,
+                              uint16_t    key2,
+                              uint32_t    te,
+                              uint32_t    serial,
+                              uint8_t     button,
+                              uint32_t    counter,
+                              uint8_t     type)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char buf[40];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != ' ')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Protocol", "VAG");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(buf, sizeof(buf),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key1 >> 56) & 0xFF),
+		         (unsigned int)((key1 >> 48) & 0xFF),
+		         (unsigned int)((key1 >> 40) & 0xFF),
+		         (unsigned int)((key1 >> 32) & 0xFF),
+		         (unsigned int)((key1 >> 24) & 0xFF),
+		         (unsigned int)((key1 >> 16) & 0xFF),
+		         (unsigned int)((key1 >>  8) & 0xFF),
+		         (unsigned int)( key1        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", buf);
+	}
+
+	if (result)
+	{
+		snprintf(buf, sizeof(buf), "%02X %02X",
+		         (unsigned int)((key2 >> 8) & 0xFF),
+		         (unsigned int)( key2       & 0xFF));
+		result = ff_write_kv_str(&ff, "Key_2", buf);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Serial", serial);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Btn", button);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Cnt", counter);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Type", type);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Save a Kia V6 capture with the fields needed to re-encrypt frames
+ *         for TX (subghz_kia_v6_encoder.c): Key (serial<<32|counter per the
+ *         decoder layout) plus Btn and Fx.
+ */
+bool flipper_subghz_save_kia_v6(const char *path,
+                                 uint32_t    frequency,
+                                 const char *preset,
+                                 uint32_t    bit_count,
+                                 uint64_t    key,
+                                 uint32_t    te,
+                                 uint8_t     button,
+                                 uint8_t     fx)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != ' ')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Protocol", "Kia V6");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Btn", button);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Fx", fx);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
  * @brief  Save a Renault V1 capture patched with the seed (IV) recovered by
  *         the Hitag2 brute-force search (subghz_renault_v1_bruteforce.c).
  *
  * Writes a Flipper Key file carrying the original Key/Key_2 plus Serial, Btn,
  * Cnt (full counter reconstructed from the seed), Hop, Seed (4 hex bytes) and
- * Recovered: 01 — the field set the ProtoPirate reference applies after a
+ * Recovered: 01 ï¿½ the field set the ProtoPirate reference applies after a
  * successful search.  The plaintext fields are sliced back out of the
  * captured frame itself (the Renault V1 wire format is cipher-free except
  * for the hop word).
@@ -1249,11 +1410,16 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
                                       const char *preset, const char *protocol,
                                       uint32_t bit_count, uint64_t key,
                                       uint32_t key_2, uint8_t key_2_len,
-                                      uint32_t te)
+                                      uint32_t te,
+                                      const flipper_subghz_key_capture_t *capture)
 {
 	flipper_file_t ff;
 	bool result = true;
 	char buf[32];
+	const bool is_vag = capture != NULL && protocol != NULL &&
+	                    strcmp(protocol, "VAG") == 0;
+	const bool is_kia_v6 = capture != NULL && protocol != NULL &&
+	                       strcmp(protocol, "Kia V6") == 0;
 
 	if (path == NULL || bit_count == 0)
 		return false;
@@ -1293,7 +1459,12 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 		result = ff_write_kv_str(&ff, "Payload", buf);
 	}
 
-	if (result && key_2_len > 0)
+	if (result && is_vag)
+	{
+		subghz_format_key_2(buf, sizeof(buf), key_2, 2u);
+		result = ff_write_kv_str(&ff, "Key_2", buf);
+	}
+	else if (result && key_2_len > 0)
 	{
 		subghz_format_key_2(buf, sizeof(buf), key_2, key_2_len);
 		result = ff_write_kv_str(&ff, "Key_2", buf);
@@ -1301,6 +1472,19 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 
 	if (result && te > 0)
 		result = ff_write_kv_uint32(&ff, "BT", te);
+
+	if (result && is_vag)
+		result = ff_write_kv_uint32(&ff, "Serial", capture->serial);
+	if (result && is_vag)
+		result = ff_write_kv_uint32(&ff, "Btn", capture->button);
+	if (result && is_vag)
+		result = ff_write_kv_uint32(&ff, "Cnt", capture->counter);
+	if (result && is_vag)
+		result = ff_write_kv_uint32(&ff, "Type", capture->type);
+	if (result && is_kia_v6)
+		result = ff_write_kv_uint32(&ff, "Btn", capture->button);
+	if (result && is_kia_v6)
+		result = ff_write_kv_uint32(&ff, "Fx", capture->fx);
 
 	ff_close(&ff);
 	return result;
@@ -1311,7 +1495,7 @@ bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        uint32_t bit_count, uint64_t key, uint32_t te)
 {
 	return subghz_save_m1native_key(path, frequency, preset, protocol,
-	                                bit_count, key, 0, 0, te);
+	                                bit_count, key, 0, 0, te, NULL);
 }
 
 bool flipper_subghz_save_m1native_key_with_key2(
@@ -1320,7 +1504,41 @@ bool flipper_subghz_save_m1native_key_with_key2(
     uint32_t key_2, uint8_t key_2_len, uint32_t te)
 {
 	return subghz_save_m1native_key(path, frequency, preset, protocol,
-	                                bit_count, key, key_2, key_2_len, te);
+	                                bit_count, key, key_2, key_2_len, te, NULL);
+}
+
+bool flipper_subghz_save_key_capture(
+    const char *path, bool m1_native,
+    const flipper_subghz_key_capture_t *capture)
+{
+	if (path == NULL || capture == NULL || capture->protocol == NULL)
+		return false;
+
+	const bool is_vag = strcmp(capture->protocol, "VAG") == 0;
+	const bool is_kia_v6 = strcmp(capture->protocol, "Kia V6") == 0;
+	if (m1_native)
+		return subghz_save_m1native_key(
+		    path, capture->frequency, capture->preset, capture->protocol,
+		    capture->bit_count, capture->key, capture->key_2,
+		    capture->key_2_len, capture->te, capture);
+	if (is_vag)
+		return flipper_subghz_save_vag(
+		    path, capture->frequency, capture->preset, capture->bit_count,
+		    capture->key, (uint16_t)capture->key_2, capture->te,
+		    capture->serial, (uint8_t)capture->button, capture->counter,
+		    capture->type);
+	if (is_kia_v6)
+		return flipper_subghz_save_kia_v6(
+		    path, capture->frequency, capture->preset, capture->bit_count,
+		    capture->key, capture->te, (uint8_t)capture->button, capture->fx);
+	if (capture->key_2_len > 0)
+		return flipper_subghz_save_key_with_key2(
+		    path, capture->frequency, capture->preset, capture->protocol,
+		    capture->bit_count, capture->key, capture->key_2,
+		    capture->key_2_len, capture->te);
+	return flipper_subghz_save_key(
+	    path, capture->frequency, capture->preset, capture->protocol,
+	    capture->bit_count, capture->key, capture->te);
 }
 
 /*============================================================================*/

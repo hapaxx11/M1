@@ -16,6 +16,7 @@
 #define M1_SUBGHZ_READ_RAW_STATE_H_
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum {
@@ -30,6 +31,21 @@ typedef enum {
     SubGhzReadRawStateLoadKeyTX,           /**< Async TX from pre-loaded file (Loaded → LoadKeyTX → Loaded) */
     SubGhzReadRawStateLoadKeyTXRepeat,     /**< Hold-to-repeat from Loaded (LoadKeyTX → LoadKeyTXRepeat while OK held) */
 } SubGhzReadRawState;
+
+static inline bool subghz_read_raw_consume_resume(bool *resume_from_child)
+{
+    if (resume_from_child == NULL)
+        return false;
+    const bool resume = *resume_from_child;
+    *resume_from_child = false;
+    return resume;
+}
+
+static inline bool subghz_read_raw_should_load_preloaded(bool is_resume,
+                                                        bool has_raw_path)
+{
+    return !is_resume && has_raw_path;
+}
 
 /**
  * @brief  Pure-logic test: true if the state is one of the four TX states.

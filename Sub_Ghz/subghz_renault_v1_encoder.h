@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "subghz_upload_entry.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,11 +40,8 @@ extern "C" {
 #define RENAULT_V1_SHORT_FRAMES     3u
 #define RENAULT_V1_UPLOAD_CAPACITY  1295u
 
-/** One upload entry: a constant level held for `duration` microseconds. */
-typedef struct {
-    uint32_t duration;
-    bool     level;  /* true = mark (high), false = space (low) */
-} renault_v1_upload_entry_t;
+/** One upload entry (shared waveform type). */
+typedef subghz_upload_entry_t renault_v1_upload_entry_t;
 
 /*============================================================================*/
 /* Frame encryption (seed path)                                                */

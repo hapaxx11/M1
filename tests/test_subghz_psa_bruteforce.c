@@ -51,6 +51,7 @@ static void make_capture(uint32_t w0, uint32_t w1, uint64_t *key1,
 /* Expected field extraction, mirroring the module contract, so the tests can
  * assert results independently of the implementation's expression of them. */
 static void expect_fields(uint32_t v0, uint32_t v1,
+                          subghz_psa_bf_phase_t phase,
                           const subghz_psa_bf_result_t *r)
 {
     const uint8_t b2 = (uint8_t)(v0 >> 24);
@@ -66,9 +67,11 @@ static void expect_fields(uint32_t v0, uint32_t v1,
     TEST_ASSERT_EQUAL_HEX32(((uint32_t)b2 << 16) | ((uint32_t)b3 << 8) | b4,
                             r->serial);
     TEST_ASSERT_EQUAL_HEX32((((uint32_t)b5 & 0x0Fu) << 24) |
-                                ((uint32_t)b6 << 16) | ((uint32_t)b7 << 8) | b8,
+                                ((uint32_t)b6 << 16) | ((uint32_t)b7 << 8) |
+                                (phase == PSA_BF_PHASE_1 ? b8 : 0u),
                             r->counter);
-    TEST_ASSERT_EQUAL_UINT16(b9, r->crc);
+    TEST_ASSERT_EQUAL_UINT16(phase == PSA_BF_PHASE_1 ? b9 :
+                             (uint16_t)(((uint16_t)b8 << 8) | b9), r->crc);
     TEST_ASSERT_EQUAL_HEX32(r->serial, r->seed);
     TEST_ASSERT_EQUAL_UINT8(0x36u, r->type);
 }
@@ -138,9 +141,10 @@ void test_extract_result_maps_fields(void)
 {
     subghz_psa_bf_result_t r;
     memset(&r, 0, sizeof(r));
-    subghz_psa_bf_extract_result(0xABCD0152u, 0x12345678u, 0x23ABCD01u, &r);
+    subghz_psa_bf_extract_result(0xABCD0152u, 0x12345678u, 0x23ABCD01u,
+                                 PSA_BF_PHASE_1, &r);
 
-    expect_fields(0xABCD0152u, 0x12345678u, &r);
+    expect_fields(0xABCD0152u, 0x12345678u, PSA_BF_PHASE_1, &r);
     TEST_ASSERT_EQUAL_HEX32(0x23ABCD01u, r.candidate);
 }
 
@@ -193,7 +197,7 @@ void test_phase1_finds_fabricated_capture(void)
     TEST_ASSERT_EQUAL_HEX32(cand, job.result);
     TEST_ASSERT_EQUAL_UINT32(3u, job.progress_current);
     TEST_ASSERT_EQUAL_HEX32(cand, r.candidate);
-    expect_fields(v0, v1, &r);
+    expect_fields(v0, v1, PSA_BF_PHASE_1, &r);
 }
 
 void test_phase1_hit_at_range_start(void)
@@ -291,7 +295,7 @@ void test_phase2_finds_fabricated_capture(void)
     TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_FOUND, job.status);
     TEST_ASSERT_EQUAL_HEX32(cand, job.result);
     TEST_ASSERT_EQUAL_HEX32(cand, r.candidate);
-    expect_fields(v0, v1, &r);
+    expect_fields(v0, v1, PSA_BF_PHASE_2, &r);
 }
 
 void test_phase2_rejects_phase1_fabrication_and_vice_versa(void)

@@ -1483,6 +1483,112 @@ static void read_tmp(const char *path, char *buf, size_t cap)
 	buf[n] = '\0';
 }
 
+void test_save_vag_key_capture_preserves_native_fields(void)
+{
+	const char *path = "/tmp/test_vag_capture_native.sgh";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 434420000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "VAG",
+		.bit_count = 96,
+		.key = 0xC0AABBCCDDEEFF00ULL,
+		.key_2 = 0x4E2Au,
+		.te = 300,
+		.serial = 0x12345678u,
+		.button = 2u,
+		.counter = 0x005634u,
+		.type = 1u,
+	};
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, true, &capture));
+
+	char text[640];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Filetype: M1 SubGHz PACKET"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 4E 2A"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 22068"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Type: 1"));
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0x4E2Au, sig.key_2);
+
+	remove(path);
+}
+
+void test_save_kia_v6_key_capture_preserves_native_fields(void)
+{
+	const char *path = "/tmp/test_kia_v6_capture_native.sgh";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Kia V6",
+		.bit_count = 144,
+		.key = 0x123456003CF089ULL,
+		.te = 200,
+		.button = 2u,
+		.fx = 0x34u,
+	};
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, true, &capture));
+
+	char text[640];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Filetype: M1 SubGHz PACKET"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: Kia V6"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Fx: 52"));
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL_STRING("Kia V6", sig.protocol);
+
+	remove(path);
+}
+
+void test_load_vag_legacy_key2_field_aliases(void)
+{
+	const char *flipper_path = "/tmp/test_vag_legacy_key2.sub";
+	write_tmp(flipper_path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 434420000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: VAG\r\n"
+	    "Bit: 96\r\n"
+	    "Key: C0 AA BB CC DD EE FF 00\r\n"
+	    "Key2: 4E 2A\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(flipper_path, &sig));
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0x4E2Au, sig.key_2);
+	remove(flipper_path);
+
+	const char *native_path = "/tmp/test_vag_legacy_key2.sgh";
+	write_tmp(native_path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 434420000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: VAG\r\n"
+	    "Bits: 96\r\n"
+	    "Payload: 0xC0AABBCCDDEEFF00\r\n"
+	    "Key2: 4E 2A\r\n");
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(native_path, &sig));
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0x4E2Au, sig.key_2);
+	remove(native_path);
+}
+
 void test_save_psa_recovered_writes_all_fields(void)
 {
 	const char *path = "/tmp/test_psa_recovered.sub";
@@ -1603,6 +1709,50 @@ void test_save_renault_v1_recovered_rejects_null(void)
 	    104, 0x123456781A8CDEADULL, 0xBEEFBCu, 125, 0x12345678u));
 }
 
+void test_save_kia_v6_writes_tx_fields(void)
+{
+	const char *path = "/tmp/test_kia_v6.sub";
+	bool ok = flipper_subghz_save_kia_v6(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    144, 0x123456003CF089ULL, 200, 2u, 0x34u);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[512];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: Kia V6"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 144"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: 00 12 34 56 00 3C F0 89"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 200"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Fx: 52"));   /* 0x34 */
+
+	remove(path);
+}
+
+void test_save_vag_writes_tx_fields(void)
+{
+	const char *path = "/tmp/test_vag.sub";
+	bool ok = flipper_subghz_save_vag(
+	    path, 434420000, "FuriHalSubGhzPresetOok650Async",
+	    96, 0xC0AABBCCDDEEFF00ULL, 0x4E2Au, 300,
+	    0x12345678u, 2u, 0x005634u, 1u);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[640];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: VAG"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 96"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: C0 AA BB CC DD EE FF 00"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 4E 2A"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 300"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 305419896"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 22068"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Type: 1"));
+
+	remove(path);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1710,6 +1860,9 @@ int main(void)
 	RUN_TEST(test_save_key_with_key2_roundtrip);
 	RUN_TEST(test_save_key_plain_writes_no_key2_line);
 	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
+	RUN_TEST(test_save_vag_key_capture_preserves_native_fields);
+	RUN_TEST(test_save_kia_v6_key_capture_preserves_native_fields);
+	RUN_TEST(test_load_vag_legacy_key2_field_aliases);
 	RUN_TEST(test_load_flipper_key_renault_key2_8byte_field);
 	RUN_TEST(test_save_key_with_key2_three_bytes_roundtrip);
 
@@ -1720,6 +1873,12 @@ int main(void)
 	/* Renault V1 Hitag2 brute-force recovered-capture write-back */
 	RUN_TEST(test_save_renault_v1_recovered_writes_all_fields);
 	RUN_TEST(test_save_renault_v1_recovered_rejects_null);
+
+	/* Kia V6 capture save with TX fields */
+	RUN_TEST(test_save_kia_v6_writes_tx_fields);
+
+	/* VAG capture save with TX fields */
+	RUN_TEST(test_save_vag_writes_tx_fields);
 
 	return UNITY_END();
 }
