@@ -135,6 +135,7 @@ typedef enum {
 } lfrfid_state_t;
 
 #define LFRFID_WRITE_ERROR_COUNT	(10)
+#define LFRFID_TPMS_ACTIVATION_MAX_MS	(3200U)
 
 /* Carrier definitions and cycle state machine (pure-logic, host-tested). */
 #include "lfrfid_carrier.h"
@@ -153,6 +154,7 @@ void safe_free(void **pp);
 //void lfrfidThread(void *param);
 void lfrfid_Init(void);
 void lfrfid_DeInit(void);
+bool lfrfid_tpms_activation_request(bool active);
 
 void bytes_to_u32_array(BitOrder order, const uint8_t in_data[], uint32_t out_data[], int size);
 

@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #define TPMS_HISTORY_CAPACITY 8U
+#define TPMS_ACTIVATION_DURATION_MS 3000U
 
 typedef struct {
     bool valid;
@@ -40,6 +41,9 @@ typedef struct {
     uint8_t selected_sensor;
     bool detail_view;
     bool radio_active;
+    bool lfrfid_worker_owned;
+    uint32_t activation_started_ms;
+    bool activation_active;
 } tpms_receiver_app_state_t;
 
 void tpms_history_reset(tpms_history_t *history);
@@ -49,6 +53,11 @@ uint8_t tpms_history_selection_index(const tpms_history_t *history,
 const tpms_sensor_t *tpms_history_get(const tpms_history_t *history,
                                       uint8_t newest_index);
 uint8_t tpms_sensor_age_min(const tpms_sensor_t *sensor, uint32_t now_ms);
+bool tpms_activation_expired(uint32_t started_ms, uint32_t now_ms);
+bool tpms_lfrfid_worker_init_needed(bool returning_from_child,
+                                   bool worker_available);
+bool tpms_lfrfid_worker_deinit_needed(bool worker_owned,
+                                     bool returning_from_child);
 bool tpms_schrader_gg4_parse(uint64_t data, uint16_t bit_length,
                              tpms_telemetry_t *telemetry);
 

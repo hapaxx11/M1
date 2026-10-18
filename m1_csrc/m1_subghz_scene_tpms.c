@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app_freertos.h"
 #include "stm32h5xx_hal.h"
+#include "lfrfid.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_settings.h"
@@ -49,6 +51,15 @@ static void stop_rx(tpms_receiver_app_state_t *state)
     }
 }
 
+static void stop_activation(tpms_receiver_app_state_t *state)
+{
+    if (state->activation_active)
+    {
+        (void)lfrfid_tpms_activation_request(false);
+        state->activation_active = false;
+    }
+}
+
 static void start_rx(SubGhzApp *app)
 {
     tpms_receiver_app_state_t *state = app->tpms_state;
@@ -83,6 +94,12 @@ static void scene_on_enter(SubGhzApp *app)
     }
 
     tpms_receiver_app_state_t *state = app->tpms_state;
+    if (tpms_lfrfid_worker_init_needed(
+            resume_from_child, lfrfid_q_hdl != NULL))
+    {
+        lfrfid_Init();
+        state->lfrfid_worker_owned = true;
+    }
     if (!resume_from_child)
     {
         state->saved_custom_frequency_hz = subghz_get_user_custom_freq_ext();
@@ -124,6 +141,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else
             {
+                stop_activation(state);
                 subghz_scene_pop(app);
             }
             return true;
@@ -137,11 +155,22 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventLeft:
+            stop_activation(state);
             stop_rx(state);
             subghz_decenc_set_tpms_only(false);
             app->resume_from_child = true;
             app->config_filter_mode = SubGhzConfigFilterFullRegistry;
             subghz_scene_push(app, SubGhzSceneConfig);
+            return true;
+
+        case SubGhzEventRight:
+            if (!state->activation_active &&
+                lfrfid_tpms_activation_request(true))
+            {
+                state->activation_started_ms = HAL_GetTick();
+                state->activation_active = true;
+                app->need_redraw = true;
+            }
             return true;
 
         case SubGhzEventUp:
@@ -200,6 +229,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         }
 
         case SubGhzEventTick:
+            if (state->activation_active &&
+                tpms_activation_expired(state->activation_started_ms, HAL_GetTick()))
+                stop_activation(state);
             if (state->radio_active)
                 app->rssi = subghz_read_rssi_ext();
             app->need_redraw = true;
@@ -214,8 +246,17 @@ static void scene_on_exit(SubGhzApp *app)
 {
     tpms_receiver_app_state_t *state = app->tpms_state;
     if (state != NULL)
+        stop_activation(state);
+    if (state != NULL)
         stop_rx(state);
     subghz_decenc_set_tpms_only(false);
+    if (state != NULL &&
+        tpms_lfrfid_worker_deinit_needed(
+            state->lfrfid_worker_owned, app->resume_from_child))
+    {
+        lfrfid_DeInit();
+        state->lfrfid_worker_owned = false;
+    }
 
     if (!app->resume_from_child && state != NULL)
     {
@@ -229,7 +270,7 @@ static void scene_on_exit(SubGhzApp *app)
     }
 }
 
-static void draw_detail(const tpms_sensor_t *sensor)
+static void draw_detail(const tpms_sensor_t *sensor, bool activation_active)
 {
     char line[32];
     const char *protocol_name = subghz_protocol_get_name(sensor->protocol);
@@ -263,9 +304,12 @@ static void draw_detail(const tpms_sensor_t *sensor)
                        (unsigned long)((sensor->frequency_hz % 1000000UL) / 1000UL),
                        (int)sensor->rssi);
         u8g2_DrawStr(&m1_u8g2, 0, 46, line);
-        (void)snprintf(line, sizeof(line), "Seen %um  x%u",
-                       (unsigned)tpms_sensor_age_min(sensor, HAL_GetTick()),
-                       (unsigned)sensor->receptions);
+        if (activation_active)
+            (void)snprintf(line, sizeof(line), "125kHz activation");
+        else
+            (void)snprintf(line, sizeof(line), "Seen %um  x%u",
+                           (unsigned)tpms_sensor_age_min(sensor, HAL_GetTick()),
+                           (unsigned)sensor->receptions);
         u8g2_DrawStr(&m1_u8g2, 0, 55, line);
     } while (m1_u8g2_nextpage());
 }
@@ -279,7 +323,7 @@ static void draw(SubGhzApp *app)
         const tpms_sensor_t *sensor =
             tpms_history_get(&state->history, state->selected_sensor);
         if (sensor != NULL)
-            draw_detail(sensor);
+            draw_detail(sensor, state->activation_active);
     }
     else
     {
@@ -336,8 +380,9 @@ static void draw(SubGhzApp *app)
                                    (state != NULL && state->detail_view) ?
                                        NULL : "OK:INFO",
                                    NULL,
-                                   (state != NULL && state->detail_view) ?
-                                       NULL : "U/D:LIST");
+                                   state == NULL ? NULL :
+                                       (state->activation_active ? "LF ON" :
+                                        (state->detail_view ? "R:ACT" : "U/D+R:ACT")));
         } while (m1_u8g2_nextpage());
     }
 }

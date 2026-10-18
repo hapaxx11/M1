@@ -7,6 +7,8 @@
 #ifndef LFRFID_HAL_H_
 #define LFRFID_HAL_H_
 
+#include <stdbool.h>
+
 void rfid_read_handler(TIM_HandleTypeDef *htim);
 void rfid_emul_handler(TIM_HandleTypeDef *htim);
 
@@ -17,6 +19,8 @@ void lfrfid_carrier_switch(uint32_t carrier_freq, float carrier_duty);
 
 void lfrfid_emul_hw_init(void);
 void lfrfid_emul_hw_deinit(void);
+bool lfrfid_tpms_activation_start(bool *supply_was_enabled);
+void lfrfid_tpms_activation_stop(bool supply_was_enabled);
 
 void lfrfid_RFIDOut_Init(uint32_t freq);
 void lfrfid_RFIDOut_Init_Ex(uint32_t freq, float duty);

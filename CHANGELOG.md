@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.15] - 2026-10-18
+
+### Added
+
+- **Sub-GHz: TPMS sensor activation** — Activate nearby TPMS sensors with a
+  125 kHz RFID field for three seconds while continuing Sub-GHz reception.
+
 ## [0.9.4.14] - 2026-10-17
 
 ### Added

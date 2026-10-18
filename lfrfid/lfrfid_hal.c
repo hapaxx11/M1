@@ -14,6 +14,7 @@
 #include "m1_log_debug.h"
 
 #include "lfrfid.h"
+#include "lfrfid_tpms_power.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -259,6 +260,35 @@ void lfrfid_emul_hw_deinit(void)
   rfid_rxtx_is_taking_this_irq = 0;
 
 } // rfid_emul_deinit
+
+bool lfrfid_tpms_activation_start(bool *supply_was_enabled)
+{
+    if (rfid_rxtx_is_taking_this_irq || supply_was_enabled == NULL)
+        return false;
+
+    *supply_was_enabled =
+        HAL_GPIO_ReadPin(EN_EXT_5V_GPIO_Port, EN_EXT_5V_Pin) == GPIO_PIN_SET;
+
+    HAL_GPIO_WritePin(EN_EXT_5V_GPIO_Port, EN_EXT_5V_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
+    lfrfid_RFIDOut_Init(125000U);
+    if (HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3) != HAL_OK)
+    {
+        lfrfid_tpms_activation_stop(*supply_was_enabled);
+        return false;
+    }
+
+    return true;
+}
+
+void lfrfid_tpms_activation_stop(bool supply_was_enabled)
+{
+    HAL_TIM_PWM_Stop(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);
+    HAL_GPIO_WritePin(RFID_OUT_GPIO_Port, RFID_OUT_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(EN_EXT_5V_GPIO_Port, EN_EXT_5V_Pin,
+                      supply_was_enabled ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
 
 
 /*============================================================================*/
@@ -549,4 +579,3 @@ void lfrfid_read_hw_deinit(void)
   //lfrfid_stream_deinit();
   rfid_rxtx_is_taking_this_irq = 0; // reset
 } // void rfid_read_deinit(void)
-

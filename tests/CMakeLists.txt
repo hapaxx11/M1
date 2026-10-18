@@ -1863,6 +1863,21 @@ endif()
 add_test(NAME lfrfid_carrier COMMAND test_lfrfid_carrier)
 
 # ------------------------------------------------------------------
+# lfrfid_tpms_power: TPMS activation supply ownership and restoration.
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_tpms_power
+    test_lfrfid_tpms_power.c
+)
+target_include_directories(test_lfrfid_tpms_power PRIVATE
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_lfrfid_tpms_power PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_tpms_power PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_tpms_power COMMAND test_lfrfid_tpms_power)
+
+# ------------------------------------------------------------------
 # Module under test: t5577_timing (T5577 write-timing constants)
 # Regression test for the da-pingwing timing bug fix: the previous
 # WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,
