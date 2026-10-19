@@ -459,6 +459,34 @@ void test_fiat_v2_is_decode_save_only(void)
 		proto->flags);
 }
 
+void test_honda_registry_metadata(void)
+{
+	static const struct {
+		const char *name;
+		uint32_t modulation;
+		uint16_t min_bits;
+	} expected[] = {
+		{ "Honda Static", SubGhzProtocolFlag_FM, 64 },
+		{ "Honda V1", SubGhzProtocolFlag_AM, 68 },
+		{ "Honda V2", SubGhzProtocolFlag_FM, 81 },
+	};
+
+	for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
+		int16_t idx = subghz_protocol_find_by_name(expected[i].name);
+		TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+		const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+		TEST_ASSERT_NOT_NULL(proto);
+		TEST_ASSERT_EQUAL(SubGhzProtocolTypeDynamic, proto->type);
+		TEST_ASSERT_EQUAL_UINT16(expected[i].min_bits,
+			proto->timing.min_count_bit_for_found);
+		TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+		                      SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save |
+		                      expected[i].modulation, proto->flags);
+		TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_PwmKeyReplay |
+		                     SubGhzProtocolFlag_Send, proto->flags);
+	}
+}
+
 void test_find_bett(void)
 {
 	int16_t idx = subghz_protocol_find_by_name("BETT");
@@ -748,6 +776,13 @@ static const ProtoFreqEntry known_proto_freqs[] = {
 	{ "Linear",          300000000UL, "Linear 300 MHz" },
 	/* Nord ICE EU gate/garage */
 	{ "Nord ICE",        433920000UL, "EU gate/garage remote" },
+	/* ProtoPirate Honda automotive remotes */
+	{ "Honda Static",    315000000UL, "Honda NA remote" },
+	{ "Honda Static",    433920000UL, "Honda EU remote" },
+	{ "Honda V1",        315000000UL, "Honda V1 NA remote" },
+	{ "Honda V1",        433920000UL, "Honda V1 EU remote" },
+	{ "Honda V2",        315000000UL, "Honda V2 NA remote" },
+	{ "Honda V2",        433920000UL, "Honda V2 EU remote" },
 };
 
 void test_known_protocol_freqs_have_presets(void)
@@ -824,6 +859,7 @@ int main(void)
 	RUN_TEST(test_find_clemsa);
 	RUN_TEST(test_find_centurion);
 	RUN_TEST(test_fiat_v2_is_decode_save_only);
+	RUN_TEST(test_honda_registry_metadata);
 	RUN_TEST(test_find_bett);
 	RUN_TEST(test_find_legrand);
 	RUN_TEST(test_find_linear_delta3);

@@ -1006,6 +1006,28 @@ endif()
 add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate Honda Static/V1/V2 decoders
+# ------------------------------------------------------------------
+add_executable(test_honda_decode
+    test_honda_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_static_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v1_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v2_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_honda_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_honda_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_honda_decode PRIVATE sanitizers)
+endif()
+add_test(NAME honda_decode COMMAND test_honda_decode)
+
+# ------------------------------------------------------------------
 # Module under test: ProtoPirate saved-capture identity matching and storage
 # ------------------------------------------------------------------
 add_executable(test_subghz_saved_capture

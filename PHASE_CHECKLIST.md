@@ -13,7 +13,7 @@
 
 ### Phase 2 — Honda decoder family
 - **Description**: Replace Honda Static, V1, and V2 placeholders with pure frame parsers and waveform decoders derived from ProtoPirate. Audit registry modulation, timing, bands, and frequencies; add synthetic positive/negative waveform tests.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Port ProtoPirate Honda decoders`
 
 ### Phase 3 — Ford decoder family
