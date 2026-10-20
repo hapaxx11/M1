@@ -1,6 +1,8 @@
 #include "unity.h"
 #include "m1_watchdog_boot_loop.h"
 
+#define TEST_IWDG_RESET_MASK (1u << 29)
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -10,7 +12,8 @@ void test_stale_signature_resets_in_range_counter_before_increment(void)
     const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
         2u,                  /* stale in-range value */
         expected_sig ^ 1u,   /* invalid signature */
-        true,                /* current reset is from WDT */
+        TEST_IWDG_RESET_MASK,
+        TEST_IWDG_RESET_MASK,
         expected_sig,
         3u);
 
@@ -25,7 +28,8 @@ void test_valid_signature_hits_boot_loop_threshold(void)
     const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
         2u,
         expected_sig,
-        true,
+        TEST_IWDG_RESET_MASK,
+        TEST_IWDG_RESET_MASK,
         expected_sig,
         3u);
 
@@ -40,7 +44,8 @@ void test_non_wdt_reset_clears_counter_even_when_signature_matches(void)
     const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
         2u,
         expected_sig,
-        false,
+        0u,
+        TEST_IWDG_RESET_MASK,
         expected_sig,
         3u);
 
@@ -55,13 +60,49 @@ void test_out_of_range_counter_is_clamped_before_increment(void)
     const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
         100u,
         expected_sig,
-        true,
+        TEST_IWDG_RESET_MASK,
+        TEST_IWDG_RESET_MASK,
         expected_sig,
         3u);
 
     TEST_ASSERT_EQUAL_UINT32(1u, eval.runtime_ctr);
     TEST_ASSERT_EQUAL_UINT32(1u, eval.stored_ctr);
     TEST_ASSERT_FALSE(eval.disable_iwdg);
+}
+
+void test_non_wdt_reset_flag_does_not_increment_counter(void)
+{
+    const uint32_t expected_sig = m1_wdt_boot_loop_build_sig_components(0u, 9u, 1u, 0u, 0u);
+    const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
+        2u,
+        expected_sig,
+        1u << 28,
+        TEST_IWDG_RESET_MASK,
+        expected_sig,
+        3u);
+
+    TEST_ASSERT_EQUAL_UINT32(0u, eval.runtime_ctr);
+    TEST_ASSERT_EQUAL_UINT32(0u, eval.stored_ctr);
+    TEST_ASSERT_FALSE(eval.disable_iwdg);
+}
+
+void test_valid_diagnostic_snapshot_suppresses_iwdg_with_cleared_live_flags(void)
+{
+    const uint32_t expected_sig = m1_wdt_boot_loop_build_sig_components(0u, 9u, 1u, 0u, 0u);
+    const uint32_t reset_cause = m1_wdt_boot_loop_select_reset_cause(
+        true,
+        TEST_IWDG_RESET_MASK,
+        0u);
+    const m1_wdt_boot_loop_eval_t eval = m1_wdt_boot_loop_evaluate(
+        2u,
+        expected_sig,
+        reset_cause,
+        TEST_IWDG_RESET_MASK,
+        expected_sig,
+        3u);
+
+    TEST_ASSERT_EQUAL_UINT32(TEST_IWDG_RESET_MASK, reset_cause);
+    TEST_ASSERT_TRUE(eval.disable_iwdg);
 }
 
 int main(void)
@@ -71,5 +112,7 @@ int main(void)
     RUN_TEST(test_valid_signature_hits_boot_loop_threshold);
     RUN_TEST(test_non_wdt_reset_clears_counter_even_when_signature_matches);
     RUN_TEST(test_out_of_range_counter_is_clamped_before_increment);
+    RUN_TEST(test_non_wdt_reset_flag_does_not_increment_counter);
+    RUN_TEST(test_valid_diagnostic_snapshot_suppresses_iwdg_with_cleared_live_flags);
     return UNITY_END();
 }
