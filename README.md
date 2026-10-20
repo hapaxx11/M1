@@ -11,6 +11,10 @@ improvements.
 
 ## GitHub-First — What Makes Hapax Different
 
+[![CI Build](https://github.com/hapaxx11/M1/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/ci.yml)
+[![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
+[![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
+
 Hapax uses a **GitHub-centered workflow** for development, releases, and
 documentation. GitHub is the primary home for source code, builds, releases,
 project discussion, and related project resources:
@@ -38,10 +42,6 @@ project discussion, and related project resources:
 - **Transparent development** — all code, issues, pull requests, security
   advisories, and discussions live on GitHub.  Nothing is hidden behind
   invite-only servers or private channels.
-
-[![CI Build](https://github.com/hapaxx11/M1/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/ci.yml)
-[![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
-[![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
 > **🔧 [Flash your M1 — open the Web Updater](https://hapaxx11.github.io/M1/)** *(work in progress)*
 >
