@@ -13,6 +13,14 @@ typedef struct
     bool disable_iwdg;
 } m1_wdt_boot_loop_eval_t;
 
+static inline uint32_t m1_wdt_boot_loop_select_reset_cause(
+    bool diagnostic_valid,
+    uint32_t diagnostic_reset_cause,
+    uint32_t live_reset_cause)
+{
+    return diagnostic_valid ? diagnostic_reset_cause : live_reset_cause;
+}
+
 static inline bool m1_wdt_boot_loop_was_wdt_reset(uint32_t reset_cause, uint32_t iwdg_reset_mask)
 {
     return (reset_cause & iwdg_reset_mask) != 0u;

@@ -111,7 +111,10 @@ void m1_wdt_init(void)
 
 	/* m1_diag_boot_report() snapshots and clears RCC reset flags earlier in
 	 * startup, so use its preserved snapshot rather than the now-cleared RSR. */
-	reset_cause = (g_m1_diag.magic == M1_DIAG_MAGIC) ? g_m1_diag.reset_cause : 0u;
+	reset_cause = m1_wdt_boot_loop_select_reset_cause(
+		g_m1_diag.magic == M1_DIAG_MAGIC,
+		g_m1_diag.reset_cause,
+		RCC->RSR);
 	was_wdt_reset = m1_wdt_boot_loop_was_wdt_reset(reset_cause, RCC_RSR_IWDGRSTF);
 	if(was_wdt_reset)
 	{
