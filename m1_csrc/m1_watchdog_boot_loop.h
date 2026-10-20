@@ -13,6 +13,11 @@ typedef struct
     bool disable_iwdg;
 } m1_wdt_boot_loop_eval_t;
 
+static inline bool m1_wdt_boot_loop_was_wdt_reset(uint32_t reset_cause, uint32_t iwdg_reset_mask)
+{
+    return (reset_cause & iwdg_reset_mask) != 0u;
+}
+
 static inline uint32_t m1_wdt_boot_loop_build_sig_components(
     uint32_t fw_major,
     uint32_t fw_minor,
@@ -32,12 +37,14 @@ static inline uint32_t m1_wdt_boot_loop_build_sig_components(
 static inline m1_wdt_boot_loop_eval_t m1_wdt_boot_loop_evaluate(
     uint32_t stored_ctr,
     uint32_t stored_sig,
-    bool was_wdt_reset,
+    uint32_t reset_cause,
+    uint32_t iwdg_reset_mask,
     uint32_t expected_sig,
     uint32_t boot_loop_max)
 {
     m1_wdt_boot_loop_eval_t out = {0u, 0u, false};
     uint32_t loop_ctr = stored_ctr;
+    bool was_wdt_reset = m1_wdt_boot_loop_was_wdt_reset(reset_cause, iwdg_reset_mask);
 
     if((stored_sig != expected_sig) || (loop_ctr > boot_loop_max))
     {

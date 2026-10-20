@@ -18,6 +18,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_fw_update_bl.h"
+#include "m1_diag.h"
 #include "m1_watchdog.h"
 #include "m1_watchdog_boot_loop.h"
 #include "m1_watchdog_decision.h"
@@ -89,6 +90,7 @@ void m1_wdt_init(void)
 	uint32_t loop_ctr;
 	uint32_t loop_sig;
 	uint32_t expected_sig;
+	uint32_t reset_cause;
 	bool was_wdt_reset;
 	m1_wdt_boot_loop_eval_t loop_eval;
 
@@ -107,7 +109,10 @@ void m1_wdt_init(void)
 	SET_BIT(DBGMCU->APB1FZR1, DBGMCU_APB1FZR1_DBG_IWDG_STOP);
 #endif
 
-	was_wdt_reset = (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != 0);
+	/* m1_diag_boot_report() snapshots and clears RCC reset flags earlier in
+	 * startup, so use its preserved snapshot rather than the now-cleared RSR. */
+	reset_cause = (g_m1_diag.magic == M1_DIAG_MAGIC) ? g_m1_diag.reset_cause : 0u;
+	was_wdt_reset = m1_wdt_boot_loop_was_wdt_reset(reset_cause, RCC_RSR_IWDGRSTF);
 	if(was_wdt_reset)
 	{
 		m1_device_stat.dev_reset_by_wdt = true;
@@ -155,7 +160,8 @@ void m1_wdt_init(void)
 	loop_eval = m1_wdt_boot_loop_evaluate(
 		loop_ctr,
 		loop_sig,
-		was_wdt_reset,
+		reset_cause,
+		RCC_RSR_IWDGRSTF,
 		expected_sig,
 		M1_WDT_BOOT_LOOP_MAX);
 	loop_ctr = loop_eval.runtime_ctr;
