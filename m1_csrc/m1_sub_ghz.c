@@ -2067,6 +2067,9 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint32_t key_type = 0;
 	uint32_t key_keyidx = 0xFFu;
 	uint32_t key2_tail = 0;
+	uint64_t key2_wide = 0;
+	uint32_t key3_crc = 0;
+	uint64_t tail_raw = 0;
 	/* Optional `CounterMode:` field on KeeLoq-family
 	 * .sub files.  Defaults to INCREMENT for files that omit the
 	 * field (matches the parse behaviour in flipper_subghz_load). */
@@ -2326,10 +2329,35 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		else if (strncmp(line_buf, "Key_2:", 6) == 0 ||
 		         strncmp(line_buf, "Key2:", 5) == 0)
 		{
-			/* Accept both the canonical Key_2 and legacy VAG Key2 field. */
+			/* VAG keeps the historical 16-bit tail; Ford V1 uses the full
+			 * 64-bit second key.  Both share this field name upstream. */
 			const char *key2_value =
 			    line_buf[3] == '_' ? line_buf + 6 : line_buf + 5;
 			key2_tail = subghz_vag_parse_key2(key2_value);
+			uint8_t key2_bytes[8] = {0};
+			const uint8_t key2_count =
+			    ff_parse_hex_bytes(key2_value, key2_bytes, sizeof(key2_bytes));
+			key2_wide = 0;
+			for (uint8_t i = 0; i < key2_count; i++)
+				key2_wide = (key2_wide << 8) | key2_bytes[i];
+		}
+		else if (strncmp(line_buf, "Key_3:", 6) == 0)
+		{
+			uint8_t key3_bytes[4] = {0};
+			if (ff_parse_hex_bytes(line_buf + 6, key3_bytes,
+			                       sizeof(key3_bytes)) == sizeof(key3_bytes))
+				key3_crc = ((uint32_t)key3_bytes[2] << 8) | key3_bytes[3];
+		}
+		else if (strncmp(line_buf, "TailRaw:", 8) == 0)
+		{
+			uint8_t tail_bytes[5] = {0};
+			if (ff_parse_hex_bytes(line_buf + 8, tail_bytes,
+			                       sizeof(tail_bytes)) == sizeof(tail_bytes))
+			{
+				tail_raw = 0;
+				for (uint8_t i = 0; i < sizeof(tail_bytes); i++)
+					tail_raw = (tail_raw << 8) | tail_bytes[i];
+			}
 		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
@@ -2425,6 +2453,22 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 
 		const SubGhzProtoPirateId pirate_id =
 		    subghz_proto_pirate_find_by_name(key_params.protocol);
+		if (pirate_id == SubGhzProtoPirate_FordV1)
+		{
+			/* Natural upstream layout: Key = raw[0..6], Key_2 = raw[7..14],
+			 * Key_3 = CRC16 in its low two bytes. */
+			for (uint8_t i = 0; i < 8u; i++)
+				key_params.extra[i] =
+				    (uint8_t)(key2_wide >> (56u - i * 8u));
+			key_params.extra[8] = (uint8_t)(key3_crc >> 8);
+			key_params.extra[9] = (uint8_t)key3_crc;
+		}
+		else if (pirate_id == SubGhzProtoPirate_FordV2)
+		{
+			for (uint8_t i = 0; i < 5u; i++)
+				key_params.extra[i] =
+				    (uint8_t)(tail_raw >> (32u - i * 8u));
+		}
 		if (pirate_id == SubGhzProtoPirate_KiaV6 ||
 		    pirate_id == SubGhzProtoPirate_VAG)
 		{

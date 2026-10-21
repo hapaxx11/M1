@@ -53,12 +53,13 @@ image.
 ProtoPirate frame identification is implemented in the pure-logic parse helpers
 and waveform decoders under `Sub_Ghz/protocols/`: Honda Static/V1/V2
 (`m1_honda_static_decode.c`, `m1_honda_v1_decode.c`,
-`m1_honda_v2_decode.c`), Fiat V2 (`m1_fiat_v2_decode.c`), Renault V1
-(`m1_renault_v1_decode.c`), PSA (`m1_psa_decode.c`), Ford V3
-(`m1_ford_v3_decode.c`), Kia V6 (`m1_kia_v6_decode.c`), and VAG
-(`m1_vag_decode.c`). These handle frame recognition and the protocol-specific
-fields documented by each decoder; they are separate from the generic job
-lifecycle in `subghz_bruteforce_job.c`.
+`m1_honda_v2_decode.c`), Ford V0/V1/V2 (`m1_ford_v0_decode.c`,
+`m1_ford_v1_decode.c`, `m1_ford_v2_decode.c`), Fiat V2
+(`m1_fiat_v2_decode.c`), Renault V1 (`m1_renault_v1_decode.c`), PSA
+(`m1_psa_decode.c`), Ford V3 (`m1_ford_v3_decode.c`), Kia V6
+(`m1_kia_v6_decode.c`), and VAG (`m1_vag_decode.c`). These handle frame
+recognition and the protocol-specific fields documented by each decoder; they
+are separate from the generic job lifecycle in `subghz_bruteforce_job.c`.
 
 ## Remaining ProtoPirate parity programme
 
@@ -85,7 +86,10 @@ headroom check):
    parsers and waveform state machines with positive/negative host tests. The
    registry now reflects their dynamic AM/FM, dual-band capabilities, and the
    capture window accommodates the full V2 preamble.
-3. **Ford decoders** — V0, V1, and V2, including FM/Manchester variants.
+3. **Ford decoders — implemented in this branch.** V0, V1, and V2 use real
+   parsers and waveform decoders with positive/negative host tests. Ford V1's
+   full 64-bit `Key_2` and CRC-derived `Key_3`, and Ford V2's `Tail31`/`TailRaw`,
+   are persisted in both save formats and feed the existing TX encoders.
 4. **Kia decoders** — V0, V1, V2, shared V3/V4, V5, and V7.
 5. **Fiat/Renault decoders** — Fiat V0/V1 and Renault V0; no new key-dependent
    TX claim and no Renault V1 full-key work.

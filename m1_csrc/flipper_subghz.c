@@ -48,36 +48,36 @@ static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static const char *stristr(const char *haystack, const char *needle);
 
-static bool subghz_parse_key_2(const char *value, uint32_t *key_2)
+static bool subghz_parse_key_2(const char *value, uint64_t *key_2,
+                               bool full_width)
 {
 	uint8_t key_bytes[9];
 	uint8_t count;
 	uint8_t i;
-	uint32_t v = 0;
+	uint64_t v = 0;
 
 	if (key_2 == NULL)
 		return false;
 
-	/* PSA writes 2 bytes; ProtoPirate Renault V1 writes 8 (low 3 carry the
-	 * frame tail).  Accept 2..8 bytes and keep the low 4, big-endian. */
+	/* ProtoPirate auxiliary fields are 2..8 bytes; keep all bytes big-endian. */
 	count = ff_parse_hex_bytes(value, key_bytes, sizeof(key_bytes));
 	if (count < 2 || count > 8)
 		return false;
 
-	for (i = (count > 4) ? (uint8_t)(count - 4) : 0; i < count; i++)
+	for (i = 0; i < count; i++)
 		v = (v << 8) | key_bytes[i];
-	*key_2 = v;
+	*key_2 = full_width ? v : (v & UINT32_MAX);
 	return true;
 }
 
-/* Format the low key_2_len bytes of key_2 as "AA BB[ CC[ DD]]" (big-endian). */
-static void subghz_format_key_2(char *buf, size_t size, uint32_t key_2,
+/* Format the low key_2_len bytes of key_2 as "AA BB[ ...]" (big-endian). */
+static void subghz_format_key_2(char *buf, size_t size, uint64_t key_2,
                                 uint8_t key_2_len)
 {
 	uint8_t n = 0;
 
-	if (key_2_len > 4)
-		key_2_len = 4;
+	if (key_2_len > 8)
+		key_2_len = 8;
 	for (uint8_t i = 0; i < key_2_len; i++)
 	{
 		int w = snprintf(buf + n, size - n, "%s%02X",
@@ -238,8 +238,9 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0 ||
 		         subghz_strcasecmp(ff_get_key(ctx), "Key2") == 0)
 		{
-			/* Accept 2–8-byte values, retaining the low four bytes. */
-			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
+			/* Accept 2–8 bytes; retain all 64 bits only for Ford V1. */
+			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2,
+				                   subghz_strcasecmp(out->protocol, "Ford V1") == 0))
 				out->has_key_2 = true;
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Type") == 0)
@@ -392,7 +393,8 @@ static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0 ||
 		         subghz_strcasecmp(ff_get_key(ctx), "Key2") == 0)
 		{
-			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
+			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2,
+				                   subghz_strcasecmp(out->protocol, "Ford V1") == 0))
 				out->has_key_2 = true;
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Type") == 0)
@@ -1400,6 +1402,38 @@ bool flipper_subghz_save_key_full(const char *path,
 	return result;
 }
 
+static uint16_t subghz_ford_v1_crc16(const flipper_subghz_key_capture_t *capture)
+{
+	uint8_t raw[15] = {0};
+	uint16_t remainder = 0;
+
+	for (uint8_t i = 0; i < 7; i++)
+		raw[i] = (uint8_t)(capture->key >> (48u - i * 8u));
+	for (uint8_t i = 0; i < 8; i++)
+		raw[7u + i] = (uint8_t)(capture->key_2 >> (56u - i * 8u));
+
+	for (uint8_t byte = 3; byte < 15; byte++)
+	{
+		remainder ^= (uint16_t)raw[byte] << 8;
+		for (uint8_t bit = 0; bit < 8; bit++)
+		{
+			remainder = (remainder & 0x8000u)
+			                ? (uint16_t)((remainder << 1) ^ 0x1021u)
+			                : (uint16_t)(remainder << 1);
+		}
+	}
+	return remainder;
+}
+
+static uint32_t subghz_ford_v2_tail31(uint64_t tail_raw)
+{
+	uint8_t raw[5];
+	for (uint8_t i = 0; i < sizeof(raw); i++)
+		raw[i] = (uint8_t)(tail_raw >> (32u - i * 8u));
+	return (((uint32_t)(raw[1] & 0x7Fu)) << 24) |
+	       ((uint32_t)raw[2] << 16) | ((uint32_t)raw[3] << 8) | raw[4];
+}
+
 /*============================================================================*/
 /**
  * @brief  Lightweight M1 native .sgh PACKET save — writes from individual fields.
@@ -1419,7 +1453,7 @@ bool flipper_subghz_save_key_full(const char *path,
 static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
                                       const char *preset, const char *protocol,
                                       uint32_t bit_count, uint64_t key,
-                                      uint32_t key_2, uint8_t key_2_len,
+                                      uint64_t key_2, uint8_t key_2_len,
                                       uint32_t te,
                                       const flipper_subghz_key_capture_t *capture)
 {
@@ -1430,6 +1464,10 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	                    strcmp(protocol, "VAG") == 0;
 	const bool is_kia_v6 = capture != NULL && protocol != NULL &&
 	                       strcmp(protocol, "Kia V6") == 0;
+	const bool is_ford_v1 = capture != NULL && protocol != NULL &&
+	                        strcmp(protocol, "Ford V1") == 0;
+	const bool is_ford_v2 = capture != NULL && protocol != NULL &&
+	                        strcmp(protocol, "Ford V2") == 0;
 
 	if (path == NULL || bit_count == 0)
 		return false;
@@ -1473,6 +1511,27 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	{
 		subghz_format_key_2(buf, sizeof(buf), key_2, 2u);
 		result = ff_write_kv_str(&ff, "Key_2", buf);
+	}
+	else if (result && is_ford_v1)
+	{
+		const uint16_t crc = subghz_ford_v1_crc16(capture);
+		subghz_format_key_2(buf, sizeof(buf), key_2, 8u);
+		result = ff_write_kv_str(&ff, "Key_2", buf);
+		if (result)
+		{
+			subghz_format_key_2(buf, sizeof(buf), crc, 4u);
+			result = ff_write_kv_str(&ff, "Key_3", buf);
+		}
+	}
+	else if (result && is_ford_v2)
+	{
+		result = ff_write_kv_uint32(&ff, "Tail31",
+		                            subghz_ford_v2_tail31(key_2));
+		if (result)
+		{
+			subghz_format_key_2(buf, sizeof(buf), key_2, 5u);
+			result = ff_write_kv_str(&ff, "TailRaw", buf);
+		}
 	}
 	else if (result && key_2_len > 0)
 	{
@@ -1525,6 +1584,8 @@ static bool subghz_save_flipper_key_capture(
 	flipper_file_t ff;
 	bool result = true;
 	char key_str[32];
+	const bool is_ford_v1 = strcmp(capture->protocol, "Ford V1") == 0;
+	const bool is_ford_v2 = strcmp(capture->protocol, "Ford V2") == 0;
 
 	if (!ff_open_write(&ff, path))
 		return false;
@@ -1554,7 +1615,28 @@ static bool subghz_save_flipper_key_capture(
 		         (unsigned int)( capture->key        & 0xFF));
 		result = ff_write_kv_str(&ff, "Key", key_str);
 	}
-	if (result && capture->key_2_len > 0)
+	if (result && is_ford_v1)
+	{
+		const uint16_t crc = subghz_ford_v1_crc16(capture);
+		subghz_format_key_2(key_str, sizeof(key_str), capture->key_2, 8u);
+		result = ff_write_kv_str(&ff, "Key_2", key_str);
+		if (result)
+		{
+			subghz_format_key_2(key_str, sizeof(key_str), crc, 4u);
+			result = ff_write_kv_str(&ff, "Key_3", key_str);
+		}
+	}
+	else if (result && is_ford_v2)
+	{
+		result = ff_write_kv_uint32(&ff, "Tail31",
+		                            subghz_ford_v2_tail31(capture->key_2));
+		if (result)
+		{
+			subghz_format_key_2(key_str, sizeof(key_str), capture->key_2, 5u);
+			result = ff_write_kv_str(&ff, "TailRaw", key_str);
+		}
+	}
+	else if (result && capture->key_2_len > 0)
 	{
 		subghz_format_key_2(key_str, sizeof(key_str), capture->key_2,
 		                    capture->key_2_len);

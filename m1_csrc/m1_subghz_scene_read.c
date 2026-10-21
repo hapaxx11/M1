@@ -145,7 +145,7 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
 
     const uint8_t k2_len = subghz_capture_key2_len(entry->info.protocol,
                                                    entry->info.serial_number);
-    const uint32_t k2 = subghz_capture_key2_value(&entry->info);
+    const uint64_t k2 = subghz_capture_key2_value(&entry->info);
     flipper_subghz_key_capture_t capture = {
         .frequency = entry->frequency,
         .preset = "FuriHalSubGhzPresetOok650Async",

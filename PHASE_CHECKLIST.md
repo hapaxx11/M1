@@ -18,7 +18,7 @@
 
 ### Phase 3 — Ford decoder family
 - **Description**: Replace Ford V0, V1, and V2 placeholders with real RX decoders and host-tested frame parsing, including the FM/Manchester variants and field persistence required by their captures.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Port ProtoPirate Ford V0-V2 decoders`
 
 ### Phase 4 — Kia decoder family

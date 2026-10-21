@@ -1626,6 +1626,101 @@ void test_save_kia_v6_flipper_derives_identity_fields(void)
 	remove(path);
 }
 
+static uint16_t test_ford_v1_crc16(uint64_t key1, uint64_t key2)
+{
+	uint8_t raw[15] = {0};
+	uint16_t remainder = 0;
+	for (uint8_t i = 0; i < 7; i++)
+		raw[i] = (uint8_t)(key1 >> (48u - i * 8u));
+	for (uint8_t i = 0; i < 8; i++)
+		raw[7u + i] = (uint8_t)(key2 >> (56u - i * 8u));
+	for (uint8_t byte = 3; byte < 15; byte++)
+	{
+		remainder ^= (uint16_t)raw[byte] << 8;
+		for (uint8_t bit = 0; bit < 8; bit++)
+			remainder = (remainder & 0x8000u)
+			                ? (uint16_t)((remainder << 1) ^ 0x1021u)
+			                : (uint16_t)(remainder << 1);
+	}
+	return remainder;
+}
+
+void test_save_ford_v1_capture_preserves_aux_fields(void)
+{
+	const uint64_t key1 = 0x12085678ULL;
+	const uint64_t key2 = 0x2204663010263000ULL;
+	const uint16_t crc = test_ford_v1_crc16(key1, key2);
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Ford V1",
+		.bit_count = 136,
+		.key = key1,
+		.key_2 = key2,
+		.key_2_len = 8,
+		.te = 65,
+		.serial = 0x12345678,
+		.button = 2,
+		.counter = 0x1234,
+	};
+	char expected[64];
+	snprintf(expected, sizeof(expected), "Key_3: 00 00 %02X %02X",
+	         (unsigned int)(crc >> 8), (unsigned int)(crc & 0xFFu));
+
+	const char *path = "/tmp/test_ford_v1_capture.sub";
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, false, &capture));
+	char text[1024];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 22 04 66 30 10 26 30 00"));
+	TEST_ASSERT_NOT_NULL(strstr(text, expected));
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_UINT64(key2, sig.key_2);
+	remove(path);
+
+	path = "/tmp/test_ford_v1_capture.sgh";
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, true, &capture));
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: 22 04 66 30 10 26 30 00"));
+	TEST_ASSERT_NOT_NULL(strstr(text, expected));
+	remove(path);
+}
+
+void test_save_ford_v2_capture_preserves_tail_fields(void)
+{
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.preset = "FuriHalSubGhzPresetOok650Async",
+		.protocol = "Ford V2",
+		.bit_count = 104,
+		.key = 0x7FA7123456781109ULL,
+		.key_2 = 0x1A5A5A5A5AULL,
+		.key_2_len = 5,
+		.te = 200,
+		.serial = 0x12345678,
+		.button = 0x11,
+		.counter = 0x1234,
+	};
+
+	const char *path = "/tmp/test_ford_v2_capture.sub";
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, false, &capture));
+	char text[1024];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Tail31: 1515870810"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TailRaw: 1A 5A 5A 5A 5A"));
+	remove(path);
+
+	path = "/tmp/test_ford_v2_capture.sgh";
+	TEST_ASSERT_TRUE(flipper_subghz_save_key_capture(path, true, &capture));
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Tail31: 1515870810"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TailRaw: 1A 5A 5A 5A 5A"));
+	remove(path);
+}
+
 void test_load_vag_legacy_key2_field_aliases(void)
 {
 	const char *flipper_path = "/tmp/test_vag_legacy_key2.sub";
@@ -1940,6 +2035,8 @@ int main(void)
 	RUN_TEST(test_save_decoded_key_capture_preserves_identity_fields);
 	RUN_TEST(test_save_decoded_native_capture_preserves_identity_fields);
 	RUN_TEST(test_save_kia_v6_flipper_derives_identity_fields);
+	RUN_TEST(test_save_ford_v1_capture_preserves_aux_fields);
+	RUN_TEST(test_save_ford_v2_capture_preserves_tail_fields);
 	RUN_TEST(test_load_vag_legacy_key2_field_aliases);
 	RUN_TEST(test_load_flipper_key_renault_key2_8byte_field);
 	RUN_TEST(test_save_key_with_key2_three_bytes_roundtrip);

@@ -74,11 +74,10 @@ typedef struct {
 	 * for files that omit the field or carry an unrecognised value. */
 	flipper_subghz_counter_mode_t counter_mode;
 	/* Optional `Key_2:` field carried by ProtoPirate captures — the second
-	 * key word (PSA: 16-bit; Renault V1: 24-bit low bytes of the 8-byte
-	 * field upstream writes).  The parser keeps the low 4 bytes,
-	 * big-endian; `has_key_2` distinguishes "field absent" from a genuine
-	 * zero value and is set only by the parser. */
-	uint32_t key_2;
+	 * key word (PSA: 16-bit; Renault V1: 24-bit; Ford V1: full 64-bit).
+	 * The parser keeps up to 8 bytes, big-endian; `has_key_2` distinguishes
+	 * "field absent" from a genuine zero value and is set only by the parser. */
+	uint64_t key_2;
 	bool     has_key_2;
 	/* Optional PSA frame type, as written by ProtoPirate and in recovered files. */
 	uint32_t protocol_type;
@@ -265,7 +264,7 @@ typedef struct {
     const char *protocol;
     uint32_t bit_count;
     uint64_t key;
-    uint32_t key_2;
+    uint64_t key_2;
     uint8_t key_2_len;
     uint32_t te;
     uint32_t serial;

@@ -39,7 +39,7 @@
 #define PACKET_PULSE_COUNT_MIN      40
 #endif
 #ifndef PACKET_PULSE_COUNT_MAX
-#define PACKET_PULSE_COUNT_MAX      1024
+#define PACKET_PULSE_COUNT_MAX      1088
 #endif
 
 /*============================================================================*/

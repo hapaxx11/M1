@@ -230,6 +230,55 @@ void test_ford_v1_encode_nonzero(void)
     TEST_ASSERT_EQUAL_UINT32(130, out[0].high_us);
 }
 
+static uint16_t test_pp_ford_v1_crc16(const uint8_t *raw)
+{
+    uint16_t remainder = 0;
+    for (uint8_t byte = 3; byte < 15; byte++)
+    {
+        remainder ^= (uint16_t)raw[byte] << 8;
+        for (uint8_t bit = 0; bit < 8; bit++)
+            remainder = (remainder & 0x8000u)
+                            ? (uint16_t)((remainder << 1) ^ 0x1021u)
+                            : (uint16_t)(remainder << 1);
+    }
+    return remainder;
+}
+
+void test_ford_v1_encoder_accepts_natural_key_layout(void)
+{
+    uint8_t expected[17] = {
+        0x00, 0x00, 0x00, 0x12, 0x08, 0x56, 0x78,
+        0x22, 0x04, 0x66, 0x30, 0x10, 0x26, 0x30, 0x00,
+        0x00, 0x00,
+    };
+    const uint16_t crc = test_pp_ford_v1_crc16(expected);
+    expected[15] = crc >> 8;
+    expected[16] = crc;
+
+    SubGhzRawPair out[8192];
+    SubGhzKeyParams params = make_params("Ford V1", 0x12085678ULL, 136);
+    for (uint8_t i = 0; i < 8; i++)
+        params.extra[i] = expected[7u + i];
+    params.extra[8] = expected[15];
+    params.extra[9] = expected[16];
+
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 8192, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+
+    uint8_t actual[17] = {0};
+    for (uint16_t bit = 0; bit < 136; bit++)
+    {
+        const SubGhzRawPair *pair = &out[401u + bit * 2u];
+        TEST_ASSERT_TRUE((pair->high_us == 65 && pair->low_us == 0) ||
+                         (pair->high_us == 0 && pair->low_us == 65));
+        TEST_ASSERT_TRUE((pair[1].high_us == 65 && pair[1].low_us == 0) ||
+                         (pair[1].high_us == 0 && pair[1].low_us == 65));
+        if (pair->high_us == 65)
+            actual[bit >> 3] |= (uint8_t)(1u << (7u - (bit & 7u)));
+    }
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, actual, 17);
+}
+
 void test_kia_v3_encode_nonzero(void)
 {
     SubGhzRawPair out[2048];
@@ -752,6 +801,7 @@ int main(void)
     RUN_TEST(test_honda_v2_encode_nonzero);
     RUN_TEST(test_ford_v2_encode_nonzero);
     RUN_TEST(test_ford_v1_encode_nonzero);
+    RUN_TEST(test_ford_v1_encoder_accepts_natural_key_layout);
     RUN_TEST(test_kia_v3_encode_nonzero);
     RUN_TEST(test_kia_v4_encode_nonzero);
     RUN_TEST(test_kia_v5_encode_nonzero);

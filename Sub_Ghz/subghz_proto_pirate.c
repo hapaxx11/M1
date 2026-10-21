@@ -2024,17 +2024,21 @@ static uint32_t encode_ford_v1_wrapper(const SubGhzKeyParams *params,
                                         uint8_t reps)
 {
     uint8_t raw17[FORD_V1_DATA_BYTES] = {0};
-
-    /* Try to use supplied raw bytes first. */
     bool has_raw = false;
-    for (int i = 0; i < 8; i++) {
-        raw17[i] = (uint8_t)(params->key_value >> (56 - i * 8));
+
+    /* Natural upstream layout: Key carries raw[0..6], extra[0..7] carries
+     * Key_2/raw[7..14], and extra[8..9] carries the CRC16. */
+    for (int i = 0; i < 7; i++) {
+        raw17[i] = (uint8_t)(params->key_value >> (48 - i * 8));
         if (raw17[i] != 0) has_raw = true;
     }
-    for (int i = 0; i < 9; i++) {
-        raw17[8 + i] = params->extra[i];
+    for (int i = 0; i < 8; i++) {
+        raw17[7 + i] = params->extra[i];
         if (params->extra[i] != 0) has_raw = true;
     }
+    raw17[15] = params->extra[8];
+    raw17[16] = params->extra[9];
+    if (params->extra[8] != 0 || params->extra[9] != 0) has_raw = true;
 
     if (!has_raw && params->serial != 0) {
         uint8_t seed_plain9[9] = {0};
