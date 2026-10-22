@@ -2,6 +2,7 @@
 
 #include "unity.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_raw_decoder.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,6 +24,25 @@ uint8_t subghz_decode_ford_v1(uint16_t protocol_index, uint16_t pulse_count);
 uint8_t subghz_decode_ford_v2(uint16_t protocol_index, uint16_t pulse_count);
 
 static uint16_t s_pulse_count;
+
+static bool ford_v1_raw_try_decode(const uint16_t *pulse_buf,
+                                   uint16_t pulse_count,
+                                   SubGhzRawDecodeResult *result,
+                                   void *user_ctx)
+{
+    (void)user_ctx;
+    memcpy(subghz_decenc_ctl.pulse_times, pulse_buf,
+           pulse_count * sizeof(*pulse_buf));
+    if (subghz_decode_ford_v1(FORD_V1, pulse_count) != 0)
+        return false;
+
+    result->protocol = FORD_V1;
+    result->key = subghz_decenc_ctl.n64_decodedvalue;
+    result->bit_len = subghz_decenc_ctl.ndecodedbitlength;
+    result->te = 65;
+    result->serial_number = subghz_decenc_ctl.n32_serialnumber;
+    return true;
+}
 
 static void emit_merge(bool level, uint32_t duration)
 {
@@ -425,7 +445,7 @@ static void v2_make_raw(uint8_t raw[13], uint32_t serial, uint8_t button,
     raw[12] = tail31;
 }
 
-static void v2_build_waveform(const uint8_t raw[13])
+static void v2_build_waveform(const uint8_t raw[13], uint16_t sync_duration)
 {
     s_pulse_count = 0;
     for (uint8_t i = 0; i < 70; i++)
@@ -433,7 +453,7 @@ static void v2_build_waveform(const uint8_t raw[13])
         emit_merge(false, 200);
         emit_merge(true, 200);
     }
-    emit_merge(false, 476);
+    emit_merge(false, sync_duration);
     emit_merge(true, 200);
     for (uint16_t bit_pos = 1; bit_pos < 104; bit_pos++)
     {
@@ -473,7 +493,7 @@ void test_ford_v2_frame_and_waveform(void)
     TEST_ASSERT_EQUAL_UINT32(tail31, parsed_tail31);
     TEST_ASSERT_EQUAL_UINT8(0x11, button);
 
-    v2_build_waveform(raw);
+    v2_build_waveform(raw, 476);
     TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
     TEST_ASSERT_EQUAL_UINT64(expected_key, subghz_decenc_ctl.n64_decodedvalue);
     TEST_ASSERT_EQUAL_UINT64(expected_tail, subghz_decenc_ctl.n32_key2);
@@ -496,8 +516,51 @@ void test_ford_v2_rejects_bad_sync_and_button(void)
 
     v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
     raw[6] = 0x30;
-    v2_build_waveform(raw);
+    v2_build_waveform(raw, 476);
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
+
+    v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
+    raw[0] = 0x7E;
+    v2_build_waveform(raw, 476);
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
+
+    v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
+    raw[1] = 0xA6;
+    v2_build_waveform(raw, 476);
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
+}
+
+void test_ford_v2_sync_timing_jitter_is_accepted(void)
+{
+    uint8_t raw[13];
+    v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
+    v2_build_waveform(raw, 456);
+
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
+    TEST_ASSERT_EQUAL_UINT32(0x12345678, subghz_decenc_ctl.n32_serialnumber);
+}
+
+void test_ford_v1_short_symbols_survive_raw_decode_pipeline(void)
+{
+    uint8_t raw_frame[17];
+    v1_make_raw(raw_frame, 0x12345678, 2, 0x1234);
+    v1_build_waveform(raw_frame);
+
+    TEST_ASSERT_GREATER_THAN_UINT16(PACKET_PULSE_TIME_MIN, 65);
+
+    int16_t raw_data[PACKET_PULSE_COUNT_MAX];
+    for (uint16_t i = 0; i < s_pulse_count; i++)
+    {
+        const int16_t duration = (int16_t)subghz_decenc_ctl.pulse_times[i];
+        raw_data[i] = (i & 1u) ? (int16_t)-duration : duration;
+    }
+
+    SubGhzRawDecodeResult result;
+    const uint8_t count = subghz_decode_raw_offline(
+        raw_data, s_pulse_count, 433920000u, &result, 1,
+        ford_v1_raw_try_decode, NULL);
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT32(0x12345678, result.serial_number);
 }
 
 int main(void)
@@ -509,5 +572,7 @@ int main(void)
     RUN_TEST(test_ford_v1_rejects_bad_crc);
     RUN_TEST(test_ford_v2_frame_and_waveform);
     RUN_TEST(test_ford_v2_rejects_bad_sync_and_button);
+    RUN_TEST(test_ford_v2_sync_timing_jitter_is_accepted);
+    RUN_TEST(test_ford_v1_short_symbols_survive_raw_decode_pipeline);
     return UNITY_END();
 }

@@ -2,6 +2,7 @@
 
 #include "unity.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_raw_decoder.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -22,6 +23,24 @@ uint8_t subghz_decode_honda_v1(uint16_t protocol_index, uint16_t pulse_count);
 uint8_t subghz_decode_honda_v2(uint16_t protocol_index, uint16_t pulse_count);
 
 static uint16_t s_pulse_count;
+
+static bool honda_static_raw_try_decode(const uint16_t *pulse_buf,
+                                        uint16_t pulse_count,
+                                        SubGhzRawDecodeResult *result,
+                                        void *user_ctx)
+{
+    (void)user_ctx;
+    memcpy(subghz_decenc_ctl.pulse_times, pulse_buf,
+           pulse_count * sizeof(*pulse_buf));
+    if (subghz_decode_honda_static(HONDA_STATIC, pulse_count) != 0)
+        return false;
+
+    result->protocol = HONDA_STATIC;
+    result->key = subghz_decenc_ctl.n64_decodedvalue;
+    result->bit_len = subghz_decenc_ctl.ndecodedbitlength;
+    result->te = 63;
+    return true;
+}
 
 static void emit_merge(bool level, uint32_t duration)
 {
@@ -158,6 +177,30 @@ void test_honda_static_waveform_decode_and_checksum_rejection(void)
     packet[7] ^= 1u;
     build_static_waveform(packet);
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_honda_static(HONDA_STATIC, s_pulse_count));
+}
+
+void test_honda_static_short_symbols_survive_raw_decode_pipeline(void)
+{
+    uint8_t packet[9];
+    make_static_packet(packet, 0x1234567, 0xABCDEF, 2);
+    build_static_waveform(packet);
+
+    TEST_ASSERT_GREATER_THAN_UINT16(PACKET_PULSE_TIME_MIN, 63);
+
+    int16_t raw_data[PACKET_PULSE_COUNT_MAX];
+    for (uint16_t i = 0; i < s_pulse_count; i++)
+    {
+        const int16_t duration = (int16_t)subghz_decenc_ctl.pulse_times[i];
+        raw_data[i] = (i & 1u) ? (int16_t)-duration : duration;
+    }
+
+    SubGhzRawDecodeResult result;
+    const uint8_t count = subghz_decode_raw_offline(
+        raw_data, s_pulse_count, 433920000u, &result, 1,
+        honda_static_raw_try_decode, NULL);
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT64(static_compact_key(0x1234567, 0xABCDEF, 2),
+                             result.key);
 }
 
 static void make_v1_bits(uint8_t bits[12], uint64_t key, uint8_t crc)
@@ -439,6 +482,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_honda_static_packet_and_reverse_variant);
     RUN_TEST(test_honda_static_waveform_decode_and_checksum_rejection);
+    RUN_TEST(test_honda_static_short_symbols_survive_raw_decode_pipeline);
     RUN_TEST(test_honda_v1_frame_alignment_and_button_validation);
     RUN_TEST(test_honda_v1_waveform_decode_and_button_rejection);
     RUN_TEST(test_honda_v2_frame_validation);

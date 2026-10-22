@@ -1010,6 +1010,7 @@ add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 # ------------------------------------------------------------------
 add_executable(test_honda_decode
     test_honda_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_static_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v1_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v2_decode.c
@@ -1032,6 +1033,7 @@ add_test(NAME honda_decode COMMAND test_honda_decode)
 # ------------------------------------------------------------------
 add_executable(test_ford_decode
     test_ford_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v0_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v1_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v2_decode.c

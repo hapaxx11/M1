@@ -112,8 +112,6 @@ static bool ford_v2_try_cells(const uint8_t *cells, uint16_t cell_count,
                               uint16_t protocol_index, bool invert)
 {
     uint8_t raw[FORD_V2_DATA_BYTES] = {0};
-    raw[0] = FORD_V2_SYNC_0;
-    raw[1] = FORD_V2_SYNC_1;
 
     for (uint16_t bit_pos = 1; bit_pos < FORD_V2_DATA_BITS; bit_pos++)
     {
@@ -140,7 +138,9 @@ uint8_t subghz_decode_ford_v2(uint16_t protocol_index, uint16_t pulse_count)
     uint16_t preamble_count = 0;
     for (uint16_t sync = 0; sync < pulse_count; sync++)
     {
-        if (ford_v2_is_short(subghz_decenc_ctl.pulse_times[sync]))
+        if (ford_v2_is_short(subghz_decenc_ctl.pulse_times[sync]) &&
+            !(preamble_count >= FORD_V2_PREAMBLE_MIN &&
+              ford_v2_is_sync(subghz_decenc_ctl.pulse_times[sync])))
         {
             if (preamble_count < UINT16_MAX)
                 preamble_count++;
