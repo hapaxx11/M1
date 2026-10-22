@@ -222,10 +222,10 @@ void test_null_callback_returns_zero(void)
 
 void test_all_noise_no_decode(void)
 {
-    /* All samples below PACKET_PULSE_TIME_MIN (120) */
+    /* All samples below PACKET_PULSE_TIME_MIN. */
     int16_t raw[60];
     for (int i = 0; i < 60; i++)
-        raw[i] = (int16_t)((i % 2 == 0) ? 50 : -50);
+        raw[i] = (int16_t)((i % 2 == 0) ? 40 : -40);
 
     SubGhzRawDecodeResult results[4];
     MockDecodeCtx ctx = make_mock(true, 1, 0x123, 40);
@@ -246,7 +246,7 @@ void test_noise_resets_accumulator(void)
     for (int i = 0; i < 20; i++)
         raw[idx++] = (int16_t)((i % 2 == 0) ? 300 : -300);
     /* 1 noise pulse */
-    raw[idx++] = 50;  /* below minimum */
+    raw[idx++] = 40;  /* below minimum */
     /* 20 more valid pulses */
     for (int i = 0; i < 20; i++)
         raw[idx++] = (int16_t)((i % 2 == 0) ? 300 : -300);
