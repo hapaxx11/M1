@@ -41,6 +41,12 @@ static bool ford_v2_is_sync(uint16_t duration)
     return get_diff(duration, FORD_V2_SYNC_US) < FORD_V2_TE_DELTA;
 }
 
+static bool ford_v2_sync_is_nearer(uint16_t duration)
+{
+    return get_diff(duration, FORD_V2_SYNC_US) <
+           get_diff(duration, FORD_V2_TE_SHORT);
+}
+
 static bool ford_v2_button_valid(uint8_t button)
 {
     return button == 0x10u || button == 0x11u || button == 0x13u ||
@@ -140,7 +146,8 @@ uint8_t subghz_decode_ford_v2(uint16_t protocol_index, uint16_t pulse_count)
     {
         if (ford_v2_is_short(subghz_decenc_ctl.pulse_times[sync]) &&
             !(preamble_count >= FORD_V2_PREAMBLE_MIN &&
-              ford_v2_is_sync(subghz_decenc_ctl.pulse_times[sync])))
+              ford_v2_is_sync(subghz_decenc_ctl.pulse_times[sync]) &&
+              ford_v2_sync_is_nearer(subghz_decenc_ctl.pulse_times[sync])))
         {
             if (preamble_count < UINT16_MAX)
                 preamble_count++;

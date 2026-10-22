@@ -445,13 +445,14 @@ static void v2_make_raw(uint8_t raw[13], uint32_t serial, uint8_t button,
     raw[12] = tail31;
 }
 
-static void v2_build_waveform(const uint8_t raw[13], uint16_t sync_duration)
+static void v2_build_waveform(const uint8_t raw[13], uint16_t sync_duration,
+                              uint16_t preamble_duration)
 {
     s_pulse_count = 0;
     for (uint8_t i = 0; i < 70; i++)
     {
-        emit_merge(false, 200);
-        emit_merge(true, 200);
+        emit_merge(false, preamble_duration);
+        emit_merge(true, preamble_duration);
     }
     emit_merge(false, sync_duration);
     emit_merge(true, 200);
@@ -493,7 +494,7 @@ void test_ford_v2_frame_and_waveform(void)
     TEST_ASSERT_EQUAL_UINT32(tail31, parsed_tail31);
     TEST_ASSERT_EQUAL_UINT8(0x11, button);
 
-    v2_build_waveform(raw, 476);
+    v2_build_waveform(raw, 476, 200);
     TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
     TEST_ASSERT_EQUAL_UINT64(expected_key, subghz_decenc_ctl.n64_decodedvalue);
     TEST_ASSERT_EQUAL_UINT64(expected_tail, subghz_decenc_ctl.n32_key2);
@@ -516,17 +517,17 @@ void test_ford_v2_rejects_bad_sync_and_button(void)
 
     v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
     raw[6] = 0x30;
-    v2_build_waveform(raw, 476);
+    v2_build_waveform(raw, 476, 200);
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
 
     v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
     raw[0] = 0x7E;
-    v2_build_waveform(raw, 476);
+    v2_build_waveform(raw, 476, 200);
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
 
     v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
     raw[1] = 0xA6;
-    v2_build_waveform(raw, 476);
+    v2_build_waveform(raw, 476, 200);
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
 }
 
@@ -534,10 +535,25 @@ void test_ford_v2_sync_timing_jitter_is_accepted(void)
 {
     uint8_t raw[13];
     v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
-    v2_build_waveform(raw, 456);
+    v2_build_waveform(raw, 456, 200);
 
     TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
     TEST_ASSERT_EQUAL_UINT32(0x12345678, subghz_decenc_ctl.n32_serialnumber);
+}
+
+void test_ford_v2_preamble_jitter_prefers_short_nominal(void)
+{
+    uint8_t raw[13];
+    v2_make_raw(raw, 0x12345678, 0x11, 0x1234, 0x5A5A5A5A);
+
+    const uint16_t jittered_pulses[] = {220, 240};
+    for (size_t i = 0; i < sizeof(jittered_pulses) / sizeof(jittered_pulses[0]); i++)
+    {
+        v2_build_waveform(raw, 476, jittered_pulses[i]);
+        TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v2(FORD_V2, s_pulse_count));
+        TEST_ASSERT_EQUAL_UINT32(0x12345678,
+                                 subghz_decenc_ctl.n32_serialnumber);
+    }
 }
 
 void test_ford_v1_short_symbols_survive_raw_decode_pipeline(void)
@@ -573,6 +589,7 @@ int main(void)
     RUN_TEST(test_ford_v2_frame_and_waveform);
     RUN_TEST(test_ford_v2_rejects_bad_sync_and_button);
     RUN_TEST(test_ford_v2_sync_timing_jitter_is_accepted);
+    RUN_TEST(test_ford_v2_preamble_jitter_prefers_short_nominal);
     RUN_TEST(test_ford_v1_short_symbols_survive_raw_decode_pipeline);
     return UNITY_END();
 }
