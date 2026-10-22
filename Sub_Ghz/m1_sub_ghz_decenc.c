@@ -18,6 +18,7 @@
 #include <m1_sub_ghz_decenc.h>
 #include "subghz_protocol_registry.h"
 #include "subghz_protocol_ignore.h"
+#include "subghz_pulse_buffer.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "si446x_cmd.h"
@@ -413,7 +414,10 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 	  {
 		  if (duration >= gap_min) // Possible gap between packets?
 		  {
-			  subghz_decenc_ctl.pulse_times[subghz_decenc_ctl.npulsecount++] = duration; // End bit
+			  subghz_pulse_buffer_append(
+			      subghz_decenc_ctl.pulse_times,
+			      &subghz_decenc_ctl.npulsecount,
+			      PACKET_PULSE_COUNT_MAX, duration); // End bit
 
 			  M1_LOG_D(M1_LOGDB_TAG, "Valid gap: %d, pulses:%d\r\n", duration, subghz_decenc_ctl.npulsecount);
 			  bool decoded = false;
@@ -476,7 +480,10 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 		  subghz_decenc_ctl.npulsecount = 0; // Reset rx buffer
 		  return PULSE_DET_IDLE; // error
 	  }
-	  subghz_decenc_ctl.pulse_times[subghz_decenc_ctl.npulsecount++] = duration;
+	  subghz_pulse_buffer_append(
+	      subghz_decenc_ctl.pulse_times,
+	      &subghz_decenc_ctl.npulsecount,
+	      PACKET_PULSE_COUNT_MAX, duration);
 	  // Read RSSI when half of this potential packet has been received
 	  if ( subghz_decenc_ctl.npulsecount==PACKET_PULSE_COUNT_MIN/2 )
 	  {
