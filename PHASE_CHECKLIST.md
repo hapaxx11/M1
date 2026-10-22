@@ -13,12 +13,12 @@
 
 ### Phase 2 — Replay and analyzer state
 - **Description**: Fix V3/V4 rolling-counter advancement, Remote Analyzer AM state retention, and explicit model preset hopping behavior.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Fix replay and analyzer state`
 
 ### Phase 3 — Saved capture matching and updates
 - **Description**: Fix static/rolling identity matching and nested search; make updates failure-safe and preserve recovered capture metadata.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Validation and final cleanup

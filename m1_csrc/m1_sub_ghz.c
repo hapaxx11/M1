@@ -2547,13 +2547,10 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			npairs = subghz_key_encode_custom(&key_params, pairs, max_pairs, 3);
 			pairs_per_rep = npairs > 0 ? (npairs + 2u) / 3u : 0;
 
-			if (npairs > 0 && (pirate_id == SubGhzProtoPirate_KiaV6 ||
-			                   pirate_id == SubGhzProtoPirate_VAG))
-			{
-				advance_proto_pirate_counter = true;
-				proto_pirate_counter_mask =
-				    (pirate_id == SubGhzProtoPirate_VAG) ? 0xFFFFFFu : 0xFFFFFFFFu;
-			}
+			proto_pirate_counter_mask =
+			    subghz_proto_pirate_counter_advance_mask(pirate_id, npairs);
+			advance_proto_pirate_counter =
+			    proto_pirate_counter_mask != 0u;
 		}
 		else
 		{

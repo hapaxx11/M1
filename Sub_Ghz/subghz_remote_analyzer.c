@@ -68,7 +68,7 @@ bool subghz_ra_fine_analyze(const int16_t *sweep_rssi, uint8_t count,
 
     /* Carry this cycle's AM verdict for subghz_ra_deliver(); it becomes the
      * remembered frame's flag if the fine or coarse path delivers. */
-    st->last_shown_am = *is_am;
+    st->fine_is_am = *is_am;
     return true;
 }
 
@@ -104,7 +104,7 @@ subghz_ra_frame_t subghz_ra_deliver(subghz_ra_state_t *st, int16_t trigger_dbm) 
         st->sample_hold = SUBGHZ_RA_HOLD_FRAMES;
         st->last_shown_freq = st->fine.best_freq;
         st->last_shown_rssi = st->fine.best_rssi;
-        /* last_shown_am already carries this cycle's verdict. */
+        st->last_shown_am = st->fine_is_am;
         frame.is_am = st->last_shown_am;
         frame.rssi = st->fine.best_rssi;
         /* subghz_ra_smooth() passes the first sample through unchanged and
@@ -117,7 +117,7 @@ subghz_ra_frame_t subghz_ra_deliver(subghz_ra_state_t *st, int16_t trigger_dbm) 
         st->sample_hold = SUBGHZ_RA_HOLD_FRAMES;
         st->last_shown_freq = st->coarse.best_freq;
         st->last_shown_rssi = st->coarse.best_rssi;
-        st->last_shown_am = fine_ran ? st->last_shown_am : false;
+        st->last_shown_am = fine_ran ? st->fine_is_am : false;
         frame.is_am = st->last_shown_am;
         frame.rssi = st->coarse.best_rssi;
         frame.frequency = subghz_ra_smooth(st, st->coarse.best_freq);

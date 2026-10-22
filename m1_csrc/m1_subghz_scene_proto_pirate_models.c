@@ -264,6 +264,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
              * menu item).  The Read scene owns the radio lifecycle. */
             app->freq_idx = (uint8_t)freq_idx;
             app->mod_idx  = entry->mod;
+            subghz_models_disable_hopping(&app->hopping);
             subghz_apply_config_ext((uint8_t)freq_idx, entry->mod);
             app->config_filter_mode = SubGhzConfigFilterProtoPirate;
             subghz_scene_push(app, SubGhzSceneRead);

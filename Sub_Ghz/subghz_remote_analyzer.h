@@ -36,6 +36,7 @@ typedef struct {
 typedef struct {
     subghz_ra_peak_t coarse;
     subghz_ra_peak_t fine;
+    bool fine_is_am;
     uint32_t fil_val;       /* adaptive smoother state; 0 = uninitialized */
     uint32_t last_shown_freq;
     int16_t  last_shown_rssi;

@@ -350,6 +350,30 @@ void test_deliver_coarse_blocked_while_hold_high(void) {
     TEST_ASSERT_EQUAL_INT16(-70, f.rssi);
 }
 
+void test_rejected_flat_sweep_preserves_held_am_classification(void) {
+    subghz_ra_state_t st;
+    subghz_ra_reset(&st);
+    int16_t sweep[POINTS];
+    bool is_am = false;
+
+    subghz_ra_coarse_feed(&st, BASE_FREQ, -80);
+    build_sweep(sweep, POINTS, -90);
+    sweep[14] = -80;
+    sweep[15] = -70;
+    sweep[16] = -80;
+    TEST_ASSERT_TRUE(subghz_ra_fine_analyze(sweep, POINTS, BASE_FREQ, &st, &is_am));
+    subghz_ra_frame_t frame = subghz_ra_deliver(&st, SUBGHZ_RA_TRIGGER_DBM);
+    TEST_ASSERT_TRUE(frame.is_am);
+
+    build_sweep(sweep, POINTS, -110);
+    TEST_ASSERT_TRUE(subghz_ra_fine_analyze(sweep, POINTS, BASE_FREQ, &st, &is_am));
+    TEST_ASSERT_FALSE(is_am);
+    frame = subghz_ra_deliver(&st, SUBGHZ_RA_TRIGGER_DBM);
+    TEST_ASSERT_EQUAL_UINT32(BASE_FREQ, frame.frequency);
+    TEST_ASSERT_EQUAL_INT16(-70, frame.rssi);
+    TEST_ASSERT_TRUE(frame.is_am);
+}
+
 void test_deliver_custom_trigger(void) {
     subghz_ra_state_t st;
     subghz_ra_reset(&st);
@@ -443,6 +467,7 @@ int main(void) {
     RUN_TEST(test_deliver_full_lifecycle);
     RUN_TEST(test_deliver_coarse_fallback_when_hold_low);
     RUN_TEST(test_deliver_coarse_blocked_while_hold_high);
+    RUN_TEST(test_rejected_flat_sweep_preserves_held_am_classification);
     RUN_TEST(test_deliver_custom_trigger);
 
     RUN_TEST(test_nearest_frequency_exact_match);

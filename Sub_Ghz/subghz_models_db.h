@@ -50,6 +50,12 @@ typedef struct {
     uint8_t count;
 } subghz_models_db_t;
 
+static inline void subghz_models_disable_hopping(bool *hopping)
+{
+    if (hopping)
+        *hopping = false;
+}
+
 /**
  * Parse a v2 models-database text (LF or CRLF).  Entries with an unknown
  * preset name or an out-of-range frequency are skipped; parsing succeeds

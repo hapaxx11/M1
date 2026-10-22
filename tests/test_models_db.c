@@ -304,6 +304,13 @@ static void test_parse_no_model_count_still_parses(void)
     TEST_ASSERT_EQUAL_UINT8(2, db.count);
 }
 
+static void test_explicit_model_selection_disables_previous_hopping(void)
+{
+    bool hopping = true;
+    subghz_models_disable_hopping(&hopping);
+    TEST_ASSERT_FALSE(hopping);
+}
+
 static void test_parse_model_count_larger_than_entries(void)
 {
     const char *text =
@@ -429,6 +436,7 @@ int main(void)
     RUN_TEST(test_parse_all_entries_bad_returns_false);
     RUN_TEST(test_parse_long_name_truncated_safely);
     RUN_TEST(test_parse_no_model_count_still_parses);
+    RUN_TEST(test_explicit_model_selection_disables_previous_hopping);
     RUN_TEST(test_parse_model_count_larger_than_entries);
     RUN_TEST(test_parse_empty_input_returns_false);
     RUN_TEST(test_parse_null_args_return_false);

@@ -1346,6 +1346,38 @@ void test_proto_pirate_counter_state_survives_capture_switches(void)
                  0x11223344u));
 }
 
+void test_kia_v3_v4_replay_preparations_advance_16_bit_counter(void)
+{
+    static const uint8_t protocols[] = {
+        SubGhzProtoPirate_KiaV3,
+        SubGhzProtoPirate_KiaV4,
+    };
+
+    for (size_t i = 0; i < sizeof(protocols) / sizeof(protocols[0]); i++)
+    {
+        subghz_proto_pirate_counter_state_t state = {0};
+        const uint32_t mask =
+            subghz_proto_pirate_counter_advance_mask(protocols[i], 1u);
+        TEST_ASSERT_EQUAL_UINT32(0xFFFFu, mask);
+
+        uint32_t counter = subghz_proto_pirate_counter_get(
+            &state, "/SUBGHZ/kia.sub", protocols[i], 0x1234u, 0xAABBCCDDu);
+        TEST_ASSERT_EQUAL_UINT32(0x1234u, counter);
+        subghz_proto_pirate_counter_advance(&state, mask);
+
+        counter = subghz_proto_pirate_counter_get(
+            &state, "/SUBGHZ/kia.sub", protocols[i], 0x1234u, 0xAABBCCDDu);
+        TEST_ASSERT_EQUAL_UINT32(0x1235u, counter);
+    }
+
+    TEST_ASSERT_EQUAL_UINT32(0u, subghz_proto_pirate_counter_advance_mask(
+                                    SubGhzProtoPirate_KiaV3, 0u));
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFu, subghz_proto_pirate_counter_advance_mask(
+                                             SubGhzProtoPirate_KiaV6, 1u));
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFFu, subghz_proto_pirate_counter_advance_mask(
+                                          SubGhzProtoPirate_VAG, 1u));
+}
+
 void test_imported_kia_v6_serial_field_overrides_packed_key_serial(void)
 {
     FILE *file = tmpfile();
@@ -1482,6 +1514,7 @@ int main(void)
     RUN_TEST(test_vag_upstream_buttons_normalize_and_replay_counter_advances);
     RUN_TEST(test_vag_passat_builds_type2_waveform);
     RUN_TEST(test_proto_pirate_counter_state_survives_capture_switches);
+    RUN_TEST(test_kia_v3_v4_replay_preparations_advance_16_bit_counter);
     RUN_TEST(test_imported_kia_v6_serial_field_overrides_packed_key_serial);
     RUN_TEST(test_vag_key2_parser_accepts_short_and_upstream_byte_lists);
 

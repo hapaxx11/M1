@@ -114,6 +114,21 @@ uint32_t subghz_proto_pirate_required_pairs(const SubGhzKeyParams *params,
 
 #define SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE 8u
 
+static inline uint32_t subghz_proto_pirate_counter_advance_mask(
+    uint8_t protocol, uint32_t encoded_pair_count)
+{
+    if (encoded_pair_count == 0u)
+        return 0u;
+    if (protocol == SubGhzProtoPirate_VAG)
+        return 0xFFFFFFu;
+    if (protocol == SubGhzProtoPirate_KiaV6)
+        return 0xFFFFFFFFu;
+    if (protocol == SubGhzProtoPirate_KiaV3 ||
+        protocol == SubGhzProtoPirate_KiaV4)
+        return 0xFFFFu;
+    return 0u;
+}
+
 typedef struct {
     uint32_t capture_hash;
     uint32_t counter;
