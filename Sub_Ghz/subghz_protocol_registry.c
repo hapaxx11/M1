@@ -1236,7 +1236,9 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KIA_V0] = {
         .name   = "Kia V0",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=250, .te_long=500, .te_delta=100,
                     .min_count_bit_for_found=61 },
@@ -1245,7 +1247,9 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KIA_V1] = {
         .name   = "Kia V1",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=800, .te_long=1600, .te_delta=200,
                     .min_count_bit_for_found=57 },
@@ -1254,7 +1258,9 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KIA_V2] = {
         .name   = "Kia V2",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=500, .te_long=1000, .te_delta=150,
                     .min_count_bit_for_found=53 },
@@ -1263,7 +1269,9 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KIA_V7] = {
         .name   = "Kia V7",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=250, .te_long=500, .te_delta=100,
                     .min_count_bit_for_found=64 },
@@ -1355,25 +1363,31 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KIA_V3] = {
         .name   = "Kia V3/V4",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_delta=150,
-                    .min_count_bit_for_found=64 },
+                    .min_count_bit_for_found=68 },
         .decode = subghz_decode_kia_v3,
     },
     [KIA_V4] = {
         .name   = "Kia V4",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_delta=150,
-                    .min_count_bit_for_found=64 },
+                    .min_count_bit_for_found=68 },
         .decode = subghz_decode_kia_v4,
     },
     [KIA_V5] = {
         .name   = "Kia V5",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_delta=150,
                     .min_count_bit_for_found=64 },

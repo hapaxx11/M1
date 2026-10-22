@@ -23,7 +23,7 @@
 
 ### Phase 4 — Kia decoder family
 - **Description**: Replace Kia V0, V1, V2, V3/V4, V5, and V7 placeholders with real RX decoders. Reuse the upstream shared Kia V3/V4 implementation without duplicating divergent logic, and test every registry entry independently.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Port ProtoPirate Kia decoder family`
 
 ### Phase 5 — Fiat and Renault V0 decoders

@@ -39,7 +39,10 @@
 #define PACKET_PULSE_COUNT_MIN      40
 #endif
 #ifndef PACKET_PULSE_COUNT_MAX
-#define PACKET_PULSE_COUNT_MAX      1088
+#define PACKET_PULSE_COUNT_MAX      1280
+#endif
+#ifndef INTERPACKET_REOPEN_MAX
+#define INTERPACKET_REOPEN_MAX      5000   /* µs — keep in sync with m1_sub_ghz_decenc.h */
 #endif
 
 /*============================================================================*/

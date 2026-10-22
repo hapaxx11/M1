@@ -94,9 +94,12 @@ static bool pair_bool(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
 /* Kia V7 — true Manchester, 64-bit, CRC-8 poly 0x7F init 0x4C                */
 /*============================================================================*/
 
-#define KIA_V7_PREAMBLE_PAIRS 319
-#define KIA_V7_TAIL_GAP_US    2000
-#define KIA_V7_DEFAULT_HEADER 0xB3   /* raw stored byte[0]; on-air complement is 0x4C */
+#define KIA_V7_PREAMBLE_PAIRS      319
+#define KIA_V7_TAIL_PREAMBLE_PAIRS 15
+#define KIA_V7_TAIL_GAP_US         2000
+/* Saved keys carry the decoder's complemented word whose header byte is
+ * 0x4C (the on-air header 0xB3 complemented). */
+#define KIA_V7_SAVED_HEADER        0x4C
 
 static uint32_t encode_kia_v7(uint64_t key, SubGhzRawPair *out,
                                uint32_t max_pairs, uint8_t reps)
@@ -125,17 +128,21 @@ static uint32_t encode_kia_v7(uint64_t key, SubGhzRawPair *out,
     manch_symbols++;
 
     /* Two passes per repetition, each:
-     *   319 preamble pairs + 1 sync-high + manch_symbols data pairs +
-     *   1 trailing marker + 1 gap pair */
-    const uint32_t pairs_per_pass = KIA_V7_PREAMBLE_PAIRS + 1 + manch_symbols + 1 + 1;
-    const uint32_t total = pairs_per_pass * 2 * reps;
+     *   preamble pairs + 1 sync-high + manch_symbols data pairs +
+     *   1 trailing marker + 1 gap pair.  Upstream sends 319 preamble pairs
+     *   in the first pass and KIA_V7_TAIL_PREAMBLE_PAIRS in the second. */
+    const uint32_t pass0 = KIA_V7_PREAMBLE_PAIRS + 1 + manch_symbols + 2;
+    const uint32_t pass1 = KIA_V7_TAIL_PREAMBLE_PAIRS + 1 + manch_symbols + 2;
+    const uint32_t total = (pass0 + pass1) * reps;
     if (total > max_pairs)
         return 0;
 
     uint32_t idx = 0;
     for (uint8_t r = 0; r < reps; r++) {
         for (uint8_t pass = 0; pass < 2; pass++) {
-            for (int i = 0; i < KIA_V7_PREAMBLE_PAIRS; i++) {
+            const uint32_t preamble =
+                (pass == 0) ? KIA_V7_PREAMBLE_PAIRS : KIA_V7_TAIL_PREAMBLE_PAIRS;
+            for (uint32_t i = 0; i < preamble; i++) {
                 pair(out, &idx, max_pairs, 250, 250);
             }
             pair(out, &idx, max_pairs, 250, 250); /* extra sync-high */
@@ -150,26 +157,20 @@ static uint32_t encode_kia_v7(uint64_t key, SubGhzRawPair *out,
                                  (result == ManchesterEncoderResultShortHigh);
                     bool is_long = (result == ManchesterEncoderResultLongLow) ||
                                    (result == ManchesterEncoderResultLongHigh);
-                    pair(out, &idx, max_pairs,
-                         is_long ? 500 : 250,
-                         level   ? 0 : (is_long ? 500 : 250));
+                    pair_bool(out, &idx, max_pairs, level, is_long ? 500 : 250);
                 }
                 bool level = (result == ManchesterEncoderResultLongHigh) ||
                              (result == ManchesterEncoderResultShortHigh);
                 bool is_long = (result == ManchesterEncoderResultLongLow) ||
                                (result == ManchesterEncoderResultLongHigh);
-                pair(out, &idx, max_pairs,
-                     is_long ? 500 : 250,
-                     level   ? 0 : (is_long ? 500 : 250));
+                pair_bool(out, &idx, max_pairs, level, is_long ? 500 : 250);
             }
             ManchesterEncoderResult fin = manchester_encoder_finish(&state);
             bool level = (fin == ManchesterEncoderResultLongHigh) ||
                          (fin == ManchesterEncoderResultShortHigh);
             bool is_long = (fin == ManchesterEncoderResultLongLow) ||
                            (fin == ManchesterEncoderResultLongHigh);
-            pair(out, &idx, max_pairs,
-                 is_long ? 500 : 250,
-                 level   ? 0 : (is_long ? 500 : 250));
+            pair_bool(out, &idx, max_pairs, level, is_long ? 500 : 250);
 
             pair(out, &idx, max_pairs, 250, KIA_V7_TAIL_GAP_US);
         }
@@ -288,19 +289,13 @@ static uint64_t kia_v0_build_honda_key(uint32_t serial, uint8_t button, uint16_t
     return key;
 }
 
-static uint8_t kia_v0_family_crc(uint16_t counter, uint32_t serial, uint8_t button)
+static uint8_t kia_v0_calculate_crc_poly(uint64_t data)
 {
-    const uint8_t bytes[6] = {
-        (uint8_t)(counter >> 8U),
-        (uint8_t)counter,
-        (uint8_t)(serial >> 20U),
-        (uint8_t)(serial >> 12U),
-        (uint8_t)(serial >> 4U),
-        (uint8_t)(((serial & 0x0FU) << 4U) | (button & 0x0FU)),
-    };
-    uint8_t crc = 0;
-    for (size_t i = 0; i < sizeof(bytes); i++) crc ^= bytes[i];
-    return crc;
+    /* Upstream wire CRC: CRC-8 (poly 0x7F, init 0x00) over bits 8..55. */
+    uint8_t crc_data[6];
+    for (uint8_t i = 0; i < 6; i++)
+        crc_data[i] = (uint8_t)(data >> (48U - i * 8U));
+    return kia_v0_crc8_poly(crc_data, sizeof(crc_data));
 }
 
 static uint64_t kia_v0_build_kia_raw(uint32_t serial, uint8_t button, uint16_t counter)
@@ -310,8 +305,7 @@ static uint64_t kia_v0_build_kia_raw(uint32_t serial, uint8_t button, uint16_t c
     const uint32_t low = (((uint32_t)serial & 0x000FFFFFUL) << 12U) |
                          (((uint32_t)button & 0x0FUL) << 8U);
     const uint64_t partial = ((uint64_t)high << 32U) | low;
-    const uint8_t crc = kia_v0_family_crc(counter, serial, button);
-    return partial | crc;
+    return partial | kia_v0_calculate_crc_poly(partial);
 }
 
 static uint8_t kia_v0_suzuki_crc8_from_fields(uint32_t serial, uint8_t button, uint32_t counter)
@@ -362,15 +356,38 @@ static void kia_v0_append_short_pairs(SubGhzRawPair *out, uint32_t *idx, uint32_
 static void kia_v0_append_data_pairs(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
                                      uint64_t raw, uint8_t bits)
 {
+    /* Upstream wire format: symmetric PWM pairs, MSB first —
+     * bit 1 = 500 high + 500 low, bit 0 = 250 high + 250 low. */
     for (int i = (int)bits - 1; i >= 0; i--) {
-        bool bit = ((raw >> i) & 1ULL) != 0ULL;
-        if (bit) {
-            pair(out, idx, max, KIA_V0_TE_SHORT, 0);
-            pair(out, idx, max, 0, KIA_V0_TE_LONG);
-        } else {
-            pair(out, idx, max, KIA_V0_TE_LONG, 0);
-            pair(out, idx, max, 0, KIA_V0_TE_SHORT);
-        }
+        const uint32_t duration =
+            ((raw >> i) & 1ULL) ? KIA_V0_TE_LONG : KIA_V0_TE_SHORT;
+        pair(out, idx, max, duration, 0);
+        pair(out, idx, max, 0, duration);
+    }
+}
+
+#define KIA_V0_MITSU_TAIL_PREAMBLE_PAIRS 80
+
+/* Recover display/TX fields from a packed key when a file carries no
+ * explicit Serial/Btn/Cnt lines.  Mirrors the upstream parse helpers. */
+static void kia_v0_fields_from_key(uint8_t type, uint64_t key,
+                                   uint32_t *serial, uint8_t *btn, uint16_t *cnt)
+{
+    if (type == 3) { /* Honda V0: transformed key layout */
+        *serial = ((uint32_t)((key >> 32) & 0xFFU) << 16) |
+                  ((uint32_t)((key >> 24) & 0xFFU) << 8) |
+                  (uint32_t)((key >> 16) & 0xFFU);
+        *cnt = (uint16_t)(((uint16_t)reverse8_local((uint8_t)(key >> 48)) << 8) |
+                          (uint16_t)reverse8_local((uint8_t)(key >> 40)));
+        *btn = (uint8_t)(((key >> 8) & 0xFFU) >> 5);
+    } else if (type == 2) { /* Suzuki */
+        *serial = (uint32_t)((key >> 16) & 0x0FFFFFFFU);
+        *btn = (uint8_t)((key >> 12) & 0x0FU);
+        *cnt = (uint16_t)((key >> 44) & 0xFFFFU);
+    } else { /* Kia / Mitsubishi */
+        *serial = (uint32_t)((key >> 12) & 0x0FFFFFFFU);
+        *btn = (uint8_t)((key >> 8) & 0x0FU);
+        *cnt = (uint16_t)((key >> 40) & 0xFFFFU);
     }
 }
 
@@ -379,34 +396,41 @@ static uint32_t encode_kia_v0(const SubGhzKeyParams *params,
                                uint32_t max_pairs,
                                uint8_t reps)
 {
-    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 32) & 0x0FFFFFFFU);
-    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
-    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+    /* Upstream subtype range is 1..4 (Kia/Suzuki/Honda/Mitsubishi); default Kia. */
+    uint8_t type = (params->extra[0] >= 1 && params->extra[0] <= 4) ? params->extra[0] : 1;
 
-    /* Default to the Kia subtype. */
-    uint8_t type = (params->extra[0] > 0 && params->extra[0] <= 3) ? params->extra[0] : 1;
+    uint32_t key_serial = 0;
+    uint8_t  key_btn = 0;
+    uint16_t key_cnt = 0;
+    kia_v0_fields_from_key(type, params->key_value, &key_serial, &key_btn, &key_cnt);
+
+    uint32_t serial = params->serial ? params->serial : key_serial;
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : key_btn;
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : key_cnt);
 
     uint64_t raw;
     uint8_t bits;
-    uint32_t burst_pairs;
+    uint32_t burst_pulses;
     if (type == 3) { /* Honda V0 */
         raw  = kia_v0_build_honda_key(serial, btn & 0x07U, cnt);
-        bits = 72;
-        burst_pairs = 40 * 2 + 4 * 2 + bits * 2 + 1;
+        bits = 56; /* wire data bits after the 40 short + 4 long preamble pairs */
+        burst_pulses = 40 * 2 + 4 * 2 + bits * 2 + 1;
     } else if (type == 2) { /* Suzuki V0 */
         const uint8_t crc = kia_v0_suzuki_crc8_from_fields(serial, btn, cnt);
         raw = kia_v0_suzuki_shifted_key_from_fields(serial, btn, cnt, crc);
         bits = 64;
-        burst_pairs = KIA_V0_TYPE2_PREAMBLE_PAIRS * 2 + bits * 2 + 3 +
-                      KIA_V0_TAIL_PREAMBLE_PAIRS * 2 + bits * 2;
-    } else { /* Kia */
+        burst_pulses = KIA_V0_TYPE2_PREAMBLE_PAIRS * 2 + bits * 2 + 3 +
+                       KIA_V0_TAIL_PREAMBLE_PAIRS * 2 + bits * 2;
+    } else { /* Kia (1) / Mitsubishi (4): same 61-bit key, different tail */
         raw = kia_v0_build_kia_raw(serial, btn, cnt);
         bits = 61;
-        burst_pairs = 2 + KIA_V0_TYPE1_PREAMBLE_PAIRS * 2 + bits * 2 + 2 +
-                      KIA_V0_TAIL_PREAMBLE_PAIRS * 2 + bits * 2 + 1;
+        const uint32_t tail_pairs = (type == 4) ? KIA_V0_MITSU_TAIL_PREAMBLE_PAIRS
+                                                : KIA_V0_TAIL_PREAMBLE_PAIRS;
+        burst_pulses = 2 + KIA_V0_TYPE1_PREAMBLE_PAIRS * 2 + bits * 2 + 2 +
+                       tail_pairs * 2 + bits * 2 + ((type == 4) ? 2 : 1);
     }
 
-    const uint32_t total = burst_pairs * reps;
+    const uint32_t total = burst_pulses * reps;
     if (total > max_pairs) return 0;
 
     uint32_t idx = 0;
@@ -418,8 +442,7 @@ static uint32_t encode_kia_v0(const SubGhzKeyParams *params,
                 pair(out, &idx, max_pairs, 0, KIA_V0_TE_LONG);
             }
             kia_v0_append_data_pairs(out, &idx, max_pairs, kia_v0_honda_transform(raw), 56);
-            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
-            pair(out, &idx, max_pairs, 0, KIA_V0_KIA_GAP);
+            pair(out, &idx, max_pairs, KIA_V0_KIA_GAP, 0);
         } else if (type == 2) {
             kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TYPE2_PREAMBLE_PAIRS);
             kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
@@ -429,16 +452,22 @@ static uint32_t encode_kia_v0(const SubGhzKeyParams *params,
             kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TAIL_PREAMBLE_PAIRS);
             kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
         } else {
+            const uint32_t tail_pairs = (type == 4) ? KIA_V0_MITSU_TAIL_PREAMBLE_PAIRS
+                                                    : KIA_V0_TAIL_PREAMBLE_PAIRS;
             pair(out, &idx, max_pairs, KIA_V0_TYPE1_SYNC, 0);
             pair(out, &idx, max_pairs, 0, KIA_V0_TYPE1_SYNC);
             kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TYPE1_PREAMBLE_PAIRS);
             kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
-            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
+            pair(out, &idx, max_pairs, 1500, 0);
             pair(out, &idx, max_pairs, 0, 1500);
-            kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TAIL_PREAMBLE_PAIRS);
+            kia_v0_append_short_pairs(out, &idx, max_pairs, tail_pairs);
             kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
-            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
-            pair(out, &idx, max_pairs, 0, KIA_V0_KIA_GAP);
+            if (type == 4) {
+                pair(out, &idx, max_pairs, 1500, 0);
+                pair(out, &idx, max_pairs, 0, 1500);
+            } else {
+                pair(out, &idx, max_pairs, KIA_V0_KIA_GAP, 0);
+            }
         }
     }
     return idx;
@@ -471,7 +500,11 @@ static uint32_t encode_kia_v1(const SubGhzKeyParams *params,
 {
     uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 24) & 0xFFFFFFFFU);
     uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 16) & 0xFFU);
-    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+    /* Counter is split across the packed word: low byte at bits 8..15,
+     * high nibble at bits 4..7 (matches the decoder's committed layout). */
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt
+                                  : (((params->key_value >> 8) & 0xFFU) |
+                                     (((params->key_value >> 4) & 0x0FU) << 8)));
 
     uint8_t cnt_high = (cnt >> 8) & 0x0F;
     uint8_t char_data[7];
@@ -544,7 +577,11 @@ static uint32_t encode_kia_v2(const SubGhzKeyParams *params,
 {
     uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 20) & 0xFFFFFFFFU);
     uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 16) & 0x0FU);
-    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+    /* Counter is split across the packed word: low byte at bits 8..15,
+     * high nibble at bits 4..7 (matches the decoder's committed layout). */
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt
+                                  : (((params->key_value >> 8) & 0xFFU) |
+                                     (((params->key_value >> 4) & 0x0FU) << 8)));
 
     uint32_t uVar6 = ((uint32_t)(cnt & 0xFF) << 8) |
                      ((uint32_t)(btn & 0x0F) << 16) |
@@ -2061,7 +2098,7 @@ static uint32_t encode_ford_v1_wrapper(const SubGhzKeyParams *params,
 }
 
 /*============================================================================*/
-/* Kia V3/V4 — PWM, 64-bit + 4-bit CRC, KeeLoq simple learning, CRC sweep      */
+/* Kia V3/V4 — PWM, 64-bit + 4-bit CRC, direct KeeLoq MF-key encryption, CRC sweep */
 /*============================================================================*/
 
 #define KIA_V3_V4_TE_SHORT       400
@@ -2117,25 +2154,55 @@ static uint32_t encode_kia_v3_v4(const SubGhzKeyParams *params,
     if (total > max_pairs)
         return 0;
 
-    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 32) & 0x0FFFFFFFU);
-    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
-    uint32_t cnt    = params->cnt ? params->cnt : (uint32_t)(params->key_value & 0xFFFFU);
-
-    /* Manufacturer key from extra[0..7]; default to the ProtoPirate KIA_KEY1 if zero. */
+    /* Manufacturer key from extra[0..7], else the build-time embedded
+     * KIA_KEY1 (ProtoPirate keystore type 10).  Upstream refuses to run
+     * the encoder without the key; do the same. */
     uint64_t mfr_key = 0;
     for (int i = 0; i < 8; i++) {
         mfr_key = (mfr_key << 8) | params->extra[i];
     }
+    if (mfr_key == 0 && m1_kia_mf_key_builtin_available) {
+        mfr_key = m1_kia_mf_key_builtin;
+    }
     if (mfr_key == 0) {
-        /* ProtoPirate KIA_KEY1 default placeholder; real deployments set extra[]. */
-        mfr_key = 0x0000000000000000ULL;
+        return 0;
+    }
+
+    uint32_t serial = params->serial;
+    uint8_t  btn    = (uint8_t)params->btn;
+    uint32_t cnt    = params->cnt;
+    if (!serial || !btn || !cnt) {
+        /* Key-only fallback: saved captures store the 64-bit on-air word
+         * (see m1_kia_v3_v4_decode.c): bytes 0..3 hold the per-byte
+         * bit-reversed encrypted word, bytes 4..7 the bit-reversed
+         * serial/button.  The counter needs MF-key decryption. */
+        uint8_t b[8];
+        for (int i = 0; i < 8; i++)
+            b[i] = (uint8_t)(params->key_value >> (56 - i * 8));
+        if (!serial) {
+            serial = ((uint32_t)reverse8_local((uint8_t)(b[7] & 0xF0U)) << 24) |
+                     ((uint32_t)reverse8_local(b[6]) << 16) |
+                     ((uint32_t)reverse8_local(b[5]) << 8) |
+                     (uint32_t)reverse8_local(b[4]);
+        }
+        if (!btn) {
+            btn = (uint8_t)(reverse8_local(b[7]) >> 4);
+        }
+        if (!cnt) {
+            const uint32_t enc =
+                ((uint32_t)reverse8_local(b[3]) << 24) |
+                ((uint32_t)reverse8_local(b[2]) << 16) |
+                ((uint32_t)reverse8_local(b[1]) << 8) |
+                (uint32_t)reverse8_local(b[0]);
+            cnt = keeloq_decrypt(enc, mfr_key) & 0xFFFFU;
+        }
     }
 
     const uint32_t plaintext = (cnt & 0xFFFFU) |
                                ((serial & 0x3FFU) << 16) |
                                ((uint32_t)(btn & 0x0FU) << 28);
-    const uint64_t device_key = keeloq_learn_simple(serial & 0x0FFFFFFFU, mfr_key);
-    const uint32_t encrypted  = keeloq_encrypt(plaintext, device_key);
+    /* Upstream encrypts with the manufacturer key directly (no learning). */
+    const uint32_t encrypted  = keeloq_encrypt(plaintext, mfr_key);
     const uint64_t tx_key     = kia_v3_v4_build_tx_bitstream(serial, btn, encrypted);
 
     uint32_t idx = 0;
@@ -2204,6 +2271,10 @@ static uint32_t encode_kia_v4_wrapper(const SubGhzKeyParams *params,
 #define KIA_V5_PREAMBLE_PAIRS 200
 #define KIA_V5_DATA_BITS      64
 #define KIA_V5_CRC_BITS       3
+
+/* RX-side mixer inverse, exported by protocols/m1_kia_v5_decode.c (used by
+ * the key-only fallback below to recover the counter from a saved wire word). */
+extern uint16_t m1_kia_v5_mixer_decode(uint32_t encrypted, uint64_t mfkey);
 
 static void kia_v5_build_keystore_from_mfkey(uint8_t result[8], uint64_t mfkey)
 {
@@ -2317,13 +2388,38 @@ static uint32_t encode_kia_v5(const SubGhzKeyParams *params,
     if (total > max_pairs)
         return 0;
 
-    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 32) & 0x0FFFFFFFU);
-    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
-    uint32_t cnt    = params->cnt ? params->cnt : (uint32_t)(params->key_value & 0xFFFFU);
-
     uint64_t mfkey = 0;
     for (int i = 0; i < 8; i++) {
         mfkey = (mfkey << 8) | params->extra[i];
+    }
+    /* Fall back to the build-time embedded KIA_KEY4 (ProtoPirate keystore
+     * type 13).  Without any key the counter mixer cannot run and the
+     * encoder has nothing meaningful to transmit (upstream refuses too). */
+    if (mfkey == 0 && m1_kia_v5_key_builtin_available) {
+        mfkey = m1_kia_v5_key_builtin;
+    }
+    if (mfkey == 0) {
+        return 0;
+    }
+
+    uint32_t serial = params->serial;
+    uint8_t  btn    = (uint8_t)params->btn;
+    uint32_t cnt    = params->cnt;
+    if (!serial || !btn || !cnt) {
+        /* Key-only fallback: saved captures store the 64-bit on-air word;
+         * fields come from the byte-swapped, per-byte bit-reversed "yek"
+         * (see m1_kia_v5_decode.c) and the counter from the mixer. */
+        uint64_t yek = 0;
+        for (int i = 0; i < 8; i++) {
+            const uint8_t b = (uint8_t)(params->key_value >> (i * 8));
+            yek |= ((uint64_t)reverse8_local(b) << ((7 - i) * 8));
+        }
+        if (!serial)
+            serial = (uint32_t)((yek >> 32) & 0x0FFFFFFFU);
+        if (!btn)
+            btn = (uint8_t)((yek >> 60) & 0x0FU);
+        if (!cnt)
+            cnt = m1_kia_v5_mixer_decode((uint32_t)(yek & 0xFFFFFFFFU), mfkey);
     }
 
     const uint32_t mixer = kia_v5_mixer_encode(serial & 0x0FFFFFFFU,
@@ -2604,14 +2700,18 @@ static uint32_t encode_kia_v7_wrapper(const SubGhzKeyParams *params,
                                        uint32_t max_pairs,
                                        uint8_t reps)
 {
-    /* For now use default header and pack fields from the lower 64 bits.
-     * The Flipper Key value is treated as the raw 64-bit key; future UI
-     * scenes can construct it from serial/button/counter fields. */
-    uint32_t serial  = (uint32_t)((params->key_value >> 12) & 0x0FFFFFFF);
-    uint8_t  button  = (uint8_t)(params->key_value & 0x0F);
-    uint16_t counter = (uint16_t)((params->key_value >> 16) & 0xFFFF);
+    /* Saved captures carry the decoder's complemented 64-bit word
+     * (m1_kia_v7_decode.c): header byte 0x4C, counter at bits 40..55,
+     * serial at bits 12..39, button at bits 8..11.  Explicit Serial/Btn/Cnt
+     * fields win over the packed layout. */
+    uint32_t serial  = params->serial ? params->serial
+                                      : (uint32_t)((params->key_value >> 12) & 0x0FFFFFFFU);
+    uint8_t  button  = params->btn ? (uint8_t)params->btn
+                                   : (uint8_t)((params->key_value >> 8) & 0x0FU);
+    uint16_t counter = params->cnt ? (uint16_t)params->cnt
+                                   : (uint16_t)((params->key_value >> 40) & 0xFFFFU);
     uint8_t  header  = (uint8_t)((params->key_value >> 56) & 0xFF);
-    if (header == 0) header = KIA_V7_DEFAULT_HEADER;
+    if (header == 0) header = KIA_V7_SAVED_HEADER;
 
     uint64_t key = kia_v7_build_key(serial, button, counter, header);
     return encode_kia_v7(key, out, max_pairs, reps);
@@ -2844,7 +2944,9 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
 {
     switch (id) {
     case SubGhzProtoPirate_KiaV7:
-        return (KIA_V7_PREAMBLE_PAIRS + 1 + (64 * 2) + 1 + 1) * 2 * reps;
+        /* Worst-case Manchester symbols per pass + 319/15 preamble passes. */
+        return ((KIA_V7_PREAMBLE_PAIRS + 1 + (64 * 2) + 2) +
+                (KIA_V7_TAIL_PREAMBLE_PAIRS + 1 + (64 * 2) + 2)) * reps;
     case SubGhzProtoPirate_FordV0:
         return ((2 + (FORD_V0_PREAMBLE_PAIRS * 2) + 2 + (79 * 2) + (16 * 2)) *
                 FORD_V0_TOTAL_BURSTS + (FORD_V0_TOTAL_BURSTS - 1)) * reps;
@@ -2853,9 +2955,10 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
     case SubGhzProtoPirate_HondaStatic:
         return (1 + HONDA_STATIC_PREAMBLE_COUNT + (HONDA_STATIC_BITS * 2) + 1) * reps;
     case SubGhzProtoPirate_KiaV0:
-        /* Worst case is the Suzuki subtype (type 2). */
-        return ((KIA_V0_TYPE2_PREAMBLE_PAIRS * 2) + (64 * 2) + 3 +
-                (KIA_V0_TAIL_PREAMBLE_PAIRS * 2) + (64 * 2)) * reps;
+        /* Worst case is the Mitsubishi subtype (type 4): 80-pair tail
+         * preamble and the 1500/1500 terminator. */
+        return (2 + (KIA_V0_TYPE1_PREAMBLE_PAIRS * 2) + (61 * 2) + 2 +
+                (KIA_V0_MITSU_TAIL_PREAMBLE_PAIRS * 2) + (61 * 2) + 2) * reps;
     case SubGhzProtoPirate_KiaV1:
         return (((KIA_V1_HEADER_PULSES * 2) + 1 + ((57U - 1) * 2)) * KIA_V1_TOTAL_BURSTS +
                 (KIA_V1_TOTAL_BURSTS - 1)) * reps;

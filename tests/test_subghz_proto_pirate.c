@@ -15,13 +15,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "unity.h"
+#include "bit_util.h"
 #include "subghz_proto_pirate.h"
 #include "subghz_kia_v6_encoder.h"
+#include "subghz_keeloq.h"
+#include "subghz_manchester_encoder.h"
 #include "subghz_protopirate_keys_builtin.h"
 #include "subghz_vag_encoder.h"
 
 void setUp(void) {}
 void tearDown(void) {}
+
+/* Real mixer inverse from m1_kia_v5_decode.c (linked into this target). */
+uint16_t m1_kia_v5_mixer_decode(uint32_t encrypted, uint64_t mfkey);
 
 static SubGhzKeyParams make_params(const char *proto, uint64_t key, uint32_t bits)
 {
@@ -80,11 +86,12 @@ void test_kia_v7_required_pairs(void)
     /* Key 0 has alternating-ish pattern after inversion; use all-zeros for
      * a deterministic symbol count. */
     SubGhzKeyParams params = make_params("Kia V7", 0, 64);
-    uint32_t per_pass = subghz_proto_pirate_required_pairs(&params, 1) / 2;
-    /* Per pass: 319 preamble + 1 sync + Manchester symbols + trailing + gap.
-     * The exact Manchester symbol count depends on the key; just verify it is
-     * non-zero and scales linearly with repetitions. */
-    TEST_ASSERT_GREATER_THAN_UINT32(319 + 1 + 64 + 1 + 1, per_pass);
+    /* Upstream sends a 319-pair first pass and a 15-pair tail pass;
+     * worst-case Manchester symbol count per pass is 2 per bit + markers. */
+    const uint32_t expect = (319u + 1u + (64u * 2u) + 2u) +
+                            (15u + 1u + (64u * 2u) + 2u);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(
+        expect, subghz_proto_pirate_required_pairs(&params, 1));
     TEST_ASSERT_EQUAL_UINT32(subghz_proto_pirate_required_pairs(&params, 1) * 3,
                              subghz_proto_pirate_required_pairs(&params, 3));
 }
@@ -393,6 +400,508 @@ void test_honda_static_encode_nonzero(void)
 void test_kia_v0_encode_nonzero(void)
 {
     tier_a_smoke("Kia V0", 0x0123456, 0x02, 0x1234, 8192);
+}
+
+/* ===================================================================
+ * Kia V0 wire format — the encoder must emit the upstream ProtoPirate
+ * waveform: symmetric PWM pairs (bit 1 = 500/500, bit 0 = 250/250),
+ * CRC-8 poly 0x7F over bits 8..55, 1500/1500 copy separator and a lone
+ * 1000 us high commit gap at the end of a Kia frame.
+ * =================================================================== */
+
+static uint64_t kia_v0_recover_data(const SubGhzRawPair *p, uint32_t first,
+                                    uint8_t bits)
+{
+    uint64_t raw = 0;
+    for (uint32_t i = 0; i < bits; i++)
+    {
+        const SubGhzRawPair *hi = &p[first + 2u * i];
+        const SubGhzRawPair *lo = &p[first + 2u * i + 1u];
+        TEST_ASSERT_EQUAL_UINT32(0, hi->low_us);
+        TEST_ASSERT_EQUAL_UINT32(0, lo->high_us);
+        TEST_ASSERT_EQUAL_UINT32(hi->high_us, lo->low_us);
+        raw <<= 1;
+        if (hi->high_us == 500u)
+            raw |= 1u;
+        else
+            TEST_ASSERT_EQUAL_UINT32(250u, hi->high_us);
+    }
+    return raw;
+}
+
+static uint8_t kia_v0_test_crc8(const uint8_t *buf, size_t len)
+{
+    /* Independent CRC-8 poly 0x7F init 0x00 (MSB-first). */
+    uint8_t crc = 0;
+    for (size_t i = 0; i < len; i++)
+    {
+        crc ^= buf[i];
+        for (uint8_t b = 0; b < 8; b++)
+            crc = (crc & 0x80u) ? (uint8_t)((crc << 1) ^ 0x7Fu)
+                                : (uint8_t)(crc << 1);
+    }
+    return crc;
+}
+
+void test_kia_v0_encode_wire_format(void)
+{
+    SubGhzKeyParams params = make_params("Kia V0", 0, 61);
+    params.serial = 0x0123456;
+    params.btn = 0x02;
+    params.cnt = 0x1234;
+
+    SubGhzRawPair out[1048];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 1048, 1);
+    /* sync(2) + 638 preamble + 122 data + 2 separator + 30 tail + 122 + 1 */
+    TEST_ASSERT_EQUAL_UINT32(917, count);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(
+        917u, subghz_proto_pirate_required_pairs(&params, 1));
+
+    /* Sync */
+    TEST_ASSERT_EQUAL_UINT32(750, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[0].low_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[1].high_us);
+    TEST_ASSERT_EQUAL_UINT32(750, out[1].low_us);
+
+    /* 319 short preamble pairs = 638 split entries */
+    for (uint32_t i = 2; i < 640; i += 2)
+    {
+        TEST_ASSERT_EQUAL_UINT32(250, out[i].high_us);
+        TEST_ASSERT_EQUAL_UINT32(0, out[i].low_us);
+        TEST_ASSERT_EQUAL_UINT32(0, out[i + 1].high_us);
+        TEST_ASSERT_EQUAL_UINT32(250, out[i + 1].low_us);
+    }
+
+    /* 61-bit data word, symmetric pairs, valid wire CRC */
+    const uint64_t raw = kia_v0_recover_data(out, 640, 61);
+    TEST_ASSERT_EQUAL_UINT64(0x0Fu, (raw >> 56) & 0xFFu);
+    TEST_ASSERT_EQUAL_UINT32(0x0123456u, (uint32_t)((raw >> 12) & 0x0FFFFFFFu));
+    TEST_ASSERT_EQUAL_UINT32(0x02u, (uint32_t)((raw >> 8) & 0x0Fu));
+    TEST_ASSERT_EQUAL_UINT32(0x1234u, (uint32_t)((raw >> 40) & 0xFFFFu));
+    uint8_t crc_buf[6];
+    for (uint8_t i = 0; i < 6; i++)
+        crc_buf[i] = (uint8_t)(raw >> (48u - i * 8u));
+    TEST_ASSERT_EQUAL_UINT8(kia_v0_test_crc8(crc_buf, 6),
+                            (uint8_t)(raw & 0xFFu));
+
+    /* 1500/1500 copy separator */
+    TEST_ASSERT_EQUAL_UINT32(1500, out[762].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[762].low_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[763].high_us);
+    TEST_ASSERT_EQUAL_UINT32(1500, out[763].low_us);
+
+    /* Tail copy: 15 pairs then the same 61-bit word */
+    const uint64_t tail = kia_v0_recover_data(out, 794, 61);
+    TEST_ASSERT_EQUAL_UINT64(raw, tail);
+
+    /* Lone 1000 us high commit gap ends the frame */
+    TEST_ASSERT_EQUAL_UINT32(1000, out[916].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[916].low_us);
+}
+
+void test_kia_v0_encode_suzuki_wire_format(void)
+{
+    SubGhzKeyParams params = make_params("Kia V0", 0, 64);
+    params.serial = 0x0BADC0D;
+    params.btn = 0x03;
+    params.cnt = 0x4711;
+    params.extra[0] = 2; /* Suzuki */
+
+    SubGhzRawPair out[1048];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 1048, 1);
+    /* 640 preamble + 128 data + 3 separator + 30 tail + 128 data */
+    TEST_ASSERT_EQUAL_UINT32(929, count);
+
+    const uint64_t raw = kia_v0_recover_data(out, 640, 64);
+    TEST_ASSERT_EQUAL_UINT32(0xFu, (uint32_t)(raw >> 60));
+    TEST_ASSERT_EQUAL_UINT32(0x0BADC0Du, (uint32_t)((raw >> 16) & 0x0FFFFFFFu));
+    TEST_ASSERT_EQUAL_UINT32(0x03u, (uint32_t)((raw >> 12) & 0x0Fu));
+    TEST_ASSERT_EQUAL_UINT32(0x4711u, (uint32_t)((raw >> 44) & 0xFFFFu));
+
+    /* Shifted-layout CRC-8 (poly 0x7F) must validate. */
+    const uint32_t lo = (uint32_t)raw;
+    const uint32_t hi = (uint32_t)(raw >> 32);
+    const uint32_t r3 = ((lo >> 16) | (hi << 16)) & ~0xF0000000u;
+    const uint32_t r2 = (lo >> 12) & 0x0Fu;
+    uint32_t r1 = (hi >> 12) & 0xFFFFu;
+    r1 = ((r1 & 0xFFu) << 8) | ((r1 >> 8) & 0xFFu);
+    const uint8_t buf[6] = {
+        (uint8_t)(r1 & 0xFFu), (uint8_t)((r1 >> 8) & 0xFFu),
+        (uint8_t)((r3 >> 20) & 0xFFu), (uint8_t)((r3 >> 12) & 0xFFu),
+        (uint8_t)((r3 >> 4) & 0xFFu), (uint8_t)(((r3 << 4) | r2) & 0xFFu),
+    };
+    TEST_ASSERT_EQUAL_UINT8(kia_v0_test_crc8(buf, 6),
+                            (uint8_t)((lo >> 4) & 0xFFu));
+
+    /* Separator: low 2000, high 2000, low 250 */
+    TEST_ASSERT_EQUAL_UINT32(0, out[768].high_us);
+    TEST_ASSERT_EQUAL_UINT32(2000, out[768].low_us);
+    TEST_ASSERT_EQUAL_UINT32(2000, out[769].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[769].low_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[770].high_us);
+    TEST_ASSERT_EQUAL_UINT32(250, out[770].low_us);
+
+    /* Tail copy repeats the word */
+    const uint64_t tail = kia_v0_recover_data(out, 801, 64);
+    TEST_ASSERT_EQUAL_UINT64(raw, tail);
+}
+
+void test_kia_v0_encode_honda_wire_format(void)
+{
+    SubGhzKeyParams params = make_params("Kia V0", 0, 72);
+    params.serial = 0x0A1B2C;
+    params.btn = 0x01;
+    params.cnt = 0x4321;
+    params.extra[0] = 3; /* Honda V0 */
+
+    SubGhzRawPair out[256];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 256, 1);
+    /* 80 short + 8 long preamble entries + 112 data + 1 commit gap */
+    TEST_ASSERT_EQUAL_UINT32(201, count);
+
+    /* 4 long pairs follow the 40 short pairs */
+    for (uint32_t i = 80; i < 88; i += 2)
+    {
+        TEST_ASSERT_EQUAL_UINT32(500, out[i].high_us);
+        TEST_ASSERT_EQUAL_UINT32(500, out[i + 1].low_us);
+    }
+
+    /* 56 wire bits transform back into a valid Honda key.  The top byte
+     * (0x0F) rides the 4 long preamble pairs, so prepend it first. */
+    const uint64_t wire = (0x0FuLL << 56) | kia_v0_recover_data(out, 88, 56);
+    uint64_t key = 0;
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        uint8_t b = (uint8_t)(wire >> (56u - i * 8u));
+        b = (uint8_t)(((b & 0xF0u) >> 4) | ((b & 0x0Fu) << 4));
+        b = (uint8_t)(((b & 0xCCu) >> 2) | ((b & 0x33u) << 2));
+        b = (uint8_t)(((b & 0xAAu) >> 1) | ((b & 0x55u) << 1));
+        key = (key << 8) | b;
+    }
+    TEST_ASSERT_EQUAL_UINT64(0xF0u, (key >> 56) & 0xFFu);
+    TEST_ASSERT_EQUAL_UINT32(0x0A1B2Cu,
+                             ((uint32_t)((key >> 32) & 0xFFu) << 16) |
+                                 ((uint32_t)((key >> 24) & 0xFFu) << 8) |
+                                 (uint32_t)((key >> 16) & 0xFFu));
+    TEST_ASSERT_EQUAL_UINT32(0x0Au, (uint32_t)((key >> 8) & 0x0Fu));
+
+    /* Lone 1000 us high commit gap */
+    TEST_ASSERT_EQUAL_UINT32(1000, out[200].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[200].low_us);
+}
+
+void test_kia_v0_encode_mitsubishi_wire_format(void)
+{
+    SubGhzKeyParams params = make_params("Kia V0", 0, 61);
+    params.serial = 0x0556677;
+    params.btn = 0x02;
+    params.cnt = 0x7777;
+    params.extra[0] = 4; /* Mitsubishi */
+
+    SubGhzRawPair out[1056];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 1056, 1);
+    /* sync(2) + 638 + 122 + 2 + 160 tail + 122 + 2 terminator */
+    TEST_ASSERT_EQUAL_UINT32(1048, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(
+        subghz_proto_pirate_required_pairs(&params, 1), 1048);
+
+    const uint64_t raw = kia_v0_recover_data(out, 640, 61);
+    const uint64_t tail = kia_v0_recover_data(out, 924, 61);
+    TEST_ASSERT_EQUAL_UINT64(raw, tail);
+
+    /* Ends with the 1500/1500 terminator (not the Kia lone 1000). */
+    TEST_ASSERT_EQUAL_UINT32(1500, out[1046].high_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[1046].low_us);
+    TEST_ASSERT_EQUAL_UINT32(0, out[1047].high_us);
+    TEST_ASSERT_EQUAL_UINT32(1500, out[1047].low_us);
+}
+
+/* ===================================================================
+ * Kia V1/V2 key-only counter fallback — the packed Key layout must
+ * match what the RX decoders commit (split counter nibbles).
+ * =================================================================== */
+
+void test_kia_v1_key_only_matches_explicit_fields(void)
+{
+    const uint32_t serial = 0x12345678u;
+    const uint8_t btn = 0x02u;
+    const uint16_t cnt = 0x0ABCu;
+
+    SubGhzKeyParams explicit_params = make_params("Kia V1", 0, 57);
+    explicit_params.serial = serial;
+    explicit_params.btn = btn;
+    explicit_params.cnt = cnt;
+
+    /* Decoder-committed layout: seed bit 56, serial bits 24..55, button
+     * byte bits 16..23, counter low byte bits 8..15 + high nibble 4..7.
+     * The CRC nibble is recomputed by the encoder, so 0 is fine here. */
+    const uint64_t packed = (1uLL << 56) | ((uint64_t)serial << 24) |
+                            ((uint64_t)btn << 16) |
+                            ((uint64_t)(cnt & 0xFFu) << 8) |
+                            ((uint64_t)((cnt >> 8) & 0x0Fu) << 4);
+    SubGhzKeyParams key_only = make_params("Kia V1", packed, 57);
+
+    SubGhzRawPair a[900], b[900];
+    const uint32_t na = subghz_proto_pirate_encode(&explicit_params, a, 900, 1);
+    const uint32_t nb = subghz_proto_pirate_encode(&key_only, b, 900, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, na);
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_EQUAL_MEMORY(a, b, na * sizeof(a[0]));
+}
+
+void test_kia_v2_key_only_matches_explicit_fields(void)
+{
+    const uint32_t serial = 0x0ABCDEF1u;
+    const uint8_t btn = 0x03u;
+    const uint16_t cnt = 0x0FEDu;
+
+    SubGhzKeyParams explicit_params = make_params("Kia V2", 0, 53);
+    explicit_params.serial = serial;
+    explicit_params.btn = btn;
+    explicit_params.cnt = cnt;
+
+    /* Decoder-committed layout: seed bit 52, serial bits 20..51, button
+     * nibble bits 16..19, counter low byte bits 8..15 + high nibble 4..7. */
+    const uint64_t packed = (1uLL << 52) | ((uint64_t)serial << 20) |
+                            ((uint64_t)btn << 16) |
+                            ((uint64_t)(cnt & 0xFFu) << 8) |
+                            ((uint64_t)(cnt >> 4) & 0xF0u);
+    SubGhzKeyParams key_only = make_params("Kia V2", packed, 53);
+
+    SubGhzRawPair a[1300], b[1300];
+    const uint32_t na = subghz_proto_pirate_encode(&explicit_params, a, 1300, 1);
+    const uint32_t nb = subghz_proto_pirate_encode(&key_only, b, 1300, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, na);
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_EQUAL_MEMORY(a, b, na * sizeof(a[0]));
+}
+
+/* ===================================================================
+ * Kia V3/V4 — the encoder must encrypt with the manufacturer key
+ * directly (upstream), sourced from extra[0..7] or the built-in
+ * keystore injection (test stub: 0x0102030405060708).
+ * =================================================================== */
+
+static uint64_t bit_reverse64(uint64_t x)
+{
+    uint64_t r = 0;
+    for (int i = 0; i < 64; i++)
+        r = (r << 1) | ((x >> i) & 1uLL);
+    return r;
+}
+
+static void kia_v3_v4_check_frame(const char *proto, bool v4)
+{
+    const uint32_t serial = 0x00ABCDE1u;
+    const uint8_t btn = 0x02u;
+    const uint16_t cnt = 0x1234u;
+
+    SubGhzKeyParams params = make_params(proto, 0, 68);
+    params.serial = serial;
+    params.btn = btn;
+    params.cnt = cnt;
+
+    SubGhzRawPair out[200];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 200, 1);
+    /* 12 preamble pairs + sync + 64 data bits + 4 CRC bits + end marker */
+    TEST_ASSERT_EQUAL_UINT32(24 + 2 + 128 + 8 + 2, count);
+
+    /* Recover the 64 emitted data bits (MSB first).  V3: pair = {d1,0},
+     * {0,d2} with d1==400 => 1; V4: {0,d1},{d2,0} with d1==400 => 1. */
+    uint64_t emitted = 0;
+    for (uint32_t i = 0; i < 64; i++)
+    {
+        const SubGhzRawPair *e = &out[26 + 2 * i];
+        uint32_t first = v4 ? e->low_us : e->high_us;
+        emitted = (emitted << 1) | (first == 400u ? 1u : 0u);
+    }
+
+    const uint32_t plaintext = (cnt & 0xFFFFu) | ((serial & 0x3FFu) << 16) |
+                               ((uint32_t)(btn & 0x0Fu) << 28);
+    const uint32_t enc =
+        keeloq_encrypt(plaintext, 0x0102030405060708ULL /* test stub key */);
+    const uint64_t expected =
+        bit_reverse64((((uint64_t)(serial & 0x0FFFFFFFu) |
+                        ((uint64_t)(btn & 0x0Fu) << 28))
+                       << 32) |
+                      enc);
+    TEST_ASSERT_EQUAL_UINT64(expected, emitted);
+}
+
+void test_kia_v3_encode_uses_mf_key_directly(void)
+{
+    kia_v3_v4_check_frame("Kia V3/V4", false);
+}
+
+void test_kia_v4_encode_uses_mf_key_directly(void)
+{
+    kia_v3_v4_check_frame("Kia V4", true);
+}
+
+void test_kia_v3_encode_builtin_key_fallback(void)
+{
+    /* extra[] carrying the key and zeroed extra[] (built-in fallback) must
+     * produce byte-identical waveforms (test stub key 0x0102030405060708). */
+    SubGhzKeyParams keyed = make_params("Kia V3/V4", 0, 68);
+    keyed.serial = 0x00ABCDE1u;
+    keyed.btn = 0x02u;
+    keyed.cnt = 0x1234u;
+    for (int i = 0; i < 8; i++)
+        keyed.extra[i] = (uint8_t)(0x0102030405060708ULL >> (56 - i * 8));
+
+    SubGhzKeyParams fallback = keyed;
+    memset(fallback.extra, 0, sizeof(fallback.extra));
+
+    SubGhzRawPair a[200], b[200];
+    const uint32_t na = subghz_proto_pirate_encode(&keyed, a, 200, 1);
+    const uint32_t nb = subghz_proto_pirate_encode(&fallback, b, 200, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, na);
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_EQUAL_MEMORY(a, b, na * sizeof(a[0]));
+}
+
+/* ===================================================================
+ * Kia V7 — golden waveform: encode() output must be the merged-pulse
+ * form of the exact stream the decoder suite proved decodable:
+ * 319-pair + 15-pair passes, sync pair, Manchester of ~candidate.
+ * =================================================================== */
+
+static uint32_t s_v7_stream[1300];
+static uint32_t s_v7_nstream;
+
+static void v7_stream_push(bool high, uint32_t dur)
+{
+    if (s_v7_nstream && ((s_v7_stream[s_v7_nstream - 1] >> 31) == (uint32_t)high))
+        s_v7_stream[s_v7_nstream - 1] += dur;
+    else
+        s_v7_stream[s_v7_nstream++] = dur | (high ? 0x80000000u : 0u);
+}
+
+static void v7_stream_pair(uint32_t high, uint32_t low)
+{
+    if (high) v7_stream_push(true, high);
+    if (low) v7_stream_push(false, low);
+}
+
+static void v7_stream_symbol(ManchesterEncoderResult r)
+{
+    const bool level = (r == ManchesterEncoderResultLongHigh) ||
+                       (r == ManchesterEncoderResultShortHigh);
+    const bool is_long = (r == ManchesterEncoderResultLongLow) ||
+                         (r == ManchesterEncoderResultLongHigh);
+    v7_stream_push(level, is_long ? 500u : 250u);
+}
+
+void test_kia_v7_encoder_golden_waveform(void)
+{
+    const uint32_t serial = 0x00ABCDE1u;
+    const uint8_t btn = 0x02u;
+    const uint16_t cnt = 0x1234u;
+
+    SubGhzKeyParams params = make_params("Kia V7", 0, 64);
+    params.serial = serial;
+    params.btn = btn;
+    params.cnt = cnt;
+
+    SubGhzRawPair out[1200];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, out, 1200, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    /* Actual: expand the pairs to a merged level stream. */
+    s_v7_nstream = 0;
+    for (uint32_t i = 0; i < npairs; i++)
+        v7_stream_pair(out[i].high_us, out[i].low_us);
+    const uint32_t actual_n = s_v7_nstream;
+    uint32_t actual[1300];
+    memcpy(actual, s_v7_stream, actual_n * sizeof(actual[0]));
+
+    /* Expected: candidate word (decoder-committed layout) and its
+     * on-air inverse per the M1 Manchester encoder. */
+    uint8_t b[8];
+    b[0] = 0x4Cu;
+    b[1] = (uint8_t)(cnt >> 8);
+    b[2] = (uint8_t)cnt;
+    b[3] = (uint8_t)((serial >> 20) & 0xFFu);
+    b[4] = (uint8_t)((serial >> 12) & 0xFFu);
+    b[5] = (uint8_t)((serial >> 4) & 0xFFu);
+    b[6] = (uint8_t)(((serial & 0x0Fu) << 4) | (btn & 0x0Fu));
+    b[7] = crc8(b, 7, 0x7Fu, 0x4Cu);
+    uint64_t candidate = 0;
+    for (int i = 0; i < 8; i++)
+        candidate = (candidate << 8) | b[i];
+    const uint64_t wire = ~candidate;
+
+    s_v7_nstream = 0;
+    for (uint8_t pass = 0; pass < 2; pass++)
+    {
+        const uint32_t preamble = (pass == 0) ? 319u : 15u;
+        for (uint32_t p = 0; p < preamble; p++)
+            v7_stream_pair(250, 250);
+        v7_stream_pair(250, 250); /* extra sync-high pair */
+
+        ManchesterEncoderState state;
+        manchester_encoder_reset(&state);
+        for (int bit = 63; bit >= 0; bit--)
+        {
+            const bool bv = ((wire >> bit) & 1uLL) != 0uLL;
+            ManchesterEncoderResult result;
+            while (!manchester_encoder_advance(&state, bv, &result))
+                v7_stream_symbol(result);
+            v7_stream_symbol(result);
+        }
+        v7_stream_symbol(manchester_encoder_finish(&state));
+        v7_stream_pair(250, 2000); /* trailing high + tail gap */
+    }
+
+    TEST_ASSERT_EQUAL_UINT32(s_v7_nstream, actual_n);
+    TEST_ASSERT_EQUAL_UINT32_ARRAY(s_v7_stream, actual, actual_n);
+}
+
+
+/* ===================================================================
+ * Kia V5 — built-in KIA_KEY4 fallback must produce byte-identical
+ * output to the same key passed through extra[0..7].
+ * =================================================================== */
+
+void test_kia_v5_encode_builtin_key_fallback(void)
+{
+    SubGhzKeyParams keyed = make_params("Kia V5", 0, 64);
+    keyed.serial = 0x0123456u;
+    keyed.btn = 0x02u;
+    keyed.cnt = 0x1234u;
+    const uint64_t k = 0xA1B2C3D4E5F60718ULL; /* matches the test stub */
+    for (int i = 0; i < 8; i++)
+        keyed.extra[i] = (uint8_t)(k >> (56 - i * 8));
+
+    SubGhzKeyParams fallback = keyed;
+    memset(fallback.extra, 0, sizeof(fallback.extra));
+
+    SubGhzRawPair a[600], b[600];
+    const uint32_t na = subghz_proto_pirate_encode(&keyed, a, 600, 1);
+    const uint32_t nb = subghz_proto_pirate_encode(&fallback, b, 600, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, na);
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_EQUAL_MEMORY(a, b, na * sizeof(a[0]));
+
+    /* Recover the 64-bit wire word (Manchester: bit 1 = low->high) and
+     * verify fields plus the counter mixer round trip through the real
+     * decoder-side mixer inverse linked into this target. */
+    uint64_t wire = 0;
+    for (uint32_t i = 0; i < 64; i++)
+        wire = (wire << 1) | (a[404 + 2 * i].low_us == 400u ? 1u : 0u);
+    uint64_t yek = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        uint8_t byte = (uint8_t)(wire >> (i * 8));
+        byte = (uint8_t)(((byte & 0xF0u) >> 4) | ((byte & 0x0Fu) << 4));
+        byte = (uint8_t)(((byte & 0xCCu) >> 2) | ((byte & 0x33u) << 2));
+        byte = (uint8_t)(((byte & 0xAAu) >> 1) | ((byte & 0x55u) << 1));
+        yek |= ((uint64_t)byte << ((7 - i) * 8));
+    }
+    TEST_ASSERT_EQUAL_UINT32(0x0123456u, (uint32_t)((yek >> 32) & 0x0FFFFFFFu));
+    TEST_ASSERT_EQUAL_UINT32(0x02u, (uint32_t)((yek >> 60) & 0x0Fu));
+    TEST_ASSERT_EQUAL_UINT32(0x1234u,
+                             m1_kia_v5_mixer_decode((uint32_t)(yek & 0xFFFFFFFFu), k));
 }
 
 void test_kia_v1_encode_nonzero(void)
@@ -821,6 +1330,17 @@ int main(void)
     RUN_TEST(test_mazda_v0_encode_nonzero);
     RUN_TEST(test_honda_static_encode_nonzero);
     RUN_TEST(test_kia_v0_encode_nonzero);
+    RUN_TEST(test_kia_v0_encode_wire_format);
+    RUN_TEST(test_kia_v0_encode_suzuki_wire_format);
+    RUN_TEST(test_kia_v0_encode_honda_wire_format);
+    RUN_TEST(test_kia_v0_encode_mitsubishi_wire_format);
+    RUN_TEST(test_kia_v1_key_only_matches_explicit_fields);
+    RUN_TEST(test_kia_v2_key_only_matches_explicit_fields);
+    RUN_TEST(test_kia_v3_encode_uses_mf_key_directly);
+    RUN_TEST(test_kia_v4_encode_uses_mf_key_directly);
+    RUN_TEST(test_kia_v3_encode_builtin_key_fallback);
+    RUN_TEST(test_kia_v5_encode_builtin_key_fallback);
+    RUN_TEST(test_kia_v7_encoder_golden_waveform);
     RUN_TEST(test_kia_v1_encode_nonzero);
     RUN_TEST(test_kia_v2_encode_nonzero);
     RUN_TEST(test_renault_v0_encode_nonzero);

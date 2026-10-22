@@ -1468,6 +1468,8 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	                        strcmp(protocol, "Ford V1") == 0;
 	const bool is_ford_v2 = capture != NULL && protocol != NULL &&
 	                        strcmp(protocol, "Ford V2") == 0;
+	const bool is_kia_v0 = capture != NULL && protocol != NULL &&
+	                       strcmp(protocol, "Kia V0") == 0;
 
 	if (path == NULL || bit_count == 0)
 		return false;
@@ -1552,6 +1554,8 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	}
 	if (result && is_vag)
 		result = ff_write_kv_uint32(&ff, "Type", capture->type);
+	if (result && is_kia_v0 && capture->type != 0)
+		result = ff_write_kv_uint32(&ff, "Type", capture->type);
 	if (result && is_kia_v6 && capture->serial == 0)
 		result = ff_write_kv_uint32(&ff, "Btn", capture->button);
 	if (result && is_kia_v6)
@@ -1586,6 +1590,7 @@ static bool subghz_save_flipper_key_capture(
 	char key_str[32];
 	const bool is_ford_v1 = strcmp(capture->protocol, "Ford V1") == 0;
 	const bool is_ford_v2 = strcmp(capture->protocol, "Ford V2") == 0;
+	const bool is_kia_v0 = strcmp(capture->protocol, "Kia V0") == 0;
 
 	if (!ff_open_write(&ff, path))
 		return false;
@@ -1652,6 +1657,10 @@ static bool subghz_save_flipper_key_capture(
 		if (result)
 			result = ff_write_kv_uint32(&ff, "Cnt", capture->counter);
 	}
+	/* Kia V0 sub-type (1=Kia 2=Suzuki 3=Honda 4=Mitsubishi) rides the
+	 * capture->type channel; persist it under the upstream "Type:" field. */
+	if (result && is_kia_v0 && capture->type != 0)
+		result = ff_write_kv_uint32(&ff, "Type", capture->type);
 
 	ff_close(&ff);
 	return result;

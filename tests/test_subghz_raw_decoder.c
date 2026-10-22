@@ -691,6 +691,119 @@ void test_two_different_protocols_each_get_repeat_count_one(void)
 }
 
 /*============================================================================*/
+/* Inter-packet gap reopen (long-symbol automotive frames)                     */
+/*============================================================================*/
+
+void test_reopen_accumulates_long_symbol_frame(void)
+{
+    /* Kia V1 shape: 1600 us preamble pulses (each above the 1500 us
+     * boundary) + short data pulses + a 25 ms inter-burst gap.  Without
+     * reopen the buffer is shredded into 2-pulse fragments and nothing
+     * ever reaches the decoder. */
+    int16_t raw[400];
+    uint16_t idx = 0;
+    for (int i = 0; i < 90; i++)
+    {
+        raw[idx++] = -1600;
+        raw[idx++] = 1600;
+    }
+    raw[idx++] = -800;                       /* sync */
+    for (int i = 0; i < 112; i++)
+    {
+        raw[idx++] = (i & 1) ? 800 : -800;   /* data (56 bit pairs) */
+    }
+    raw[idx++] = -25000;                     /* hard inter-burst gap */
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 5, 0x51A1, 250);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, idx, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(5, results[0].protocol);
+    /* The decoder saw the complete frame (180 preamble + 1 sync + 112
+     * data + 1 gap), not a fragment. */
+    TEST_ASSERT_EQUAL_UINT16(294, ctx.last_pulse_count);
+}
+
+void test_reopen_hard_gap_separates_undecoded_junk(void)
+{
+    /* Junk fragments (< reopen ceiling gaps) must not leak into a later
+     * valid frame once a >= INTERPACKET_REOPEN_MAX gap resets the buffer. */
+    int16_t raw[200];
+    uint16_t idx = 0;
+    for (int i = 0; i < 10; i++)
+    {
+        raw[idx++] = 800;
+        raw[idx++] = 1600;    /* mid-size gap: reopen while undecoded */
+    }
+    raw[idx++] = 6000;        /* hard separator: reset */
+    for (int i = 0; i < 60; i++)
+        raw[idx++] = (i & 1) ? 400 : -400;
+    raw[idx++] = 10000;
+
+    SubGhzRawDecodeResult results[4];
+    /* Junk never matches (needs >= 50 pulses in ONE decode attempt after
+     * the reset); the good frame is 61 pulses. */
+    MockDecodeCtx ctx = make_mock(true, 7, 0x600D, 50);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, idx, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(61, ctx.last_pulse_count);
+}
+
+void test_reopen_preserves_duplicate_repeat_count(void)
+{
+    /* Three copies separated by 2000 us gaps.  Each copy decodes, so the
+     * buffer resets per copy and repeat_count must reach 3 (duplicates
+     * count as matched, not as reopen candidates). */
+    int16_t raw[200];
+    uint16_t idx = 0;
+    for (int copy = 0; copy < 3; copy++)
+    {
+        for (int i = 0; i < 48; i++)
+            raw[idx++] = (int16_t)((i % 2 == 0) ? 350 : -350);
+        raw[idx++] = (copy == 2) ? 10000 : 2000;
+    }
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 9, 0xC091, 40);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, idx, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT8(3, results[0].repeat_count);
+    TEST_ASSERT_EQUAL_UINT8(3, ctx.call_count);
+}
+
+void test_reopen_below_min_pulses_keeps_buffer(void)
+{
+    /* Fragments below PACKET_PULSE_COUNT_MIN are never offered to the
+     * decoder, but with reopen they stay in the buffer and a later
+     * fragment completes the packet. */
+    int16_t raw[100];
+    uint16_t idx = 0;
+    for (int i = 0; i < 20; i++)
+        raw[idx++] = (i & 1) ? 400 : -400;
+    raw[idx++] = 1600;                       /* 21 pulses: < MIN, reopen */
+    for (int i = 0; i < 30; i++)
+        raw[idx++] = (i & 1) ? 400 : -400;
+    raw[idx++] = 2500;                       /* 52 pulses: decode attempt */
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 11, 0xBEEF, 52);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, idx, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT16(52, ctx.last_pulse_count);
+    /* Exactly one decode attempt: the mid-size gap below MIN did not
+     * invoke the callback. */
+    TEST_ASSERT_EQUAL_UINT8(1, ctx.call_count);
+}
+
+/*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
 
@@ -752,6 +865,11 @@ int main(void)
     RUN_TEST(test_single_packet_repeat_count_is_one);
     RUN_TEST(test_three_identical_packets_repeat_count_is_three);
     RUN_TEST(test_two_different_protocols_each_get_repeat_count_one);
+
+    RUN_TEST(test_reopen_accumulates_long_symbol_frame);
+    RUN_TEST(test_reopen_hard_gap_separates_undecoded_junk);
+    RUN_TEST(test_reopen_preserves_duplicate_repeat_count);
+    RUN_TEST(test_reopen_below_min_pulses_keeps_buffer);
 
     return UNITY_END();
 }

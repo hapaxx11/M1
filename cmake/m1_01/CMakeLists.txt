@@ -527,6 +527,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_honda_v2_decode.c
     ../../Sub_Ghz/protocols/m1_ford_v1_decode.c
     ../../Sub_Ghz/protocols/m1_ford_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v3_v4_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v3_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v4_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v5_decode.c

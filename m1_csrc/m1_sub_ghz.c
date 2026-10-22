@@ -2469,8 +2469,17 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				key_params.extra[i] =
 				    (uint8_t)(tail_raw >> (32u - i * 8u));
 		}
+		else if (pirate_id == SubGhzProtoPirate_KiaV0)
+		{
+			/* ProtoPirate stores the Kia V0 sub-type (1=Kia 2=Suzuki
+			 * 3=Honda 4=Mitsubishi) in the "Type:" field. */
+			if (key_type >= 1u && key_type <= 4u)
+				key_params.extra[0] = (uint8_t)key_type;
+		}
 		if (pirate_id == SubGhzProtoPirate_KiaV6 ||
-		    pirate_id == SubGhzProtoPirate_VAG)
+		    pirate_id == SubGhzProtoPirate_VAG ||
+		    pirate_id == SubGhzProtoPirate_KiaV3 ||
+		    pirate_id == SubGhzProtoPirate_KiaV4)
 		{
 			uint32_t initial_counter = key_cnt;
 			if (pirate_id == SubGhzProtoPirate_KiaV6 &&

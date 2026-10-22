@@ -416,18 +416,33 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 			  subghz_decenc_ctl.pulse_times[subghz_decenc_ctl.npulsecount++] = duration; // End bit
 
 			  M1_LOG_D(M1_LOGDB_TAG, "Valid gap: %d, pulses:%d\r\n", duration, subghz_decenc_ctl.npulsecount);
+			  bool decoded = false;
 			  if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN ) // Potential packet received?
 			  {
 				  if ( decode_weather_only )
 				  {
-					  decode_try_sliding(subghz_decenc_ctl.npulsecount);
+					  decoded = decode_try_sliding(subghz_decenc_ctl.npulsecount);
 				  }
 				  else
 				  {
-					  decode_try_all_protocols(subghz_decenc_ctl.npulsecount);
+					  decoded = decode_try_all_protocols(subghz_decenc_ctl.npulsecount);
 				  }
 			  } // if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN )
 			  pulse_handler_interpacket_gap = duration; // update
+
+			  /* Some automotive keyfobs carry intra-frame symbols longer than
+			   * the generic 1.5 ms boundary (Kia V1 te_long = 1.6 ms, Honda V1
+			   * te_long = 2 ms, Ford V0 has a 3.5 ms mid-frame gap).  When the
+			   * buffer failed to decode, keep it open across the gap so such
+			   * frames accumulate into one packet; gaps of
+			   * INTERPACKET_REOPEN_MAX or longer still hard-separate captures. */
+			  if ( !decoded && !decode_weather_only &&
+			       duration < INTERPACKET_REOPEN_MAX &&
+			       subghz_decenc_ctl.npulsecount < PACKET_PULSE_COUNT_MAX )
+			  {
+				  return PULSE_DET_NORMAL; // keep accumulating
+			  }
+
 			  subghz_decenc_ctl.npulsecount = 0;
 			  // A potential interpacket gap has been detected, so it's not required to check for this condition for the next packet, if any.
 			  return PULSE_DET_EOP; // error or end of packet has been met

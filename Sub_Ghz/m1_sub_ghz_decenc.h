@@ -42,11 +42,22 @@
  * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
  * still fall below this threshold unless they repeat within one capture window. */
 #define PACKET_PULSE_COUNT_MIN				40 // was 48 (24 bits)
-#define PACKET_PULSE_COUNT_MAX				1088 // includes ProtoPirate Honda V2 and Ford V1 full preambles + terminal gap
+#define PACKET_PULSE_COUNT_MAX				1280 // includes ProtoPirate Honda V2/Ford V1 full
+                                                 //   preambles + terminal gap, and gapless
+                                                 //   Kia V2 two-burst uploads
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
 #define PACKET_PULSE_TIME_TOLERANCE25		25
 #define PACKET_PULSE_TIME_TOLERANCE30		30
+
+/* Several automotive keyfobs carry intra-frame symbols longer than the
+ * generic 1.5 ms packet boundary (Kia V1 te_long = 1.6 ms, Honda V1
+ * te_long = 2 ms, Ford V0 has a 3.5 ms mid-frame gap).  When such a pulse
+ * arrives but the accumulated buffer did not decode, the capture stays
+ * open across the gap instead of resetting; a gap of INTERPACKET_REOPEN_MAX
+ * or longer still hard-separates captures (the affected fobs use repeat
+ * gaps of 25 ms and up). */
+#define INTERPACKET_REOPEN_MAX				5000 // uS
 
 typedef struct SubGHz_protocol
 {

@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 # See COPYING.txt for license details.
-"""Embed optional ProtoPirate Kia V6 and VAG keys into firmware flash."""
+"""Embed optional ProtoPirate Kia and VAG keys into firmware flash.
+
+Kia keystore types follow the upstream ProtoPirate numbering:
+  10 = KIA_KEY1 (Kia V3/V4 manufacturer key)
+  11 = KIA_KEY2 (Kia V6 AES key A)
+  12 = KIA_KEY3 (Kia V6 AES key B)
+  13 = KIA_KEY4 (Kia V5 counter mixer key)
+Any non-empty subset of types 10-13 is accepted; each embedded key gets its
+own availability flag so firmware can gate the matching feature.
+"""
 
 import argparse
 import re
 import sys
 
-KIA_KEY_TYPES = (11, 12)
+KIA_KEY_TYPES = (10, 11, 12, 13)
 KIA_RAW_SIZE = 16
+KIA_RAW_SIZE_FULL = 32
 VAG_AUT64_SIZE = 48
 RAW_FILETYPE = "Flipper SubGhz Keystore RAW File"
 KEYSTORE_FILETYPE = "Flipper SubGhz Keystore File"
@@ -74,11 +84,12 @@ def _parse_raw_payload(lines, expected_sizes):
 
 
 def parse_kia_keystore(text):
-    """Return the type-11/type-12 keys, or None for an encrypted RAW keystore.
+    """Return {type: key} for Kia types 10-13, or None for an encrypted RAW keystore.
 
-    Accepts either a plaintext RAW file containing the two 8-byte keys in order,
-    or a plaintext standard Flipper keystore containing Type 11 and Type 12,
-    with or without its Flipper file header.
+    Accepts either a plaintext RAW file containing two 8-byte keys (legacy
+    layout: types 11 and 12 in order) or four 8-byte keys (types 10, 11, 12
+    and 13 in order), or a plaintext standard Flipper keystore holding any
+    non-empty subset of types 10-13, with or without its Flipper file header.
     """
     lines = text.splitlines()
     if lines and lines[0].strip().startswith("Filetype:"):
@@ -89,8 +100,15 @@ def parse_kia_keystore(text):
         return None
 
     if filetype == RAW_FILETYPE:
-        data = _parse_raw_payload(lines, (KIA_RAW_SIZE,))
-        return tuple(int.from_bytes(data[index : index + 8], "big") for index in (0, 8))
+        data = _parse_raw_payload(lines, (KIA_RAW_SIZE, KIA_RAW_SIZE_FULL))
+        if len(data) == KIA_RAW_SIZE:
+            types = (11, 12)
+        else:
+            types = KIA_KEY_TYPES
+        return {
+            key_type: int.from_bytes(data[index : index + 8], "big")
+            for key_type, index in zip(types, range(0, len(data), 8))
+        }
 
     keys = {}
     for line in lines:
@@ -117,9 +135,12 @@ def parse_kia_keystore(text):
             if key_type in keys:
                 raise ValueError(f"duplicate Kia key type {key_type}")
             keys[key_type] = key
-    if set(keys) != set(KIA_KEY_TYPES):
-        raise ValueError("plaintext Sub-GHz keystore must contain one Type 11 and Type 12 key")
-    return keys[11], keys[12]
+    if not keys:
+        raise ValueError(
+            "plaintext Sub-GHz keystore must contain at least one Kia key "
+            "(types 10-13)"
+        )
+    return keys
 
 
 def parse_vag_keystore(text):
@@ -143,8 +164,15 @@ def _format_bytes(data):
 
 
 def generate_source(kia_keys=None, vag_keys=None):
-    """Generate a C source file containing only the supplied key data."""
-    kia_values = kia_keys or (0, 0)
+    """Generate a C source file containing only the supplied key data.
+
+    kia_keys maps ProtoPirate keystore types (10-13) to keys; missing types
+    are embedded as zero with their availability flag cleared.
+    """
+    kia_keys = kia_keys or {}
+    kia_mf = kia_keys.get(10, 0)
+    kia_v6 = (kia_keys.get(11, 0), kia_keys.get(12, 0))
+    kia_v5 = kia_keys.get(13, 0)
     vag_values = vag_keys or bytes(VAG_AUT64_SIZE)
     return f"""\
 /* See COPYING.txt for license details. */
@@ -158,15 +186,20 @@ def generate_source(kia_keys=None, vag_keys=None):
 #endif
 
 M1_KEY_DATA_USED const uint64_t m1_kia_v6_keys_builtin[M1_KIA_V6_KEY_COUNT] = {{
-    0x{kia_values[0]:016X}ULL,
-    0x{kia_values[1]:016X}ULL,
+    0x{kia_v6[0]:016X}ULL,
+    0x{kia_v6[1]:016X}ULL,
 }};
-M1_KEY_DATA_USED const bool m1_kia_v6_keys_builtin_available = {str(kia_keys is not None).lower()};
+M1_KEY_DATA_USED const bool m1_kia_v6_keys_builtin_available = {str(11 in kia_keys and 12 in kia_keys).lower()};
 
 M1_KEY_DATA_USED const uint8_t m1_vag_aut64_keys_builtin[M1_VAG_AUT64_KEY_BYTES] = {{
     {_format_bytes(vag_values)},
 }};
 M1_KEY_DATA_USED const bool m1_vag_aut64_keys_builtin_available = {str(vag_keys is not None).lower()};
+
+M1_KEY_DATA_USED const uint64_t m1_kia_mf_key_builtin = 0x{kia_mf:016X}ULL;
+M1_KEY_DATA_USED const bool m1_kia_mf_key_builtin_available = {str(10 in kia_keys).lower()};
+M1_KEY_DATA_USED const uint64_t m1_kia_v5_key_builtin = 0x{kia_v5:016X}ULL;
+M1_KEY_DATA_USED const bool m1_kia_v5_key_builtin_available = {str(13 in kia_keys).lower()};
 """
 
 
