@@ -28,7 +28,7 @@
 
 ### Phase 5 — Fiat and Renault V0 decoders
 - **Description**: Port Fiat V0/V1 and Renault V0 RX decoding. Keep Fiat V1 key-dependent TX/key-resolution behavior out of this decoder phase unless separately provisioned; do not reopen the excluded Renault V1 full-key path.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Port ProtoPirate Fiat and Renault V0 decoders`
 
 ### Phase 6 — Mazda, Subaru, and Chrysler decoders

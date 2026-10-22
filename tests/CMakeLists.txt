@@ -1141,6 +1141,49 @@ endif()
 add_test(NAME kia_v5_v7_decode COMMAND test_kia_v5_v7_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate Fiat V0/V1 decoders
+# ------------------------------------------------------------------
+add_executable(test_fiat_decode
+    test_fiat_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_fiat_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_fiat_v1_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_fiat_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_fiat_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fiat_decode PRIVATE sanitizers)
+endif()
+add_test(NAME fiat_decode COMMAND test_fiat_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Renault V0 decoder
+# ------------------------------------------------------------------
+add_executable(test_renault_v0_decode
+    test_renault_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v0_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_renault_v0_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_renault_v0_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_renault_v0_decode PRIVATE sanitizers)
+endif()
+add_test(NAME renault_v0_decode COMMAND test_renault_v0_decode)
+
+# ------------------------------------------------------------------
 # Module under test: ProtoPirate saved-capture identity matching and storage
 # ------------------------------------------------------------------
 add_executable(test_subghz_saved_capture
@@ -3685,6 +3728,7 @@ add_executable(test_subghz_proto_pirate
     ${M1_ROOT}/Sub_Ghz/subghz_vag_encoder.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v5_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v0_decode.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
@@ -3695,7 +3739,7 @@ add_executable(test_subghz_proto_pirate
     ${STUBS_DIR}/subghz_decode_stubs.c
     ${STUBS_DIR}/protopirate_keys_test_data.c
 )
-target_compile_definitions(test_subghz_proto_pirate PRIVATE M1_TEST_REAL_KIA_V5_DECODE)
+target_compile_definitions(test_subghz_proto_pirate PRIVATE M1_TEST_REAL_KIA_V5_DECODE M1_TEST_REAL_RENAULT_V0_DECODE)
 target_include_directories(test_subghz_proto_pirate PRIVATE
     ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc

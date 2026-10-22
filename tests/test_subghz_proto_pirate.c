@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include "unity.h"
 #include "bit_util.h"
+#include "m1_sub_ghz_decenc.h"
 #include "subghz_proto_pirate.h"
 #include "subghz_kia_v6_encoder.h"
 #include "subghz_keeloq.h"
@@ -28,6 +29,34 @@ void tearDown(void) {}
 
 /* Real mixer inverse from m1_kia_v5_decode.c (linked into this target). */
 uint16_t m1_kia_v5_mixer_decode(uint32_t encrypted, uint64_t mfkey);
+/* Real Renault V0 decoder (linked into this target) + its checksum helper. */
+uint8_t subghz_decode_renault_v0(uint16_t protocol_index, uint16_t pulse_count);
+
+/* Expand encoder pairs to the merged pulse_times view the RX decoders see
+ * (even index = HIGH). */
+static uint16_t pairs_to_pulse_times(const SubGhzRawPair *pairs, uint32_t npairs)
+{
+    uint16_t n = 0;
+    memset(&subghz_decenc_ctl, 0, sizeof(subghz_decenc_ctl));
+    for (uint32_t i = 0; i < npairs; i++)
+    {
+        if (pairs[i].high_us)
+        {
+            if (n && (n & 1u)) /* last pulse was high */
+                subghz_decenc_ctl.pulse_times[n - 1] += (uint16_t)pairs[i].high_us;
+            else
+                subghz_decenc_ctl.pulse_times[n++] = (uint16_t)pairs[i].high_us;
+        }
+        if (pairs[i].low_us)
+        {
+            if (n && !(n & 1u)) /* last pulse was low */
+                subghz_decenc_ctl.pulse_times[n - 1] += (uint16_t)pairs[i].low_us;
+            else
+                subghz_decenc_ctl.pulse_times[n++] = (uint16_t)pairs[i].low_us;
+        }
+    }
+    return n;
+}
 
 static SubGhzKeyParams make_params(const char *proto, uint64_t key, uint32_t bits)
 {
@@ -904,6 +933,85 @@ void test_kia_v5_encode_builtin_key_fallback(void)
                              m1_kia_v5_mixer_decode((uint32_t)(yek & 0xFFFFFFFFu), k));
 }
 
+/* ===================================================================
+ * Renault V0 — verbatim replay of captured frames (Key2 tail word),
+ * upstream burst timings, and a full encode -> decode round trip
+ * through the real decoder linked into this target.
+ * =================================================================== */
+
+void test_renault_v0_encode_verbatim_round_trip(void)
+{
+    /* Real captured frame (upstream-anchored vector): serial 0x100092,
+     * button 0x06, counter 0x42. */
+    const uint64_t data = 0x10009206428A4DC3ULL;
+    const uint32_t key2 = 0x15E18u;
+
+    SubGhzKeyParams params = make_params("Renault V0", data, 82);
+    params.extra[0] = (uint8_t)(key2 >> 16);
+    params.extra[1] = (uint8_t)(key2 >> 8);
+    params.extra[2] = (uint8_t)key2;
+
+    SubGhzRawPair out[650];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, out, 650, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    const uint16_t npulses = pairs_to_pulse_times(out, npairs);
+    TEST_ASSERT_LESS_THAN_UINT16(PACKET_PULSE_COUNT_MAX, npulses);
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_renault_v0(RENAULT_V0, npulses));
+    TEST_ASSERT_EQUAL_HEX64(data, subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_HEX32(0x100092u, subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX8(0x06u, subghz_decenc_ctl.n8_buttonid);
+    TEST_ASSERT_EQUAL_HEX32(0x42u, subghz_decenc_ctl.n32_rollingcode);
+    TEST_ASSERT_EQUAL_HEX32(key2, subghz_decenc_ctl.n32_key2 & 0x3FFFFu);
+}
+
+void test_renault_v0_encode_rebuild_round_trip(void)
+{
+    /* Rebuild path (no Key2): the same vector must re-encode to a frame
+     * the decoder accepts — this serial/button/counter combination passes
+     * the upstream parity model. */
+    SubGhzKeyParams params = make_params("Renault V0", 0, 82);
+    params.serial = 0x100092u;
+    params.btn = 0x06u;
+    params.cnt = 0x42u;
+
+    SubGhzRawPair out[650];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, out, 650, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    const uint16_t npulses = pairs_to_pulse_times(out, npairs);
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_renault_v0(RENAULT_V0, npulses));
+    TEST_ASSERT_EQUAL_HEX32(0x100092u, subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX8(0x06u, subghz_decenc_ctl.n8_buttonid);
+    TEST_ASSERT_EQUAL_HEX32(0x42u, subghz_decenc_ctl.n32_rollingcode);
+}
+
+void test_renault_v0_encode_upstream_timings(void)
+{
+    SubGhzKeyParams params = make_params("Renault V0", 0x10009206428A4DC3ULL, 82);
+    params.extra[2] = 1; /* any non-zero Key2 selects the verbatim path */
+
+    SubGhzRawPair out[650];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, out, 650, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    /* Sync high 1000 us opens each burst; inter-burst gaps are 25000 us
+     * low and the frame ends with a 250 us low (upstream timings). */
+    uint32_t sync_highs = 0, inter_gaps = 0;
+    for (uint32_t i = 0; i < npairs; i++)
+    {
+        if (out[i].high_us == 1000u)
+            sync_highs++;
+        if (out[i].low_us == 25000u)
+            inter_gaps++;
+    }
+    TEST_ASSERT_EQUAL_UINT32(3, sync_highs);
+    TEST_ASSERT_EQUAL_UINT32(2, inter_gaps);
+    TEST_ASSERT_EQUAL_UINT32(0, out[npairs - 1].high_us);
+    TEST_ASSERT_EQUAL_UINT32(250, out[npairs - 1].low_us);
+}
+
+
 void test_kia_v1_encode_nonzero(void)
 {
     tier_a_smoke("Kia V1", 0x12345678, 0x02, 0x1234, 4096);
@@ -1341,6 +1449,9 @@ int main(void)
     RUN_TEST(test_kia_v3_encode_builtin_key_fallback);
     RUN_TEST(test_kia_v5_encode_builtin_key_fallback);
     RUN_TEST(test_kia_v7_encoder_golden_waveform);
+    RUN_TEST(test_renault_v0_encode_verbatim_round_trip);
+    RUN_TEST(test_renault_v0_encode_rebuild_round_trip);
+    RUN_TEST(test_renault_v0_encode_upstream_timings);
     RUN_TEST(test_kia_v1_encode_nonzero);
     RUN_TEST(test_kia_v2_encode_nonzero);
     RUN_TEST(test_renault_v0_encode_nonzero);

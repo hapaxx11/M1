@@ -1280,10 +1280,12 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [RENAULT_V0] = {
         .name   = "Renault V0",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=250, .te_long=500, .te_delta=100,
-                    .min_count_bit_for_found=64 },
+        .timing = { .te_short=125, .te_long=250, .te_delta=69,
+                    .min_count_bit_for_found=82 },
         .decode = subghz_decode_renault_v0,
     },
     [CHRYSLER_V0] = {
@@ -1298,9 +1300,11 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [FIAT_V0] = {
         .name   = "Fiat V0",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=250, .te_long=500, .te_delta=100,
+        .timing = { .te_short=200, .te_long=400, .te_delta=100,
                     .min_count_bit_for_found=64 },
         .decode = subghz_decode_fiat_v0,
     },
@@ -1396,10 +1400,14 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [FIAT_V1] = {
         .name   = "Fiat V1",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
+        /* Variant A timings here (250/500); the decoder also handles the
+         * 100/200 variant B cell windows internally.  102 logical bits. */
         .timing = { .te_short=250, .te_long=500, .te_delta=100,
-                    .min_count_bit_for_found=64 },
+                    .min_count_bit_for_found=102 },
         .decode = subghz_decode_fiat_v1,
     },
     [FIAT_V2] = {

@@ -119,7 +119,11 @@ uint8_t subghz_decode_kia_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 
 uint8_t subghz_decode_kia_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v7(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+/* Targets that link the real m1_renault_v0_decode.c define
+ * M1_TEST_REAL_RENAULT_V0_DECODE and take the real entry point instead. */
+#ifndef M1_TEST_REAL_RENAULT_V0_DECODE
 uint8_t subghz_decode_renault_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+#endif
 uint8_t subghz_decode_chrysler_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_fiat_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_subaru_pp(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }

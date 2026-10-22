@@ -1411,12 +1411,25 @@ static uint32_t encode_renault_v0(const SubGhzKeyParams *params,
 
     uint64_t data;
     uint32_t key2;
-    renault_v0_build_key(serial, button, counter, &data, &key2);
+    const uint32_t saved_key2 = ((uint32_t)params->extra[0] << 16) |
+                                ((uint32_t)params->extra[1] << 8) |
+                                (uint32_t)params->extra[2];
+    if (saved_key2 != 0) {
+        /* A saved capture carries the 18-bit Key2 tail word: transmit the
+         * captured 82-bit frame verbatim.  The rebuild path below keeps the
+         * upstream parity model, which does not fold the serial and so
+         * produces frames that fail the decoder's checksum gate for most
+         * serials — real-capture replay must not rebuild. */
+        data = params->key_value;
+        key2 = saved_key2;
+    } else {
+        renault_v0_build_key(serial, button, counter, &data, &key2);
+    }
 
     const uint8_t preamble_pairs = 16;
     const uint8_t burst_count = 3;
-    const uint32_t inter_burst_low = 1500;
-    const uint32_t final_low = 1500;
+    const uint32_t inter_burst_low = 25000; /* upstream inter-burst gap */
+    const uint32_t final_low = 250;         /* upstream frame-final low */
 
     const uint32_t burst_pairs = 1 + (preamble_pairs * 2) + (RENAULT_V0_MIN_BITS * 2) + 2;
     const uint32_t total = (burst_pairs * burst_count + (burst_count - 1)) * reps;

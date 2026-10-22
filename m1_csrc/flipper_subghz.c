@@ -1470,6 +1470,8 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	                        strcmp(protocol, "Ford V2") == 0;
 	const bool is_kia_v0 = capture != NULL && protocol != NULL &&
 	                       strcmp(protocol, "Kia V0") == 0;
+	const bool is_renault_v0 = capture != NULL && protocol != NULL &&
+	                           strcmp(protocol, "Renault V0") == 0;
 
 	if (path == NULL || bit_count == 0)
 		return false;
@@ -1537,8 +1539,9 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	}
 	else if (result && key_2_len > 0)
 	{
+		/* Upstream ProtoPirate spells the Renault V0 tail word "Key2". */
 		subghz_format_key_2(buf, sizeof(buf), key_2, key_2_len);
-		result = ff_write_kv_str(&ff, "Key_2", buf);
+		result = ff_write_kv_str(&ff, is_renault_v0 ? "Key2" : "Key_2", buf);
 	}
 
 	if (result && te > 0)
@@ -1591,6 +1594,7 @@ static bool subghz_save_flipper_key_capture(
 	const bool is_ford_v1 = strcmp(capture->protocol, "Ford V1") == 0;
 	const bool is_ford_v2 = strcmp(capture->protocol, "Ford V2") == 0;
 	const bool is_kia_v0 = strcmp(capture->protocol, "Kia V0") == 0;
+	const bool is_renault_v0 = strcmp(capture->protocol, "Renault V0") == 0;
 
 	if (!ff_open_write(&ff, path))
 		return false;
@@ -1643,9 +1647,11 @@ static bool subghz_save_flipper_key_capture(
 	}
 	else if (result && capture->key_2_len > 0)
 	{
+		/* Upstream ProtoPirate spells the Renault V0 tail word "Key2". */
 		subghz_format_key_2(key_str, sizeof(key_str), capture->key_2,
 		                    capture->key_2_len);
-		result = ff_write_kv_str(&ff, "Key_2", key_str);
+		result = ff_write_kv_str(&ff, is_renault_v0 ? "Key2" : "Key_2",
+		                         key_str);
 	}
 	if (result && capture->te > 0)
 		result = ff_write_kv_uint32(&ff, "TE", capture->te);

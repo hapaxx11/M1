@@ -68,8 +68,10 @@ and waveform decoders under `Sub_Ghz/protocols/`: Honda Static/V1/V2
 `m1_ford_v1_decode.c`, `m1_ford_v2_decode.c`), Kia V0/V1/V2/V3/V4/V5/V7
 (`m1_kia_v0_decode.c`, `m1_kia_v1_decode.c`, `m1_kia_v2_decode.c`,
 `m1_kia_v3_v4_decode.c` + the `m1_kia_v3_decode.c`/`m1_kia_v4_decode.c`
-polarity wrappers, `m1_kia_v5_decode.c`, `m1_kia_v7_decode.c`), Fiat V2
-(`m1_fiat_v2_decode.c`), Renault V1 (`m1_renault_v1_decode.c`), PSA
+polarity wrappers, `m1_kia_v5_decode.c`, `m1_kia_v7_decode.c`), Fiat
+V0/V1/V2 (`m1_fiat_v0_decode.c`, `m1_fiat_v1_decode.c`,
+`m1_fiat_v2_decode.c`), Renault V0/V1 (`m1_renault_v0_decode.c`,
+`m1_renault_v1_decode.c`), PSA
 (`m1_psa_decode.c`), Ford V3 (`m1_ford_v3_decode.c`), Kia V6
 (`m1_kia_v6_decode.c`), and VAG (`m1_vag_decode.c`). These handle frame
 recognition and the protocol-specific fields documented by each decoder; they
@@ -87,7 +89,7 @@ full-key path still lacks a public key source.
 | Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
 | Models DB | **Portable with radio adaptation** | Parse the public v2 database, but translate AM/FM and the published Honda custom profile to SI4463 settings; never write the database's CC1101 register blobs to M1 hardware. |
 | Remote Analyzer | **Portable with radio/UI redesign** | Reuse the detection concepts, not the CC1101 worker or Flipper plugin UI. Implement an asynchronous SI4463 scene with existing M1 scan/RSSI infrastructure and hardware validation. |
-| Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. 13 of 19 done (Honda ×3, Ford ×3, Kia ×7); 6 remain (Mazda V0, Subaru, Chrysler V0, Fiat V0/V1, Renault V0). |
+| Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. 16 of 19 done (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0); 3 remain (Mazda V0, Subaru, Chrysler V0). |
 | Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
 
 Implementation phases (each requires host tests, a firmware build, and a RAM
@@ -127,8 +129,29 @@ headroom check):
    additionally require a valid CRC-4, which drops tail-truncated phantom
    commits (model-validated: no legitimate frame lost; shifted commits reduced
    to the 1/16 CRC-collision residual).
-5. **Fiat/Renault decoders** — Fiat V0/V1 and Renault V0; no new key-dependent
-   TX claim and no Renault V1 full-key work.
+5. **Fiat/Renault decoders — implemented in this branch.** Fiat V0
+   (differential Manchester, hop/fix split, end-byte button; M1 seeds a
+   leading 1 on a `te_long`-high first data pulse, fixing an upstream
+   mis-decode of bit-63-set frames, and commits at the trailer/buffer end
+   because M1's 25 ms hard gap never delivers upstream's next-burst commit
+   artifacts), Fiat V1 (dual timing variants A 250/500 and B 100/200,
+   structural commit plus validation against the 9 public known BCM/Hitag2
+   keys, auxiliary fields packed into an 8-byte `Key_2`), and Renault V0
+   (te 125/250, 82-bit frame, C1/C2 checksum gate) are real host-tested
+   waveform decoders.  Renault V0's 18-bit tail word persists as the
+   upstream-spelled `Key2:` field in both save formats, and its encoder
+   replays captured frames verbatim when `Key2` is present — the upstream
+   rebuild model does not fold the serial into the parity bits and fails
+   the decoder's checksum gate for ~255/256 serials (an upstream
+   limitation, documented here rather than silently "fixed" with invented
+   crypto).  Fiat V1 TX keeps its existing encoder (key via `extra[0..5]`
+   loaded from the saved `Key_2`, default key otherwise) and always emits
+   timing variant A; Fiat V1 variant-B captures only reach the decoder
+   once a ≥1.5 ms gap or the buffer cap ends the capture, so a continuous
+   >6-frame variant-B stream would overflow before decode — not observed
+   with normal button presses.  Fiat V1's key-dependent TX/key-resolution
+   features beyond this and the Renault V1 full-key path stay out of
+   scope.
 6. **Remaining automotive decoders** — Mazda V0, Subaru, and Chrysler V0.
 7. **Models DB** — bounded parser, preset mapping, receiver integration, and SD
    installation documentation.

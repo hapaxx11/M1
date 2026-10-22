@@ -385,17 +385,25 @@ static inline bool subghz_psa_capture_needs_bruteforce(uint16_t protocol,
  * Returns how many auxiliary bytes a decoded capture carries (0 = none):
  *  - PSA TEA-mode captures (serial==0 marker): 2 bytes, stored in
  *    rolling_code by the decoder.
+ *  - Renault V0: 3 bytes (the 18-bit "Key2" tail word), stored in key2.
  *  - Renault V1: 3 bytes (frame bytes 8..10), stored in the key2 field.
  *  - Ford V1: 8 bytes (full Key_2), stored in the key2 field.
  *  - Ford V2: 5 bytes (TailRaw), stored in the key2 field.
+ *  - Fiat V1: 8 bytes (m1_fiat_v1_pack_key2: 6-byte matched Hitag2 key,
+ *    TE variant, tail bits, known-key-valid flag, frame XOR), stored in
+ *    the key2 field.
  */
 static inline uint8_t subghz_capture_key2_len(uint16_t protocol,
                                               uint32_t serial_number)
 {
     if (subghz_psa_capture_needs_bruteforce(protocol, serial_number))
         return 2u;
+    if (protocol == (uint16_t)RENAULT_V0)
+        return 3u;
     if (protocol == (uint16_t)RENAULT_V1)
         return 3u;
+    if (protocol == (uint16_t)FIAT_V1)
+        return 8u;
     if (protocol == (uint16_t)FORD_V1)
         return 8u;
     if (protocol == (uint16_t)FORD_V2)

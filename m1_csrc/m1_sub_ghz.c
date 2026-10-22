@@ -2476,6 +2476,26 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			if (key_type >= 1u && key_type <= 4u)
 				key_params.extra[0] = (uint8_t)key_type;
 		}
+		else if (pirate_id == SubGhzProtoPirate_RenaultV0)
+		{
+			/* Upstream "Key2" 18-bit tail word → extra[0..2]; when present
+			 * the encoder transmits the captured frame verbatim instead of
+			 * rebuilding the parity (the upstream rebuild model does not
+			 * fold the serial and fails the decoder's checksum gate for
+			 * most serials). */
+			key_params.extra[0] = (uint8_t)(key2_wide >> 16);
+			key_params.extra[1] = (uint8_t)(key2_wide >> 8);
+			key_params.extra[2] = (uint8_t)key2_wide;
+		}
+		else if (pirate_id == SubGhzProtoPirate_FiatV1)
+		{
+			/* Packed Key_2 (m1_fiat_v1_pack_key2): 6-byte matched Hitag2
+			 * key in bits 47..0, tail bits in bits 49..50. */
+			for (uint8_t i = 0; i < 6u; i++)
+				key_params.extra[i] =
+				    (uint8_t)(key2_wide >> (40u - i * 8u));
+			key_params.extra[6] = (uint8_t)((key2_wide >> 49) & 0x03u);
+		}
 		if (pirate_id == SubGhzProtoPirate_KiaV6 ||
 		    pirate_id == SubGhzProtoPirate_VAG ||
 		    pirate_id == SubGhzProtoPirate_KiaV3 ||
