@@ -13,8 +13,8 @@
 
 ### Phase 2 — Kia V3/V4 counter seeding
 - **Description**: Resolve key-only capture counters before initializing the replay cache and test consecutive encoder preparations.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Seed Kia replay counters from key-only captures`
 
 ### Phase 3 — Saved capture UI and metadata
 - **Description**: Incrementally scan saved captures on scene ticks, reject protocol mismatches early, and retain KeeLoq metadata during updates.

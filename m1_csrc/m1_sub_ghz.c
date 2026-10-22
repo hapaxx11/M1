@@ -2514,11 +2514,21 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			if (pirate_id == SubGhzProtoPirate_KiaV6 &&
 			    !key_cnt_present)
 				initial_counter = (uint32_t)key_value;
-			key_params.cnt = subghz_proto_pirate_counter_get(
-			    &s_proto_pirate_counter, sub_path, (uint8_t)pirate_id,
-			    initial_counter,
-			    key_value ^ ((uint64_t)key_serial << 32) ^ key_cnt);
-			key_params.cnt_present = true;
+			bool can_cache_counter = true;
+			if ((pirate_id == SubGhzProtoPirate_KiaV3 ||
+			     pirate_id == SubGhzProtoPirate_KiaV4) &&
+			    !key_cnt_present)
+				can_cache_counter =
+				    subghz_proto_pirate_kia_v3_v4_resolve_counter(
+				        &key_params, &initial_counter);
+			if (can_cache_counter)
+			{
+				key_params.cnt = subghz_proto_pirate_counter_get(
+				    &s_proto_pirate_counter, sub_path,
+				    (uint8_t)pirate_id, initial_counter,
+				    key_value ^ ((uint64_t)key_serial << 32) ^ key_cnt);
+				key_params.cnt_present = true;
+			}
 		}
 
 		uint32_t npairs = 0;

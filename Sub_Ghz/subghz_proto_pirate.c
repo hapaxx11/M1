@@ -2146,6 +2146,37 @@ static uint32_t encode_ford_v1_wrapper(const SubGhzKeyParams *params,
 #define KIA_V3_V4_CRC_BITS       4
 #define KIA_V3_V4_CRC_COUNT      16
 
+bool subghz_proto_pirate_kia_v3_v4_resolve_counter(
+    const SubGhzKeyParams *params, uint32_t *counter)
+{
+    if (!params || !counter)
+        return false;
+    if (params->cnt_present)
+    {
+        *counter = params->cnt;
+        return true;
+    }
+
+    uint64_t mfr_key = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        mfr_key = (mfr_key << 8) | params->extra[i];
+    if (mfr_key == 0 && m1_kia_mf_key_builtin_available)
+        mfr_key = m1_kia_mf_key_builtin;
+    if (mfr_key == 0)
+        return false;
+
+    uint8_t bytes[8];
+    for (uint8_t i = 0; i < sizeof(bytes); i++)
+        bytes[i] = (uint8_t)(params->key_value >> (56u - i * 8u));
+    const uint32_t encrypted =
+        ((uint32_t)reverse8_local(bytes[3]) << 24) |
+        ((uint32_t)reverse8_local(bytes[2]) << 16) |
+        ((uint32_t)reverse8_local(bytes[1]) << 8) |
+        (uint32_t)reverse8_local(bytes[0]);
+    *counter = keeloq_decrypt(encrypted, mfr_key) & 0xFFFFu;
+    return true;
+}
+
 static uint64_t kia_v3_v4_build_tx_bitstream(uint32_t serial, uint8_t btn,
                                               uint32_t encrypted)
 {

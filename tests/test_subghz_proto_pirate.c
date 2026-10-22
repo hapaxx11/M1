@@ -769,6 +769,70 @@ void test_kia_v4_encode_uses_mf_key_directly(void)
     kia_v3_v4_check_frame("Kia V4", true);
 }
 
+static uint8_t reverse_test_byte(uint8_t value)
+{
+    uint8_t result = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        result = (uint8_t)((result << 1) | ((value >> i) & 1u));
+    return result;
+}
+
+void test_kia_v3_key_only_replay_advances_from_captured_counter(void)
+{
+    const uint32_t serial = 0x00ABCDE1u;
+    const uint8_t button = 0x02u;
+    const uint16_t captured_counter = 0x1234u;
+    const uint64_t mf_key = 0x0102030405060708ULL;
+    const uint32_t encrypted = keeloq_encrypt(
+        captured_counter | ((serial & 0x3FFu) << 16) |
+            ((uint32_t)button << 28),
+        mf_key);
+
+    uint8_t bytes[8] = {0};
+    bytes[0] = reverse_test_byte((uint8_t)encrypted);
+    bytes[1] = reverse_test_byte((uint8_t)(encrypted >> 8));
+    bytes[2] = reverse_test_byte((uint8_t)(encrypted >> 16));
+    bytes[3] = reverse_test_byte((uint8_t)(encrypted >> 24));
+    uint64_t key_value = 0;
+    for (uint8_t i = 0; i < sizeof(bytes); i++)
+        key_value = (key_value << 8) | bytes[i];
+
+    SubGhzKeyParams params = make_params("Kia V3/V4", key_value, 68);
+    params.serial = serial;
+    params.btn = button;
+    uint32_t initial_counter = 0;
+    TEST_ASSERT_TRUE(subghz_proto_pirate_kia_v3_v4_resolve_counter(
+        &params, &initial_counter));
+    TEST_ASSERT_EQUAL_UINT32(captured_counter, initial_counter);
+
+    subghz_proto_pirate_counter_state_t state = {0};
+    const uint32_t mask = subghz_proto_pirate_counter_advance_mask(
+        SubGhzProtoPirate_KiaV3, 1u);
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFu, mask);
+    for (uint8_t replay = 0; replay < 2u; replay++)
+    {
+        params.cnt = subghz_proto_pirate_counter_get(
+            &state, "/SUBGHZ/key-only.sub", SubGhzProtoPirate_KiaV3,
+            initial_counter, key_value);
+        params.cnt_present = true;
+        SubGhzRawPair pairs[200];
+        const uint32_t count =
+            subghz_proto_pirate_encode(&params, pairs, 200, 1);
+        TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+
+        uint64_t emitted = 0;
+        for (uint32_t bit = 0; bit < 64u; bit++)
+        {
+            const SubGhzRawPair *pair = &pairs[26u + 2u * bit];
+            emitted = (emitted << 1) | (pair->high_us == 400u ? 1u : 0u);
+        }
+        const uint32_t encoded_counter =
+            keeloq_decrypt((uint32_t)bit_reverse64(emitted), mf_key) & 0xFFFFu;
+        TEST_ASSERT_EQUAL_UINT32(captured_counter + replay, encoded_counter);
+        subghz_proto_pirate_counter_advance(&state, mask);
+    }
+}
+
 void test_kia_v3_encode_builtin_key_fallback(void)
 {
     /* extra[] carrying the key and zeroed extra[] (built-in fallback) must
@@ -1530,6 +1594,7 @@ int main(void)
     RUN_TEST(test_kia_v2_key_only_matches_explicit_fields);
     RUN_TEST(test_kia_v3_encode_uses_mf_key_directly);
     RUN_TEST(test_kia_v4_encode_uses_mf_key_directly);
+    RUN_TEST(test_kia_v3_key_only_replay_advances_from_captured_counter);
     RUN_TEST(test_kia_v3_encode_builtin_key_fallback);
     RUN_TEST(test_kia_v5_encode_builtin_key_fallback);
     RUN_TEST(test_kia_v7_encoder_golden_waveform);

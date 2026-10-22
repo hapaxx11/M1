@@ -90,6 +90,8 @@ SubGhzProtoPirateId subghz_proto_pirate_find_by_name(const char *name);
 /** Return true if the protocol is implemented in this dispatcher. */
 bool subghz_proto_pirate_is_supported(const char *name);
 bool subghz_proto_pirate_parse_serial_line(const char *line, uint32_t *serial);
+bool subghz_proto_pirate_kia_v3_v4_resolve_counter(
+    const SubGhzKeyParams *params, uint32_t *counter);
 
 /**
  * Encode a keyfob signal into raw timing pairs.
