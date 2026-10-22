@@ -119,8 +119,16 @@ uint8_t subghz_decode_kia_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 
 uint8_t subghz_decode_kia_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v7(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+/* Targets that link the real m1_renault_v0_decode.c define
+ * M1_TEST_REAL_RENAULT_V0_DECODE and take the real entry point instead. */
+#ifndef M1_TEST_REAL_RENAULT_V0_DECODE
 uint8_t subghz_decode_renault_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+#endif
+/* Targets that link the real m1_chrysler_v0_decode.c define
+ * M1_TEST_REAL_CHRYSLER_V0_DECODE and take the real entry point instead. */
+#ifndef M1_TEST_REAL_CHRYSLER_V0_DECODE
 uint8_t subghz_decode_chrysler_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+#endif
 uint8_t subghz_decode_fiat_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_subaru_pp(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_honda_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
@@ -129,7 +137,13 @@ uint8_t subghz_decode_ford_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return
 uint8_t subghz_decode_ford_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v3(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_kia_v4(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+/* Targets that link the real m1_kia_v5_decode.c (e.g. ProtoPirate encoder
+ * tests exercising the mixer round trip) define M1_TEST_REAL_KIA_V5_DECODE
+ * and take the real entry point instead of this stub. */
+#ifndef M1_TEST_REAL_KIA_V5_DECODE
 uint8_t subghz_decode_kia_v5(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint16_t m1_kia_v5_mixer_decode(uint32_t a, uint64_t b) { (void)a; (void)b; return 0; }
+#endif
 uint8_t subghz_decode_fiat_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_fiat_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_renault_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
@@ -147,6 +161,11 @@ uint8_t subghz_decode_kia_v6(uint16_t a, uint16_t b) { (void)a; (void)b; return 
 #include "m1_sub_ghz_decenc.h"
 
 SubGHz_DecEnc_t subghz_decenc_ctl;
+
+uint16_t get_diff(uint16_t n_a, uint16_t n_b)
+{
+    return (n_a > n_b) ? (n_a - n_b) : (n_b - n_a);
+}
 
 bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw) { (void)out; (void)raw; return false; }
 

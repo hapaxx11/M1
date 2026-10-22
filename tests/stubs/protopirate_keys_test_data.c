@@ -20,3 +20,7 @@ const uint64_t m1_kia_v6_keys_builtin[M1_KIA_V6_KEY_COUNT] = {
 const bool m1_kia_v6_keys_builtin_available = true;
 const uint8_t m1_vag_aut64_keys_builtin[M1_VAG_AUT64_KEY_BYTES] = {0};
 const bool m1_vag_aut64_keys_builtin_available = false;
+const uint64_t m1_kia_mf_key_builtin = 0x0102030405060708ULL;
+const bool m1_kia_mf_key_builtin_available = true;
+const uint64_t m1_kia_v5_key_builtin = 0xA1B2C3D4E5F60718ULL;
+const bool m1_kia_v5_key_builtin_available = true;

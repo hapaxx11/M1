@@ -393,6 +393,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_kia_v6_encoder.c
     ../../Sub_Ghz/subghz_vag_encoder.c
     ../../Sub_Ghz/subghz_proto_pirate_timing.c
+    ../../Sub_Ghz/subghz_saved_match.c
     ../../Sub_Ghz/subghz_raw_pairs_writer.c
     ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/subghz_weather_parse.c
@@ -526,6 +527,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_honda_v2_decode.c
     ../../Sub_Ghz/protocols/m1_ford_v1_decode.c
     ../../Sub_Ghz/protocols/m1_ford_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v3_v4_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v3_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v4_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v5_decode.c
@@ -686,6 +688,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_read.c
     ../../m1_csrc/m1_subghz_scene_read_raw.c
     ../../m1_csrc/subghz_autosave.c
+    ../../m1_csrc/subghz_saved_capture.c
     ../../m1_csrc/m1_subghz_scene_receiver_info.c
     ../../m1_csrc/subghz_config_cycle.c
     ../../m1_csrc/m1_subghz_scene_config.c
@@ -717,8 +720,12 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_signal_settings.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_models.c
+    ../../Sub_Ghz/subghz_models_db.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_emulate.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_bruteforce.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_analyzer.c
+    ../../Sub_Ghz/subghz_remote_analyzer.c
     ../../m1_csrc/m1_subghz_scene_signal_identifier.c
     ../../m1_csrc/m1_subghz_scene_smart_signal_id.c
     ../../m1_csrc/m1_subghz_scene_analyzer_menu.c

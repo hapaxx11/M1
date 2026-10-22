@@ -7,7 +7,7 @@ M1 firmware, recording its current emulation capability, the technical reason fo
 any limitation, and where to look for new information that might unlock emulation
 in the future.
 
-**Last reviewed:** 2026-06-05
+**Last reviewed:** 2026-10-17
 
 ---
 
@@ -22,16 +22,20 @@ in the future.
 
 ---
 
-## ProtoPirate Kia V6 / VAG key injection
+## ProtoPirate Kia / VAG key injection
 
 The release workflow optionally embeds `KIA_V6_KEYSTORE_RAW` and
 `VAG_AUT64_KEYSTORE_RAW` into firmware flash. Encrypted (`Encryption: 1`) files are
 skipped; malformed plaintext inputs fail the build rather than silently producing
 partial key data. Accepted plaintext inputs:
 
-- Kia V6: a RAW file with exactly 16 payload bytes (Type 11 key then Type 12 key,
-  each big-endian), or plaintext Type 11/12 entries in a standard Flipper keystore
-  with or without its file header.
+- Kia: a RAW file with 16 payload bytes (legacy layout: Type 11 key then Type 12
+  key, each big-endian) or 32 payload bytes (Types 10, 11, 12 and 13 in order), or
+  plaintext Type 10/11/12/13 entries in a standard Flipper keystore with or
+  without its file header. Any non-empty subset of the four types is accepted;
+  each key gets its own availability flag. Type 10 (KIA_KEY1) is the Kia V3/V4
+  manufacturer key, Types 11/12 the Kia V6 AES keys, and Type 13 (KIA_KEY4) the
+  Kia V5 counter-mixer key.
 - VAG: 48 bytes of packed AUT64 records, either as contiguous hex or a sequential
   offset hexdump. A 64-byte dump is accepted when its final 16 padding bytes are
   zero; only the first 48 bytes are embedded.
@@ -42,7 +46,14 @@ secrets only, not in source, tests, or documentation. Host-side tests use synthe
 values and exercise parsing and generated-source availability flags.
 
 The Kia V6 decoder uses the injected keys to decrypt frames and validate their
-CRC. The VAG decoder uses the AUT64 records to recover serial/counter fields for
+CRC. The Kia V3/V4 decoder uses the Type 10 manufacturer key for direct KeeLoq
+plaintext validation (button nibble + serial low byte cross-check); without it,
+V3/V4 frames still commit structurally with zeroed fields so the raw word can be
+saved and replayed bitwise. The Kia V5 decoder recovers serial/button cipher-free
+and uses Type 13 for the counter mixer; without it the counter reads as 0. The
+V3/V4 and V5 TX encoders likewise take their key from `extra[0..7]` or the
+embedded key and refuse to transmit when no key is provisioned (upstream refuses
+too). The VAG decoder uses the AUT64 records to recover serial/counter fields for
 type 1; type 2 uses its fixed TEA schedule. Without injected Kia or VAG type-1
 keys, VAG still identifies the protocol and button but cannot recover its
 encrypted fields. Keys embedded in firmware can be extracted from a firmware
@@ -51,12 +62,164 @@ image.
 ## Decoder and build-injected data organization
 
 ProtoPirate frame identification is implemented in the pure-logic parse helpers
-and waveform decoders under `Sub_Ghz/protocols/`: Fiat V2
-(`m1_fiat_v2_decode.c`), Renault V1 (`m1_renault_v1_decode.c`), PSA
+and waveform decoders under `Sub_Ghz/protocols/`: Honda Static/V1/V2
+(`m1_honda_static_decode.c`, `m1_honda_v1_decode.c`,
+`m1_honda_v2_decode.c`), Ford V0/V1/V2 (`m1_ford_v0_decode.c`,
+`m1_ford_v1_decode.c`, `m1_ford_v2_decode.c`), Kia V0/V1/V2/V3/V4/V5/V7
+(`m1_kia_v0_decode.c`, `m1_kia_v1_decode.c`, `m1_kia_v2_decode.c`,
+`m1_kia_v3_v4_decode.c` + the `m1_kia_v3_decode.c`/`m1_kia_v4_decode.c`
+polarity wrappers, `m1_kia_v5_decode.c`, `m1_kia_v7_decode.c`), Fiat
+V0/V1/V2 (`m1_fiat_v0_decode.c`, `m1_fiat_v1_decode.c`,
+`m1_fiat_v2_decode.c`), Renault V0/V1 (`m1_renault_v0_decode.c`,
+`m1_renault_v1_decode.c`), Mazda V0 (`m1_mazda_v0_decode.c`), Subaru
+(`m1_subaru_pp_decode.c`), Chrysler V0 (`m1_chrysler_v0_decode.c`), PSA
 (`m1_psa_decode.c`), Ford V3 (`m1_ford_v3_decode.c`), Kia V6
 (`m1_kia_v6_decode.c`), and VAG (`m1_vag_decode.c`). These handle frame
 recognition and the protocol-specific fields documented by each decoder; they
 are separate from the generic job lifecycle in `subghz_bruteforce_job.c`.
+
+## Remaining ProtoPirate parity programme
+
+Evaluated against RocketGod-git/ProtoPirate commit `dc3446b9` on 2026-10-17.
+The remaining items are not equivalent blockers: the app helpers and all 19
+placeholder automotive protocols have upstream source, while the Renault V1
+full-key path still lacks a public key source.
+
+| Item | Assessment | M1 implementation boundary |
+|------|------------|----------------------------|
+| Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
+| Models DB | **Implemented in this branch** | Bounded host-tested v2 parser (`Sub_Ghz/subghz_models_db.c`) + "Models DB" scene in the Proto Pirate menu: entries map Flipper preset names to M1's SI4463 AM/FM modulation presets (the Honda custom CC1101 blob is acknowledged but never consumed — it maps to FM476); selecting an entry applies the frequency/modulation and opens the Read scene with the ProtoPirate filter. Ships as `subghz_database/models_db/models.txt` → install at `SubGHz/models_db/models.txt`. |
+| Remote Analyzer | **Implemented in this branch** | Reuse the detection concepts, not the CC1101 worker: two-stage RSSI sweep (6 region-aware hopper frequencies coarse, ±300 kHz @ 20 kHz fine), AM classification by >6 dB neighbor drop, adaptive frequency smoothing, and the 5-frame sample hold are pure host-tested logic (`Sub_Ghz/subghz_remote_analyzer.c`); the async scene (`m1_subghz_scene_proto_pirate_analyzer.c`) tunes the SI4463 directly, pauses/resumes on OK, adjusts the trigger with LEFT/RIGHT, and shares the tuner scene's radio lifecycle. |
+| Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. **All 19 done** (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0, Mazda V0, Subaru, Chrysler V0). |
+| Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
+
+Implementation phases (each requires host tests, a firmware build, and a RAM
+headroom check):
+
+1. **Saved-capture match/update — implemented in this branch.** Pure matching
+   helpers, dual-format storage scan, Serial/Btn/Cnt persistence, and Receiver
+   Info Update flow; targeted host tests and the firmware build pass.
+2. **Honda decoders — implemented in this branch.** Static, V1, and V2 use real
+   parsers and waveform state machines with positive/negative host tests. The
+   registry now reflects their dynamic AM/FM, dual-band capabilities, and the
+   capture window accommodates the full V2 preamble.
+3. **Ford decoders — implemented in this branch.** V0, V1, and V2 use real
+   parsers and waveform decoders with positive/negative host tests. Ford V1's
+   full 64-bit `Key_2` and CRC-derived `Key_3`, and Ford V2's `Tail31`/`TailRaw`,
+   are persisted in both save formats and feed the existing TX encoders.
+4. **Kia decoders — implemented in this branch.** V0 (including the
+   Suzuki/Honda V0/Mitsubishi sub-types, persisted via the upstream-compatible
+   `Type:` field), V1, V2, the shared V3/V4 core with polarity-filtered
+   wrappers, V5 (mixer counter recovery gated on the Type 13 key), and V7
+   (complemented-word CRC-8 gate) are real host-tested waveform decoders.  The
+   V0 encoder was brought to the upstream wire format (symmetric PWM pairs,
+   CRC-8 poly 0x7F, 1500/1500 copy separator, lone 1000 µs commit gap) — the
+   previous asymmetric-pair/XOR-CRC output could not be decoded by the upstream
+   algorithm at all.  The V3/V4 encoder now encrypts with the manufacturer key
+   directly (no KeeLoq simple learning) and both it and the V5 encoder refuse
+   to transmit without key material (upstream behaviour); the V7 encoder's
+   Manchester pair emission, saved-key field layout, and 15-pair tail pass were
+   aligned with upstream.  Two capture-pipeline caveats were fixed alongside:
+   the pulse handler and the offline RAW decoder now keep an undecoded buffer
+   open across 1.5–5 ms gaps (`INTERPACKET_REOPEN_MAX`), so long-symbol frames
+   (Kia V1 te_long = 1.6 ms, Honda V1 2 ms, Ford V0's 3.5 ms mid-frame gap)
+   accumulate instead of being shredded at every long pulse, and
+   `PACKET_PULSE_COUNT_MAX` grew 1088 → 1280 to hold gapless Kia V2 two-burst
+   uploads.  Kia V1/V2 commit gating is stricter than upstream by design:
+   frames whose leading symbols were reconstructed through hidden-pair recovery
+   additionally require a valid CRC-4, which drops tail-truncated phantom
+   commits (model-validated: no legitimate frame lost; shifted commits reduced
+   to the 1/16 CRC-collision residual).
+5. **Fiat/Renault decoders — implemented in this branch.** Fiat V0
+   (differential Manchester, hop/fix split, end-byte button; M1 seeds a
+   leading 1 on a `te_long`-high first data pulse, fixing an upstream
+   mis-decode of bit-63-set frames, and commits at the trailer/buffer end
+   because M1's 25 ms hard gap never delivers upstream's next-burst commit
+   artifacts), Fiat V1 (dual timing variants A 250/500 and B 100/200,
+   structural commit plus validation against the 9 public known BCM/Hitag2
+   keys, auxiliary fields packed into an 8-byte `Key_2`), and Renault V0
+   (te 125/250, 82-bit frame, C1/C2 checksum gate) are real host-tested
+   waveform decoders.  Renault V0's 18-bit tail word persists as the
+   upstream-spelled `Key2:` field in both save formats, and its encoder
+   replays captured frames verbatim when `Key2` is present — the upstream
+   rebuild model does not fold the serial into the parity bits and fails
+   the decoder's checksum gate for ~255/256 serials (an upstream
+   limitation, documented here rather than silently "fixed" with invented
+   crypto).  Fiat V1 TX keeps its existing encoder (key via `extra[0..5]`
+   loaded from the saved `Key_2`, default key otherwise) and always emits
+   timing variant A; Fiat V1 variant-B captures only reach the decoder
+   once a ≥1.5 ms gap or the buffer cap ends the capture, so a continuous
+   >6-frame variant-B stream would overflow before decode — not observed
+   with normal button presses.  Fiat V1's key-dependent TX/key-resolution
+   features beyond this and the Renault V1 full-key path stay out of
+   scope.
+6. **Remaining automotive decoders — implemented in this branch.** Mazda V0
+   (Manchester, 0xD7/0x5A sync-tail bytes, bytewise-sum checksum), Subaru
+   (PWM 800/1600 µs, structural only — upstream has no checksum and its own
+   validity flag is inconsistent even for upstream-encoder output, kept
+   faithful), and Chrysler V0 (300 µs short marks, 3400/3700 µs long marks,
+   80-bit dual payload with seed/XOR-transform blocks and a 16-bit second
+   wire word) are real host-tested waveform decoders.  Chrysler's upstream
+   decoder arms on the 15.6 ms frame gap that M1's capture model
+   hard-separates, so the M1 decoder additionally re-runs the upstream
+   machine pre-armed in its Data state — both passes are structural-gate
+   protected.  Chrysler's second wire word persists as a 2-byte `Key_2` and
+   reloads into a verbatim replay path (extra[9..10]) that coexists with the
+   encoder's plaintext-block rebuild path; the full loop (plaintext rebuild
+   → decode → verbatim replay → identical decode) is host-tested.  Subaru
+   (800/1600/200 µs) and Chrysler (300/3400/3700 µs, 80-bit) registry
+   timings were corrected to upstream, the proto-pirate catalog entries
+   match, and the generic PWM replay flags were removed from all three.
+7. **Models DB — implemented in this branch.** The v2 models-file parser
+   (`Sub_Ghz/subghz_models_db.c`, pure logic, 20 host tests) validates the
+   header, bounds names/frequencies, skips unknown presets and out-of-range
+   frequencies, and maps Flipper preset names to M1's SI4463 modulation
+   presets (Ook270/Ook650/2FSKDev238/2FSKDev476; the published Honda
+   `FuriHalSubGhzPresetCustom` CC1101 blob is acknowledged but never
+   consumed — it maps to FM476).  The "Models DB" scene in the Proto Pirate
+   menu lists entries from `SubGHz/models_db/models.txt` on the SD card
+   (shipped in the repo as `subghz_database/models_db/models.txt`), applies
+   frequency + modulation through the existing config seam, and opens the
+   Read scene with the ProtoPirate filter; a missing/invalid database or an
+   unmappable frequency shows a plain info screen.
+8. **Remote Analyzer — implemented in this branch.** The detection core is
+   pure host-tested logic (`Sub_Ghz/subghz_remote_analyzer.c`, 23 tests):
+   coarse/fine peak tracking, AM classification by steep (>6 dB) neighbor
+   drop at the fine peak, adaptive EMA frequency smoothing (with a
+   first-sample initialization fix — upstream's smoother starts from
+   uninitialized heap), the upstream sample-hold delivery policy, and
+   nearest-frequency rounding.  The "Remote Analyzer" scene in the Proto
+   Pirate menu drives the SI4463 directly with a tick-chunked scan
+   (≤ ~25 ms per tick, instant BACK cancellation, the tuner scene's radio
+   lifecycle), pausing on OK and a LEFT/RIGHT trigger adjustment.  M1 has
+   no narrow-BW second stage, so the fine sweep runs with the normal RX
+   config — the documented SI4463 adaptation.  **On-device detection
+   validation is still outstanding** (requires hardware + a live fob).
+9. **Closeout — done in this branch.** Full host suite (218 suites) and
+   firmware build pass; RAM 568,904 B / 640 KB (86.81%), FLASH 914,940 B /
+   1023 KB (87.34%); the protocol/feature inventories and this matrix are
+   updated, and the temporary `PHASE_CHECKLIST.md` was removed.
+
+### On-device validation outstanding
+
+All of the above is host-tested only (synthetic waveforms, model-validated).
+Before relying on these features with real fobs, the following need hardware
+validation (none were RF-tested on-device):
+
+- Each new automotive decoder against a live fob (frame identification and
+  Serial/Btn/Cnt fields), especially the Kia V1 path that depends on the
+  1.5–5 ms gap-reopen capture change, and the gap-reopen change's effect on
+  unrelated protocols in noisy environments.
+- Saved-capture replay round trips on air for the corrected TX encoders
+  (Kia V0 symmetric-PWM wire format, Kia V7 Manchester polarity, Renault V0
+  and Chrysler V0 verbatim replay, Fiat V1 variant-A emission).
+- The Models DB scene flow with `SubGHz/models_db/models.txt` installed.
+- The Remote Analyzer's detection accuracy (frequency estimate, AM verdict)
+  against known fobs on both bands.
+- Kia V3/V4/V5 field validation with provisioned keystore types 10/13.
+
+The working phase checklist was tracked in `PHASE_CHECKLIST.md` on the
+`feature/protopirate-parity` branch and removed at closeout.
 
 ## PSA TEA-mode brute-force key recovery
 

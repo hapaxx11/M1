@@ -15,8 +15,12 @@
  *                    file, then the existing Decode-Raw flow handles analysis.
  *   3. Timing Tuner — Async timing analysis tool; pushes
  *                    SubGhzSceneProtoPirateTuner.
- *   4. Emulate     — Pick a ProtoPirate protocol and transmit a hex key.
- *   5. Brute Force — PSA TEA key recovery from a saved capture; pushes
+ *   4. Models DB   — ProtoPirate car-models database from SD; applies the
+ *                    selected receiver preset and pushes SubGhzSceneRead.
+ *   5. Remote Analyzer — Async two-stage frequency/RSSI/modulation sweep;
+ *                    pushes SubGhzSceneProtoPirateAnalyzer.
+ *   6. Emulate     — Pick a ProtoPirate protocol and transmit a hex key.
+ *   7. Brute Force — PSA TEA key recovery from a saved capture; pushes
  *                    SubGhzSceneProtoPirateBruteForce.
  *
  * All scene transitions are non-blocking; the scene itself only handles
@@ -37,12 +41,14 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define PP_MENU_ITEM_COUNT  5
+#define PP_MENU_ITEM_COUNT  7
 
 static const char *pp_menu_labels[PP_MENU_ITEM_COUNT] = {
     "Receiver",
     "Sub Decode",
     "Timing Tuner",
+    "Models DB",
+    "Remote Analyzer",
     "Emulate",
     "Brute Force",
 };
@@ -51,6 +57,8 @@ static const SubGhzSceneId pp_menu_targets[PP_MENU_ITEM_COUNT] = {
     SubGhzSceneRead,                   /* Receiver: reuse existing async read scene */
     SubGhzSceneSaved,                  /* Sub Decode: browse saved files → Decode Raw flow */
     SubGhzSceneProtoPirateTuner,       /* Timing Tuner: new async scene */
+    SubGhzSceneProtoPirateModels,      /* Models DB: car-models database → Read scene */
+    SubGhzSceneProtoPirateAnalyzer,    /* Remote Analyzer: async freq/RSSI/modulation sweep */
     SubGhzSceneProtoPirateEmulate,     /* Emulate: pick ProtoPirate protocol and send */
     SubGhzSceneProtoPirateBruteForce,  /* Brute Force: PSA TEA key recovery */
 };

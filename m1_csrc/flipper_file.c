@@ -135,16 +135,18 @@ bool ff_open_write(flipper_file_t *ctx, const char *path)
  * @brief  Close an open Flipper file
  * @param  ctx  flipper file context
  */
-void ff_close(flipper_file_t *ctx)
+bool ff_close(flipper_file_t *ctx)
 {
 	if (ctx == NULL)
-		return;
+		return false;
 
 	if (ctx->is_open)
 	{
-		f_close(&ctx->fh);
+		const bool closed = f_close(&ctx->fh) == FR_OK;
 		ctx->is_open = false;
+		return closed;
 	}
+	return true;
 }
 
 /*============================================================================*/

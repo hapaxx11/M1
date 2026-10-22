@@ -85,7 +85,7 @@ static void scene_on_enter(SubGhzApp *app)
 
     const uint8_t k2_len = subghz_capture_key2_len(e->info.protocol,
                                                    e->info.serial_number);
-    const uint32_t k2 = subghz_capture_key2_value(&e->info);
+    const uint64_t k2 = subghz_capture_key2_value(&e->info);
     flipper_subghz_key_capture_t capture = {
         .frequency = e->frequency,
         .preset = "FuriHalSubGhzPresetOok650Async",

@@ -90,6 +90,8 @@ SubGhzProtoPirateId subghz_proto_pirate_find_by_name(const char *name);
 /** Return true if the protocol is implemented in this dispatcher. */
 bool subghz_proto_pirate_is_supported(const char *name);
 bool subghz_proto_pirate_parse_serial_line(const char *line, uint32_t *serial);
+bool subghz_proto_pirate_kia_v3_v4_resolve_counter(
+    const SubGhzKeyParams *params, uint32_t *counter);
 
 /**
  * Encode a keyfob signal into raw timing pairs.
@@ -113,6 +115,21 @@ uint32_t subghz_proto_pirate_required_pairs(const SubGhzKeyParams *params,
                                              uint8_t                repetitions);
 
 #define SUBGHZ_PROTO_PIRATE_COUNTER_CACHE_SIZE 8u
+
+static inline uint32_t subghz_proto_pirate_counter_advance_mask(
+    uint8_t protocol, uint32_t encoded_pair_count)
+{
+    if (encoded_pair_count == 0u)
+        return 0u;
+    if (protocol == SubGhzProtoPirate_VAG)
+        return 0xFFFFFFu;
+    if (protocol == SubGhzProtoPirate_KiaV6)
+        return 0xFFFFFFFFu;
+    if (protocol == SubGhzProtoPirate_KiaV3 ||
+        protocol == SubGhzProtoPirate_KiaV4)
+        return 0xFFFFu;
+    return 0u;
+}
 
 typedef struct {
     uint32_t capture_hash;

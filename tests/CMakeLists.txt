@@ -1006,6 +1006,264 @@ endif()
 add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate Honda Static/V1/V2 decoders
+# ------------------------------------------------------------------
+add_executable(test_honda_decode
+    test_honda_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_static_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v1_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_honda_v2_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_honda_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_honda_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_honda_decode PRIVATE sanitizers)
+endif()
+add_test(NAME honda_decode COMMAND test_honda_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Ford V0/V1/V2 decoders
+# ------------------------------------------------------------------
+add_executable(test_ford_decode
+    test_ford_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v1_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v2_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_ford_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_ford_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ford_decode PRIVATE sanitizers)
+endif()
+add_test(NAME ford_decode COMMAND test_ford_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Kia V0 family decoder (Kia/Suzuki/
+# Honda V0/Mitsubishi sub-types)
+# ------------------------------------------------------------------
+add_executable(test_kia_v0_decode
+    test_kia_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v0_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v0_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_kia_v0_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v0_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v0_decode COMMAND test_kia_v0_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Kia V1/V2 decoders
+# ------------------------------------------------------------------
+add_executable(test_kia_v1_v2_decode
+    test_kia_v1_v2_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v1_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v2_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v1_v2_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_kia_v1_v2_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v1_v2_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v1_v2_decode COMMAND test_kia_v1_v2_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Kia V3/V4 decoders (shared core +
+# polarity wrappers, KeeLoq MF-key gated)
+# ------------------------------------------------------------------
+add_executable(test_kia_v3_v4_decode
+    test_kia_v3_v4_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v3_v4_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v3_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v4_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v3_v4_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_kia_v3_v4_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v3_v4_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v3_v4_decode COMMAND test_kia_v3_v4_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Kia V5/V7 decoders
+# ------------------------------------------------------------------
+add_executable(test_kia_v5_v7_decode
+    test_kia_v5_v7_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v5_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v7_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v5_v7_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_kia_v5_v7_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v5_v7_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v5_v7_decode COMMAND test_kia_v5_v7_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Fiat V0/V1 decoders
+# ------------------------------------------------------------------
+add_executable(test_fiat_decode
+    test_fiat_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_fiat_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_fiat_v1_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_fiat_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_fiat_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fiat_decode PRIVATE sanitizers)
+endif()
+add_test(NAME fiat_decode COMMAND test_fiat_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Renault V0 decoder
+# ------------------------------------------------------------------
+add_executable(test_renault_v0_decode
+    test_renault_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v0_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_renault_v0_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_renault_v0_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_renault_v0_decode PRIVATE sanitizers)
+endif()
+add_test(NAME renault_v0_decode COMMAND test_renault_v0_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate Mazda V0 / Subaru / Chrysler V0 decoders
+# ------------------------------------------------------------------
+add_executable(test_mazda_subaru_chrysler_decode
+    test_mazda_subaru_chrysler_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_mazda_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_subaru_pp_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_chrysler_v0_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_mazda_subaru_chrysler_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_mazda_subaru_chrysler_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mazda_subaru_chrysler_decode PRIVATE sanitizers)
+endif()
+add_test(NAME mazda_subaru_chrysler_decode COMMAND test_mazda_subaru_chrysler_decode)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate models database parser (pure logic)
+# ------------------------------------------------------------------
+add_executable(test_models_db
+    test_models_db.c
+    ${M1_ROOT}/Sub_Ghz/subghz_models_db.c
+)
+target_include_directories(test_models_db PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_models_db PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_models_db PRIVATE sanitizers)
+endif()
+add_test(NAME models_db COMMAND test_models_db)
+
+# ------------------------------------------------------------------
+# Module under test: Remote Analyzer detection logic (pure)
+# ------------------------------------------------------------------
+add_executable(test_remote_analyzer
+    test_remote_analyzer.c
+    ${M1_ROOT}/Sub_Ghz/subghz_remote_analyzer.c
+)
+target_include_directories(test_remote_analyzer PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_remote_analyzer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_remote_analyzer PRIVATE sanitizers)
+endif()
+add_test(NAME remote_analyzer COMMAND test_remote_analyzer)
+
+# ------------------------------------------------------------------
+# Module under test: ProtoPirate saved-capture identity matching and storage
+# ------------------------------------------------------------------
+add_executable(test_subghz_saved_capture
+    test_subghz_saved_capture.c
+    ${M1_ROOT}/Sub_Ghz/subghz_saved_match.c
+    ${M1_ROOT}/m1_csrc/subghz_saved_capture.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${STUBS_DIR}/fatfs_dir_posix.c
+)
+target_include_directories(test_subghz_saved_capture PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_saved_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_saved_capture PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_saved_capture COMMAND test_subghz_saved_capture)
+
+# ------------------------------------------------------------------
 # Module under test: synthetic ProtoPirate brute-force lifecycle contract
 # Exercises match/no-match, progress, cancellation, and empty-range behavior
 # without real protocol data or key-search logic.
@@ -1336,6 +1594,23 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_raw_decoder PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_pulse_buffer (live capture buffer append guard)
+# ------------------------------------------------------------------
+add_executable(test_subghz_pulse_buffer
+    test_subghz_pulse_buffer.c
+)
+target_include_directories(test_subghz_pulse_buffer PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_pulse_buffer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_pulse_buffer PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_pulse_buffer COMMAND test_subghz_pulse_buffer)
 
 # ------------------------------------------------------------------
 # Module under test: subghz_mod_suggest (waveform → modulation hint)
@@ -3528,6 +3803,9 @@ add_executable(test_subghz_proto_pirate
     ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_vag_encoder.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v5_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_chrysler_v0_decode.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
@@ -3538,6 +3816,7 @@ add_executable(test_subghz_proto_pirate
     ${STUBS_DIR}/subghz_decode_stubs.c
     ${STUBS_DIR}/protopirate_keys_test_data.c
 )
+target_compile_definitions(test_subghz_proto_pirate PRIVATE M1_TEST_REAL_KIA_V5_DECODE M1_TEST_REAL_RENAULT_V0_DECODE M1_TEST_REAL_CHRYSLER_V0_DECODE)
 target_include_directories(test_subghz_proto_pirate PRIVATE
     ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc

@@ -41,6 +41,10 @@ static int find_duplicate(const SubGhzRawDecodeResult *results,
 /**
  * Try to decode a packet and store the result if unique.
  *
+ * @param matched  Set to true when a decoder recognised the packet with a
+ *                 non-zero key, even if it turned out to be a duplicate
+ *                 (callers use this to tell "noise" apart from "valid frame
+ *                 already recorded").
  * @return true if a new (non-duplicate) result was added.
  */
 static bool try_packet(const uint16_t *pulse_buf,
@@ -50,8 +54,11 @@ static bool try_packet(const uint16_t *pulse_buf,
                         uint8_t *decode_count,
                         uint8_t max_results,
                         SubGhzRawDecodeTryFn try_decode,
-                        void *user_ctx)
+                        void *user_ctx,
+                        bool *matched)
 {
+    *matched = false;
+
     if (*decode_count >= max_results)
         return false;
 
@@ -65,6 +72,7 @@ static bool try_packet(const uint16_t *pulse_buf,
     if (result.key == 0)
         return false;
 
+    *matched = true;
     result.frequency = frequency;
     result.rssi = 0;   /* RSSI is meaningless for offline decode */
 
@@ -121,12 +129,22 @@ uint8_t subghz_decode_raw_offline(const int16_t *raw_data,
             if (pulse_count < PACKET_PULSE_COUNT_MAX)
                 pulse_buf[pulse_count++] = dur;
 
+            bool matched = false;
             if (pulse_count >= PACKET_PULSE_COUNT_MIN)
             {
                 try_packet(pulse_buf, pulse_count, frequency,
                            results, &decode_count, max_results,
-                           try_decode, user_ctx);
+                           try_decode, user_ctx, &matched);
             }
+            /* If nothing recognised the buffer, keep it open across
+             * mid-size gaps: automotive keyfobs with intra-frame symbols
+             * longer than INTERPACKET_GAP_MIN (e.g. Kia V1, te_long =
+             * 1600 us) would otherwise be shredded into undecodable
+             * fragments.  A gap of INTERPACKET_REOPEN_MAX or longer still
+             * hard-separates packets. */
+            if (!matched && dur < INTERPACKET_REOPEN_MAX &&
+                pulse_count < PACKET_PULSE_COUNT_MAX)
+                continue;
             pulse_count = 0;
         }
         else
@@ -146,9 +164,10 @@ uint8_t subghz_decode_raw_offline(const int16_t *raw_data,
     /* Try to decode any remaining pulses (file may end without a final gap) */
     if (pulse_count >= PACKET_PULSE_COUNT_MIN && decode_count < max_results)
     {
+        bool matched = false;
         try_packet(pulse_buf, pulse_count, frequency,
                    results, &decode_count, max_results,
-                   try_decode, user_ctx);
+                   try_decode, user_ctx, &matched);
     }
 
     return decode_count;

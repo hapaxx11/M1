@@ -36,7 +36,7 @@ bool ff_open(flipper_file_t *ctx, const char *path);
 bool ff_open_write(flipper_file_t *ctx, const char *path);
 
 /* Close file */
-void ff_close(flipper_file_t *ctx);
+bool ff_close(flipper_file_t *ctx);
 
 /* Read next non-comment, non-empty line. Returns false at EOF */
 bool ff_read_line(flipper_file_t *ctx);

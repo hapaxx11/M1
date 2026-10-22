@@ -34,7 +34,7 @@
  */
 #define WEATHER_DECODE_MAX_OFFSETS			8
 #define INTERPACKET_GAP_MAX					80000//5000 // uS
-#define PACKET_PULSE_TIME_MIN				80  // uS — was 120; lowered to handle Princeton
+#define PACKET_PULSE_TIME_MIN				50  // uS — admits short automotive symbols
                                                 //   variants with te≈125µs whose Flipper-recorded
                                                 //   RAW files contain jitter-shortened gaps (~104µs)
 /* Minimum pulse count to trigger decode.  Set to 40 so that Security+ 1.0
@@ -42,11 +42,22 @@
  * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
  * still fall below this threshold unless they repeat within one capture window. */
 #define PACKET_PULSE_COUNT_MIN				40 // was 48 (24 bits)
-#define PACKET_PULSE_COUNT_MAX				384 // includes long Manchester frames and terminal gap
+#define PACKET_PULSE_COUNT_MAX				1280 // includes ProtoPirate Honda V2/Ford V1 full
+                                                 //   preambles + terminal gap, and gapless
+                                                 //   Kia V2 two-burst uploads
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
 #define PACKET_PULSE_TIME_TOLERANCE25		25
 #define PACKET_PULSE_TIME_TOLERANCE30		30
+
+/* Several automotive keyfobs carry intra-frame symbols longer than the
+ * generic 1.5 ms packet boundary (Kia V1 te_long = 1.6 ms, Honda V1
+ * te_long = 2 ms, Ford V0 has a 3.5 ms mid-frame gap).  When such a pulse
+ * arrives but the accumulated buffer did not decode, the capture stays
+ * open across the gap instead of resetting; a gap of INTERPACKET_REOPEN_MAX
+ * or longer still hard-separates captures (the affected fobs use repeat
+ * gaps of 25 ms and up). */
+#define INTERPACKET_REOPEN_MAX				5000 // uS
 
 typedef struct SubGHz_protocol
 {
@@ -75,7 +86,7 @@ typedef struct
     uint64_t n64_decodedvalue;
     uint32_t n32_serialnumber;
     uint32_t n32_rollingcode;
-    uint32_t n32_key2;   /* Protocol-specific 2nd key word (Renault V1: frame bytes 8..10) */
+    uint64_t n32_key2;   /* Protocol-specific 2nd key word; Ford V1 uses all 64 bits */
     uint8_t n8_buttonid;
     int16_t ndecodedrssi;
     uint16_t ndecodedbitlength;
@@ -104,7 +115,7 @@ typedef struct
     /* Extended fields — populated by protocol decoders that set them */
     uint32_t serial_number;
     uint32_t rolling_code;
-    uint32_t key2;        /* Renault V1: frame bytes 8..10 (Key_2); 0 otherwise */
+    uint64_t key2;        /* Protocol-specific auxiliary key/tail; 0 otherwise */
     uint8_t  button_id;
 } SubGHz_Dec_Info_t;
 
@@ -371,24 +382,40 @@ static inline bool subghz_psa_capture_needs_bruteforce(uint16_t protocol,
 /**
  * Capture Key_2 persistence dispatch (pure; host-testable).
  *
- * Returns how many Key_2 bytes a decoded capture carries (0 = none):
+ * Returns how many auxiliary bytes a decoded capture carries (0 = none):
  *  - PSA TEA-mode captures (serial==0 marker): 2 bytes, stored in
  *    rolling_code by the decoder.
+ *  - Renault V0: 3 bytes (the 18-bit "Key2" tail word), stored in key2.
  *  - Renault V1: 3 bytes (frame bytes 8..10), stored in the key2 field.
- * Both feed the ProtoPirate brute-force searches when the capture is saved.
+ *  - Chrysler V0: 2 bytes (the 16-bit second wire word), stored in key2.
+ *  - Ford V1: 8 bytes (full Key_2), stored in the key2 field.
+ *  - Ford V2: 5 bytes (TailRaw), stored in the key2 field.
+ *  - Fiat V1: 8 bytes (m1_fiat_v1_pack_key2: 6-byte matched Hitag2 key,
+ *    TE variant, tail bits, known-key-valid flag, frame XOR), stored in
+ *    the key2 field.
  */
 static inline uint8_t subghz_capture_key2_len(uint16_t protocol,
                                               uint32_t serial_number)
 {
     if (subghz_psa_capture_needs_bruteforce(protocol, serial_number))
         return 2u;
+    if (protocol == (uint16_t)RENAULT_V0)
+        return 3u;
     if (protocol == (uint16_t)RENAULT_V1)
         return 3u;
+    if (protocol == (uint16_t)CHRYSLER_V0)
+        return 2u;
+    if (protocol == (uint16_t)FIAT_V1)
+        return 8u;
+    if (protocol == (uint16_t)FORD_V1)
+        return 8u;
+    if (protocol == (uint16_t)FORD_V2)
+        return 5u;
     return 0u;
 }
 
-/** Value companion of subghz_capture_key2_len(): the Key_2 word to persist. */
-static inline uint32_t subghz_capture_key2_value(const SubGHz_Dec_Info_t *info)
+/** Value companion of subghz_capture_key2_len(): the auxiliary word to persist. */
+static inline uint64_t subghz_capture_key2_value(const SubGHz_Dec_Info_t *info)
 {
     return subghz_psa_capture_needs_bruteforce(info->protocol,
                                                info->serial_number)

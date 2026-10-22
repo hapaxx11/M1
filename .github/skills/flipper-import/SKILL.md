@@ -355,15 +355,24 @@ M1-specific wrappers/adapters derived from the Flipper HAL contract.
 
 Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
 
-The 97 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+The 132 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
 the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
-code is not a copy of Flipper source.  The sole exception is noted below.  The total of 97
-comprises 96 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
+code is not a copy of Flipper source.  The sole Flipper-direct exception is noted below.  The
+total of 132 comprises 131 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
+
+**Exception — ProtoPirate provenance:** the 23 ProtoPirate automotive decoders
+(`m1_honda_static/v1/v2_decode.c`, `m1_ford_v0/v1/v2_decode.c`, `m1_kia_v0/v1/v2/v3/v4/v5/v6/v7_decode.c`
+incl. the shared `m1_kia_v3_v4_decode.c` core, `m1_renault_v0/v1_decode.c`,
+`m1_fiat_v0/v1/v2_decode.c`, `m1_mazda_v0_decode.c`, `m1_subaru_pp_decode.c`,
+`m1_chrysler_v0_decode.c`, `m1_psa_decode.c`, `m1_ford_v3_decode.c`, `m1_vag_decode.c`)
+are **ports derived from RocketGod-git/ProtoPirate** (GPLv3), each carrying that attribution
+in its file header, and are tracked in the [`forks-tracker`](../forks-tracker/SKILL.md) skill
+rather than as Flipper-origin files.
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
 | `Sub_Ghz/protocols/m1_chamberlain_decode.c` | `lib/subghz/protocols/secplus_v1.c` | Contains direct port of argilo/secplus ternary algorithm; GPLv3 attribution present |
-| All other `Sub_Ghz/protocols/m1_*_decode.c` (90 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+| All other `Sub_Ghz/protocols/m1_*_decode.c` (101 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
 | `Sub_Ghz/protocols/m1_acurite_592txr_decode.c` | `lib/subghz/protocols/acurite_592txr.c` | **Independent port** — 56-bit PWM, sum checksum + parity |
 | `Sub_Ghz/protocols/m1_acurite_986_decode.c` | `lib/subghz/protocols/acurite_986.c` | **Independent port** — 40-bit PWM, CRC-8 poly 0x07, LSB bit reversal |
 | `Sub_Ghz/protocols/m1_tx_8300_decode.c` | `lib/subghz/protocols/tx_8300.c` | **Independent port** — 72-bit OOK, Fletcher-8 checksum, 128-bit decoder |
@@ -371,7 +380,8 @@ comprises 96 named protocol decoders plus one utility file (`m1_bin_raw_decode.c
 | `Sub_Ghz/protocols/m1_oregon3_decode.c` | `lib/subghz/protocols/oregon3.c` | **Independent port** — Manchester inverted, 32-bit, nibble checksum |
 | `Sub_Ghz/protocols/m1_nord_ice_decode.c` | `lib/subghz/protocols/nord_ice.c` (Momentum) | **Independent port** — 33-bit PWM, 433 MHz gate/garage remote |
 
-**Subtotal:** 1 directly-copied file; 95 independent ports (+ 1 bin_raw utility file)
+**Subtotal:** 1 directly-copied file; 107 independent Flipper-spec ports + 23
+ProtoPirate-derived ports (see above) (+ 1 bin_raw utility file)
 
 ---
 
@@ -411,10 +421,10 @@ documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
 | Category | Files | Directly copied | Independent ports/writes |
 |----------|-------|-----------------|--------------------------|
 | LF-RFID protocols | 57 | 57 | 0 |
-| Sub-GHz decoders | 97 | 1 | 95 (+ 1 bin_raw) |
+| Sub-GHz decoders | 132 | 1 | 130 (+ 1 bin_raw) |
 | Furi HAL reference (docs) | 45 | 45 | — |
 | Flipper file parsers | 10 | 0 | 10 |
-| **Total** | **209** | **58 compiled + 45 docs** | **105** |
+| **Total** | **244** | **58 compiled + 45 docs** | **140** |
 
 The **directly-copied compiled files** total ~58, comfortably below the 80-file submodule
 threshold.  Continue monitoring this count as new LF-RFID protocols are ported.

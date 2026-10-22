@@ -20,7 +20,28 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
         )
         self.assertEqual(
             KEYVAULT.parse_kia_keystore(source),
-            (0x0123456789ABCDEF, 0xFEDCBA9876543210),
+            {11: 0x0123456789ABCDEF, 12: 0xFEDCBA9876543210},
+        )
+
+    def test_parse_kia_raw_full_layout(self):
+        payload = (
+            "AAAAAAAAAAAAAAAABBBBBBBBBBBBBBBB"
+            "CCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD\n"
+        )
+        source = (
+            "Filetype: Flipper SubGhz Keystore RAW File\n"
+            "Version: 0\n"
+            "Encryption: 0\n"
+            + payload
+        )
+        self.assertEqual(
+            KEYVAULT.parse_kia_keystore(source),
+            {
+                10: 0xAAAAAAAAAAAAAAAA,
+                11: 0xBBBBBBBBBBBBBBBB,
+                12: 0xCCCCCCCCCCCCCCCC,
+                13: 0xDDDDDDDDDDDDDDDD,
+            },
         )
 
     def test_parse_kia_typed_keystore(self):
@@ -33,7 +54,7 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
         )
         self.assertEqual(
             KEYVAULT.parse_kia_keystore(source),
-            (0x0123456789ABCDEF, 0xFEDCBA9876543210),
+            {11: 0x0123456789ABCDEF, 12: 0xFEDCBA9876543210},
         )
 
     def test_parse_headerless_kia_entry_list(self):
@@ -45,7 +66,23 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
         )
         self.assertEqual(
             KEYVAULT.parse_kia_keystore(source),
-            (0x1122334455667788, 0x99AABBCCDDEEFF00),
+            {
+                10: 0x0123456789ABCDEF,
+                11: 0x1122334455667788,
+                12: 0x99AABBCCDDEEFF00,
+                13: 0xFEDCBA9876543210,
+            },
+        )
+
+    def test_parse_kia_mf_or_v5_subset_only(self):
+        """A keystore carrying only the V3/V4 or V5 key is accepted."""
+        self.assertEqual(
+            KEYVAULT.parse_kia_keystore("0123456789ABCDEF:10:KIA\n"),
+            {10: 0x0123456789ABCDEF},
+        )
+        self.assertEqual(
+            KEYVAULT.parse_kia_keystore("FEDCBA9876543210:13:KIAV5\n"),
+            {13: 0xFEDCBA9876543210},
         )
 
     def test_parse_vag_aut64_records(self):
@@ -105,10 +142,10 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             KEYVAULT.parse_vag_keystore(source)
 
-    def test_rejects_missing_kia_types_and_duplicate_types(self):
+    def test_rejects_empty_kia_keystore_and_duplicate_types(self):
         header = "Filetype: Flipper SubGhz Keystore File\nVersion: 0\nEncryption: 0\n"
         with self.assertRaises(ValueError):
-            KEYVAULT.parse_kia_keystore(header + "0123456789ABCDEF:11:KIA_KEY2\n")
+            KEYVAULT.parse_kia_keystore(header + "0123456789ABCDEF:99:UNRELATED\n")
         with self.assertRaises(ValueError):
             KEYVAULT.parse_kia_keystore(
                 header
@@ -119,13 +156,25 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
 
     def test_generated_source_contains_only_configured_keys(self):
         source = KEYVAULT.generate_source(
-            (0x0123456789ABCDEF, 0xFEDCBA9876543210),
+            {10: 0xAAAAAAAAAAAAAAAA, 11: 0x0123456789ABCDEF,
+             12: 0xFEDCBA9876543210, 13: 0xDDDDDDDDDDDDDDDD},
             bytes(range(KEYVAULT.VAG_AUT64_SIZE)),
         )
         self.assertIn("0x0123456789ABCDEFULL", source)
         self.assertIn("0xFEDCBA9876543210ULL", source)
+        self.assertIn("0xAAAAAAAAAAAAAAAAULL", source)
+        self.assertIn("0xDDDDDDDDDDDDDDDDULL", source)
         self.assertIn("m1_kia_v6_keys_builtin_available = true", source)
+        self.assertIn("m1_kia_mf_key_builtin_available = true", source)
+        self.assertIn("m1_kia_v5_key_builtin_available = true", source)
         self.assertIn("m1_vag_aut64_keys_builtin_available = true", source)
+
+    def test_generated_source_marks_missing_kia_types_unavailable(self):
+        source = KEYVAULT.generate_source({11: 0x0123456789ABCDEF,
+                                           12: 0xFEDCBA9876543210})
+        self.assertIn("m1_kia_v6_keys_builtin_available = true", source)
+        self.assertIn("m1_kia_mf_key_builtin_available = false", source)
+        self.assertIn("m1_kia_v5_key_builtin_available = false", source)
 
     def test_cli_generates_source_from_plaintext_secret_formats(self):
         kia_source = (
@@ -158,10 +207,12 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
             self.assertIn("m1_vag_aut64_keys_builtin_available = true", generated)
             self.assertIn("0x2F", generated)
 
-    def test_stub_generation_marks_both_stores_unavailable(self):
+    def test_stub_generation_marks_all_stores_unavailable(self):
         source = KEYVAULT.generate_source()
         self.assertIn("m1_kia_v6_keys_builtin_available = false", source)
         self.assertIn("m1_vag_aut64_keys_builtin_available = false", source)
+        self.assertIn("m1_kia_mf_key_builtin_available = false", source)
+        self.assertIn("m1_kia_v5_key_builtin_available = false", source)
 
 
 if __name__ == "__main__":
