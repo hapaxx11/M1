@@ -195,11 +195,31 @@ headroom check):
    no narrow-BW second stage, so the fine sweep runs with the normal RX
    config — the documented SI4463 adaptation.  **On-device detection
    validation is still outstanding** (requires hardware + a live fob).
-9. **Closeout** — full host/firmware validation, RAM review, and documentation
-   inventory updates.
+9. **Closeout — done in this branch.** Full host suite (218 suites) and
+   firmware build pass; RAM 568,904 B / 640 KB (86.81%), FLASH 914,940 B /
+   1023 KB (87.34%); the protocol/feature inventories and this matrix are
+   updated, and the temporary `PHASE_CHECKLIST.md` was removed.
 
-The working phase checklist is tracked in `PHASE_CHECKLIST.md` on the
-`feature/protopirate-parity` branch until the final PR is prepared.
+### On-device validation outstanding
+
+All of the above is host-tested only (synthetic waveforms, model-validated).
+Before relying on these features with real fobs, the following need hardware
+validation (none were RF-tested on-device):
+
+- Each new automotive decoder against a live fob (frame identification and
+  Serial/Btn/Cnt fields), especially the Kia V1 path that depends on the
+  1.5–5 ms gap-reopen capture change, and the gap-reopen change's effect on
+  unrelated protocols in noisy environments.
+- Saved-capture replay round trips on air for the corrected TX encoders
+  (Kia V0 symmetric-PWM wire format, Kia V7 Manchester polarity, Renault V0
+  and Chrysler V0 verbatim replay, Fiat V1 variant-A emission).
+- The Models DB scene flow with `SubGHz/models_db/models.txt` installed.
+- The Remote Analyzer's detection accuracy (frequency estimate, AM verdict)
+  against known fobs on both bands.
+- Kia V3/V4/V5 field validation with provisioned keystore types 10/13.
+
+The working phase checklist was tracked in `PHASE_CHECKLIST.md` on the
+`feature/protopirate-parity` branch and removed at closeout.
 
 ## PSA TEA-mode brute-force key recovery
 
