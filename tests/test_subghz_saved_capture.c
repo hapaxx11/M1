@@ -21,12 +21,17 @@ static void write_tmp(const char *path, const char *text)
     fclose(file);
 }
 
+static void assert_file_equals(const char *path, const char *expected);
+
 static void remove_test_files(void)
 {
     unlink(TEST_DIR "/nested/capture.sub");
     rmdir(TEST_DIR "/nested");
     unlink(TEST_DIR "/capture.sgh");
     unlink(TEST_DIR "/other.sub");
+    unlink(TEST_DIR "/mismatch.sub");
+    unlink(TEST_DIR "/matching.sub");
+    unlink(TEST_DIR "/keeloq.sub");
     unlink(TEST_DIR "/notes.txt");
     unlink(TEST_DIR "/format.sub");
     unlink(TEST_DIR "/format.sgh");
@@ -233,6 +238,93 @@ void test_saved_capture_find_match_searches_nested_directories(void)
     TEST_ASSERT_EQUAL_STRING(TEST_DIR "/nested/capture.sub", path);
 }
 
+void test_saved_capture_scan_is_incremental_and_rejects_wrong_protocol_early(void)
+{
+    const char *mismatch_path = TEST_DIR "/mismatch.sub";
+    FILE *file = fopen(mismatch_path, "wb");
+    TEST_ASSERT_NOT_NULL(file);
+    fputs("Filetype: Flipper SubGhz Key File\n"
+          "Version: 1\n"
+          "Protocol: Other\n"
+          "RAW_Data: ", file);
+    for (size_t i = 0; i < 100000u; i++)
+        fputc('1', file);
+    fputc('\n', file);
+    TEST_ASSERT_EQUAL_INT(0, fclose(file));
+
+    write_tmp(TEST_DIR "/matching.sub",
+              "Filetype: Flipper SubGhz Key File\r\n"
+              "Version: 1\r\n"
+              "Protocol: PSA\r\n"
+              "Key: 12 3A 44 55 66 77 88 99\r\n"
+              "Serial: 305419896\r\n"
+              "Cnt: 100\r\n");
+
+    SubGHz_Dec_Info_t received;
+    memset(&received, 0, sizeof(received));
+    received.key = 0x123A445566778899ULL;
+    received.serial_number = 0x12345678;
+    received.rolling_code = 100;
+
+    subghz_saved_capture_scan_t *scan = subghz_saved_capture_scan_start(
+        TEST_DIR, &received, "PSA", true);
+    TEST_ASSERT_NOT_NULL(scan);
+    char path[128];
+    subghz_saved_capture_scan_result_t result =
+        SubGhzSavedCaptureScanPending;
+    uint16_t steps = 0;
+    while (result == SubGhzSavedCaptureScanPending && steps < 100u)
+    {
+        result = subghz_saved_capture_scan_step(scan, path, sizeof(path));
+        steps++;
+    }
+    subghz_saved_capture_scan_destroy(scan);
+
+    TEST_ASSERT_EQUAL(SubGhzSavedCaptureScanFound, result);
+    TEST_ASSERT_EQUAL_STRING(TEST_DIR "/matching.sub", path);
+    TEST_ASSERT_LESS_THAN_UINT16(30u, steps);
+}
+
+void test_saved_capture_with_replay_metadata_is_not_offered_for_update(void)
+{
+    write_tmp(TEST_DIR "/keeloq.sub",
+              "Filetype: Flipper SubGhz Key File\r\n"
+              "Version: 1\r\n"
+              "Protocol: KeeLoq\r\n"
+              "Bit: 64\r\n"
+              "Key: 12 3A 44 55 66 77 88 99\r\n"
+              "Serial: 305419896\r\n"
+              "Cnt: 100\r\n"
+              "Manufacture: AN-Motors\r\n"
+              "CounterMode: Static\r\n");
+
+    subghz_saved_match_identity_t parsed;
+    TEST_ASSERT_TRUE(subghz_saved_capture_read_identity(
+        TEST_DIR "/keeloq.sub", &parsed));
+    TEST_ASSERT_TRUE(parsed.has_manufacture);
+    TEST_ASSERT_TRUE(parsed.has_counter_mode);
+
+    SubGHz_Dec_Info_t received;
+    memset(&received, 0, sizeof(received));
+    received.key = 0x123A445566778899ULL;
+    received.serial_number = 0x12345678;
+    received.rolling_code = 100;
+
+    char path[128];
+    TEST_ASSERT_FALSE(subghz_saved_capture_find_match(
+        TEST_DIR, &received, "KeeLoq", true, path, sizeof(path)));
+    assert_file_equals(TEST_DIR "/keeloq.sub",
+                      "Filetype: Flipper SubGhz Key File\r\n"
+                      "Version: 1\r\n"
+                      "Protocol: KeeLoq\r\n"
+                      "Bit: 64\r\n"
+                      "Key: 12 3A 44 55 66 77 88 99\r\n"
+                      "Serial: 305419896\r\n"
+                      "Cnt: 100\r\n"
+                      "Manufacture: AN-Motors\r\n"
+                      "CounterMode: Static\r\n");
+}
+
 void test_saved_capture_does_not_offer_update_for_recovered_psa(void)
 {
     write_tmp(TEST_DIR "/capture.sub",
@@ -385,6 +477,8 @@ int main(void)
     RUN_TEST(test_saved_capture_read_flipper_and_native_identities);
     RUN_TEST(test_saved_capture_find_match_scans_sub_and_sgh);
     RUN_TEST(test_saved_capture_find_match_searches_nested_directories);
+    RUN_TEST(test_saved_capture_scan_is_incremental_and_rejects_wrong_protocol_early);
+    RUN_TEST(test_saved_capture_with_replay_metadata_is_not_offered_for_update);
     RUN_TEST(test_saved_capture_does_not_offer_update_for_recovered_psa);
     RUN_TEST(test_saved_capture_update_preserves_original_on_write_failure);
     RUN_TEST(test_saved_capture_update_replaces_only_after_success);

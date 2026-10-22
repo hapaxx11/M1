@@ -26,6 +26,9 @@ extern bool subghz_protocol_is_static_ext(uint16_t protocol);
 extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry);
 
 #define RECEIVER_INFO_STATE_HAS_MATCH 1u
+#define RECEIVER_INFO_STATE_SEARCHING 2u
+
+static subghz_saved_capture_scan_t *s_capture_scan;
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -34,18 +37,20 @@ extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entr
 static void scene_on_enter(SubGhzApp *app)
 {
     app->file_path[0] = '\0';
-    bool has_match = false;
+    if (s_capture_scan)
+        subghz_saved_capture_scan_destroy(s_capture_scan);
+    s_capture_scan = NULL;
     const SubGHz_History_Entry_t *e =
         subghz_history_get(&app->history, app->history_sel);
     if (e)
     {
-        has_match = subghz_saved_capture_find_match(
+        s_capture_scan = subghz_saved_capture_scan_start(
             "/SUBGHZ", &e->info, protocol_text[e->info.protocol],
-            !subghz_protocol_is_static_ext(e->info.protocol),
-            app->file_path, sizeof(app->file_path));
+            !subghz_protocol_is_static_ext(e->info.protocol));
     }
     subghz_scene_set_state(app, SubGhzSceneReceiverInfo,
-                           has_match ? RECEIVER_INFO_STATE_HAS_MATCH : 0u);
+                           s_capture_scan ? RECEIVER_INFO_STATE_SEARCHING : 0u);
+    subghz_scene_set_tick_period(app, s_capture_scan ? 100u : 0u);
     app->need_redraw = true;
 }
 
@@ -55,6 +60,28 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     {
         case SubGhzEventBack:
             subghz_scene_pop(app);
+            return true;
+
+        case SubGhzEventTick:
+            if (s_capture_scan)
+            {
+                const subghz_saved_capture_scan_result_t result =
+                    subghz_saved_capture_scan_step(
+                        s_capture_scan, app->file_path,
+                        sizeof(app->file_path));
+                if (result != SubGhzSavedCaptureScanPending)
+                {
+                    subghz_saved_capture_scan_destroy(s_capture_scan);
+                    s_capture_scan = NULL;
+                    subghz_scene_set_tick_period(app, 0u);
+                    subghz_scene_set_state(
+                        app, SubGhzSceneReceiverInfo,
+                        result == SubGhzSavedCaptureScanFound
+                            ? RECEIVER_INFO_STATE_HAS_MATCH
+                            : 0u);
+                    app->need_redraw = true;
+                }
+            }
             return true;
 
         case SubGhzEventOk:
@@ -71,6 +98,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventDown:
         {
+            if (subghz_scene_get_state(app, SubGhzSceneReceiverInfo) &
+                RECEIVER_INFO_STATE_SEARCHING)
+                return true;
+
             const SubGHz_History_Entry_t *e =
                 subghz_history_get(&app->history, app->history_sel);
             const bool has_match =
@@ -114,7 +145,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    (void)app;
+    subghz_scene_set_tick_period(app, 0u);
+    subghz_saved_capture_scan_destroy(s_capture_scan);
+    s_capture_scan = NULL;
 }
 
 static void draw(SubGhzApp *app)
@@ -176,11 +209,12 @@ static void draw(SubGhzApp *app)
 
     /* Bottom bar */
     bool can_send = subghz_protocol_is_static_ext(e->info.protocol);
-    const bool has_match =
-        subghz_scene_get_state(app, SubGhzSceneReceiverInfo) ==
-        RECEIVER_INFO_STATE_HAS_MATCH;
+    const uint8_t state =
+        subghz_scene_get_state(app, SubGhzSceneReceiverInfo);
+    const bool has_match = (state & RECEIVER_INFO_STATE_HAS_MATCH) != 0u;
+    const bool searching = (state & RECEIVER_INFO_STATE_SEARCHING) != 0u;
     subghz_button_bar_draw(
-        arrowdown_8x8, has_match ? "Update" : "Save",
+        arrowdown_8x8, searching ? "Search" : (has_match ? "Update" : "Save"),
         NULL, can_send ? "Send" : NULL,
         NULL, NULL);
 

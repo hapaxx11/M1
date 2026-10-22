@@ -17,9 +17,9 @@
 - **Commit**: `Seed Kia replay counters from key-only captures`
 
 ### Phase 3 — Saved capture UI and metadata
-- **Description**: Incrementally scan saved captures on scene ticks, reject protocol mismatches early, and retain KeeLoq metadata during updates.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: Incrementally scan saved captures on scene ticks, reject protocol mismatches early, and prevent updates from overwriting KeeLoq metadata.
+- **Status**: ✅ Complete
+- **Commit**: `Make receiver capture lookup incremental`
 
 ### Phase 4 — Final verification
 - **Description**: Run targeted host tests, firmware build/RAM check, and automated code review; remove this checklist.

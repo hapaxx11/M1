@@ -20,6 +20,21 @@ void subghz_saved_capture_from_history(
 bool subghz_saved_capture_read_identity(
     const char *path, subghz_saved_match_identity_t *out);
 
+typedef struct subghz_saved_capture_scan subghz_saved_capture_scan_t;
+
+typedef enum {
+    SubGhzSavedCaptureScanPending,
+    SubGhzSavedCaptureScanFound,
+    SubGhzSavedCaptureScanDone,
+} subghz_saved_capture_scan_result_t;
+
+subghz_saved_capture_scan_t *subghz_saved_capture_scan_start(
+    const char *directory, const SubGHz_Dec_Info_t *received,
+    const char *protocol_name, bool allow_serial_match);
+subghz_saved_capture_scan_result_t subghz_saved_capture_scan_step(
+    subghz_saved_capture_scan_t *scan, char *out_path, size_t out_path_size);
+void subghz_saved_capture_scan_destroy(subghz_saved_capture_scan_t *scan);
+
 bool subghz_saved_capture_find_match(
     const char *directory, const SubGHz_Dec_Info_t *received,
     const char *protocol_name, bool allow_serial_match,

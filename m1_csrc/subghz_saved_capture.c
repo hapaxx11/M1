@@ -13,6 +13,25 @@
 #define SUBGHZ_ASK_PRESET     "FuriHalSubGhzPresetASK"
 #define SUBGHZ_SAVED_CAPTURE_PATH_MAX 128u
 #define SUBGHZ_SAVED_CAPTURE_MAX_DEPTH 4u
+#define SUBGHZ_SAVED_CAPTURE_SCAN_LINES 64u
+
+typedef struct {
+    DIR dir;
+    char path[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+} subghz_saved_capture_dir_t;
+
+struct subghz_saved_capture_scan {
+    subghz_saved_match_identity_t received;
+    char protocol[SUBGHZ_SAVED_MATCH_PROTOCOL_MAX_LEN];
+    subghz_saved_capture_dir_t directories[SUBGHZ_SAVED_CAPTURE_MAX_DEPTH + 1u];
+    uint8_t directory_count;
+    flipper_file_t file;
+    char candidate_path[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+    subghz_saved_match_identity_t candidate;
+    uint8_t candidate_lines;
+    bool candidate_open;
+    bool candidate_has_seed;
+};
 
 static bool parse_u64(const char *text, uint64_t *out)
 {
@@ -148,6 +167,10 @@ bool subghz_saved_capture_read_identity(
         {
             has_seed = true;
         }
+        else if (strcmp(key, "Manufacture") == 0)
+            out->has_manufacture = true;
+        else if (strcmp(key, "CounterMode") == 0)
+            out->has_counter_mode = true;
     }
 
     ff_close(&ff);
@@ -164,62 +187,212 @@ static bool subghz_saved_capture_join_path(
     return length >= 0 && (size_t)length < out_size;
 }
 
-static bool subghz_saved_capture_find_match_in_directory(
-    const char *directory, const subghz_saved_match_identity_t *received,
-    char *out_path, size_t out_path_size, uint8_t depth)
+static void subghz_saved_capture_scan_close_candidate(
+    subghz_saved_capture_scan_t *scan)
 {
-    DIR dir;
-    if (f_opendir(&dir, directory) != FR_OK)
-        return false;
+    if (scan->candidate_open)
+        (void)ff_close(&scan->file);
+    scan->candidate_open = false;
+}
 
-    bool found = false;
-    while (!found)
+static subghz_saved_capture_scan_result_t
+subghz_saved_capture_scan_finish_candidate(
+    subghz_saved_capture_scan_t *scan, char *out_path, size_t out_path_size)
+{
+    subghz_saved_capture_scan_close_candidate(scan);
+    scan->candidate.is_recovered_psa =
+        scan->candidate_has_seed && strcmp(scan->candidate.protocol, "PSA") == 0;
+    const bool matches =
+        scan->candidate.protocol[0] != '\0' &&
+        (scan->candidate.has_serial || scan->candidate.has_key) &&
+        !scan->candidate.is_recovered_psa &&
+        !scan->candidate.has_manufacture &&
+        !scan->candidate.has_counter_mode &&
+        subghz_saved_match_identity(&scan->received, &scan->candidate);
+    if (matches)
     {
-        FILINFO info;
-        memset(&info, 0, sizeof(info));
-        if (f_readdir(&dir, &info) != FR_OK || info.fname[0] == '\0')
-            break;
+        const int out_length =
+            snprintf(out_path, out_path_size, "%s", scan->candidate_path);
+        if (out_length >= 0 && (size_t)out_length < out_path_size)
+            return SubGhzSavedCaptureScanFound;
+    }
+    return SubGhzSavedCaptureScanPending;
+}
 
-        if (info.fattrib & AM_DIR)
-        {
-            if (depth < SUBGHZ_SAVED_CAPTURE_MAX_DEPTH &&
-                strcmp(info.fname, ".") != 0 &&
-                strcmp(info.fname, "..") != 0)
-            {
-                char nested[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
-                if (subghz_saved_capture_join_path(
-                        nested, sizeof(nested), directory, info.fname))
-                {
-                    found = subghz_saved_capture_find_match_in_directory(
-                        nested, received, out_path, out_path_size,
-                        (uint8_t)(depth + 1u));
-                }
-            }
-            continue;
-        }
+subghz_saved_capture_scan_t *subghz_saved_capture_scan_start(
+    const char *directory, const SubGHz_Dec_Info_t *received,
+    const char *protocol_name, bool allow_serial_match)
+{
+    if (!directory || !received || !protocol_name)
+        return NULL;
 
-        if (!has_capture_extension(info.fname) ||
-            strcmp(info.fname, "_flipper_tmp.sgh") == 0)
-            continue;
+    subghz_saved_capture_scan_t *scan = calloc(1, sizeof(*scan));
+    if (!scan)
+        return NULL;
 
-        char path[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
-        if (!subghz_saved_capture_join_path(
-                path, sizeof(path), directory, info.fname))
-            continue;
-
-        subghz_saved_match_identity_t saved;
-        if (subghz_saved_capture_read_identity(path, &saved) &&
-            !saved.is_recovered_psa &&
-            subghz_saved_match_identity(received, &saved))
-        {
-            const int out_length = snprintf(out_path, out_path_size, "%s", path);
-            if (out_length >= 0 && (size_t)out_length < out_path_size)
-                found = true;
-        }
+    subghz_saved_capture_identity_from_info(received, protocol_name,
+                                            &scan->received);
+    scan->received.allow_serial_match = allow_serial_match;
+    snprintf(scan->protocol, sizeof(scan->protocol), "%s", protocol_name);
+    if ((!scan->received.has_serial && !scan->received.has_key) ||
+        scan->protocol[0] == '\0' ||
+        !subghz_saved_capture_join_path(
+            scan->directories[0].path, sizeof(scan->directories[0].path),
+            directory, ""))
+    {
+        free(scan);
+        return NULL;
     }
 
-    f_closedir(&dir);
-    return found;
+    size_t path_length = strlen(scan->directories[0].path);
+    while (path_length > 1u && scan->directories[0].path[path_length - 1u] == '/')
+        scan->directories[0].path[--path_length] = '\0';
+    if (f_opendir(&scan->directories[0].dir,
+                  scan->directories[0].path) != FR_OK)
+    {
+        free(scan);
+        return NULL;
+    }
+    scan->directory_count = 1u;
+    return scan;
+}
+
+static subghz_saved_capture_scan_result_t
+subghz_saved_capture_scan_read_candidate(
+    subghz_saved_capture_scan_t *scan, char *out_path, size_t out_path_size)
+{
+    if (scan->candidate_lines++ >= SUBGHZ_SAVED_CAPTURE_SCAN_LINES ||
+        !ff_read_line(&scan->file))
+        return subghz_saved_capture_scan_finish_candidate(
+            scan, out_path, out_path_size);
+
+    if (!ff_parse_kv(&scan->file))
+        return SubGhzSavedCaptureScanPending;
+
+    const char *key = ff_get_key(&scan->file);
+    const char *value = ff_get_value(&scan->file);
+    if (strcmp(key, "Protocol") == 0)
+    {
+        snprintf(scan->candidate.protocol, sizeof(scan->candidate.protocol),
+                 "%s", value);
+        if (strcmp(scan->candidate.protocol, scan->protocol) != 0)
+        {
+            subghz_saved_capture_scan_close_candidate(scan);
+            return SubGhzSavedCaptureScanPending;
+        }
+    }
+    else if (strcmp(key, "Key") == 0)
+    {
+        uint8_t bytes[8];
+        if (ff_parse_hex_bytes(value, bytes, sizeof(bytes)) == sizeof(bytes))
+        {
+            for (size_t i = 0; i < sizeof(bytes); i++)
+                scan->candidate.key =
+                    (scan->candidate.key << 8) | bytes[i];
+            scan->candidate.has_key = true;
+        }
+    }
+    else if (strcmp(key, "Payload") == 0)
+    {
+        scan->candidate.has_key =
+            parse_u64(value, &scan->candidate.key);
+    }
+    else if (strcmp(key, "Serial") == 0)
+    {
+        scan->candidate.has_serial =
+            parse_u32(value, &scan->candidate.serial);
+    }
+    else if (strcmp(key, "Cnt") == 0)
+    {
+        scan->candidate.has_counter =
+            parse_u32(value, &scan->candidate.counter);
+    }
+    else if (strcmp(key, "Seed") == 0)
+    {
+        scan->candidate_has_seed = true;
+    }
+    else if (strcmp(key, "Manufacture") == 0)
+        scan->candidate.has_manufacture = true;
+    else if (strcmp(key, "CounterMode") == 0)
+        scan->candidate.has_counter_mode = true;
+    else if (strcmp(key, "RAW_Data") == 0 || strcmp(key, "Data") == 0)
+    {
+        return subghz_saved_capture_scan_finish_candidate(
+            scan, out_path, out_path_size);
+    }
+    return SubGhzSavedCaptureScanPending;
+}
+
+subghz_saved_capture_scan_result_t subghz_saved_capture_scan_step(
+    subghz_saved_capture_scan_t *scan, char *out_path, size_t out_path_size)
+{
+    if (!scan || !out_path || out_path_size == 0)
+        return SubGhzSavedCaptureScanDone;
+    out_path[0] = '\0';
+
+    if (scan->candidate_open)
+        return subghz_saved_capture_scan_read_candidate(
+            scan, out_path, out_path_size);
+
+    if (scan->directory_count == 0)
+        return SubGhzSavedCaptureScanDone;
+
+    subghz_saved_capture_dir_t *current =
+        &scan->directories[scan->directory_count - 1u];
+    FILINFO info;
+    memset(&info, 0, sizeof(info));
+    if (f_readdir(&current->dir, &info) != FR_OK || info.fname[0] == '\0')
+    {
+        (void)f_closedir(&current->dir);
+        scan->directory_count--;
+        return scan->directory_count == 0
+                   ? SubGhzSavedCaptureScanDone
+                   : SubGhzSavedCaptureScanPending;
+    }
+
+    if (info.fattrib & AM_DIR)
+    {
+        if (scan->directory_count < SUBGHZ_SAVED_CAPTURE_MAX_DEPTH + 1u &&
+            strcmp(info.fname, ".") != 0 &&
+            strcmp(info.fname, "..") != 0)
+        {
+            subghz_saved_capture_dir_t *nested =
+                &scan->directories[scan->directory_count];
+            if (subghz_saved_capture_join_path(
+                    nested->path, sizeof(nested->path), current->path,
+                    info.fname) &&
+                f_opendir(&nested->dir, nested->path) == FR_OK)
+                scan->directory_count++;
+        }
+        return SubGhzSavedCaptureScanPending;
+    }
+
+    if (!has_capture_extension(info.fname) ||
+        strcmp(info.fname, "_flipper_tmp.sgh") == 0 ||
+        !subghz_saved_capture_join_path(
+            scan->candidate_path, sizeof(scan->candidate_path),
+            current->path, info.fname))
+        return SubGhzSavedCaptureScanPending;
+
+    memset(&scan->candidate, 0, sizeof(scan->candidate));
+    scan->candidate_lines = 0;
+    scan->candidate_has_seed = false;
+    if (ff_open(&scan->file, scan->candidate_path))
+        scan->candidate_open = true;
+    return SubGhzSavedCaptureScanPending;
+}
+
+void subghz_saved_capture_scan_destroy(subghz_saved_capture_scan_t *scan)
+{
+    if (!scan)
+        return;
+    subghz_saved_capture_scan_close_candidate(scan);
+    while (scan->directory_count > 0)
+    {
+        scan->directory_count--;
+        (void)f_closedir(&scan->directories[scan->directory_count].dir);
+    }
+    free(scan);
 }
 
 bool subghz_saved_capture_find_match(
@@ -232,14 +405,19 @@ bool subghz_saved_capture_find_match(
         return false;
 
     out_path[0] = '\0';
-    subghz_saved_match_identity_t rx;
-    subghz_saved_capture_identity_from_info(received, protocol_name, &rx);
-    rx.allow_serial_match = allow_serial_match;
-    if ((!rx.has_serial && !rx.has_key) || rx.protocol[0] == '\0')
+    subghz_saved_capture_scan_t *scan =
+        subghz_saved_capture_scan_start(directory, received, protocol_name,
+                                        allow_serial_match);
+    if (!scan)
         return false;
 
-    return subghz_saved_capture_find_match_in_directory(
-        directory, &rx, out_path, out_path_size, 0);
+    subghz_saved_capture_scan_result_t result;
+    do
+    {
+        result = subghz_saved_capture_scan_step(scan, out_path, out_path_size);
+    } while (result == SubGhzSavedCaptureScanPending);
+    subghz_saved_capture_scan_destroy(scan);
+    return result == SubGhzSavedCaptureScanFound;
 }
 
 bool subghz_saved_capture_update(
