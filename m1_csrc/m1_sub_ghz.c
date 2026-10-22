@@ -2496,6 +2496,15 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				    (uint8_t)(key2_wide >> (40u - i * 8u));
 			key_params.extra[6] = (uint8_t)((key2_wide >> 49) & 0x03u);
 		}
+		else if (pirate_id == SubGhzProtoPirate_ChryslerV0)
+		{
+			/* Upstream "Key_2" 16-bit second wire word → extra[9..10]
+			 * (extra[0..8] stays the encoder's plaintext block); when
+			 * present the encoder replays the captured 80-bit frame
+			 * verbatim instead of rebuilding from plaintext blocks. */
+			key_params.extra[9]  = (uint8_t)(key2_wide >> 8);
+			key_params.extra[10] = (uint8_t)key2_wide;
+		}
 		if (pirate_id == SubGhzProtoPirate_KiaV6 ||
 		    pirate_id == SubGhzProtoPirate_VAG ||
 		    pirate_id == SubGhzProtoPirate_KiaV3 ||

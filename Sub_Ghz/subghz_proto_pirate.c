@@ -43,9 +43,9 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
     [SubGhzProtoPirate_KiaV2]       = { SubGhzProtoPirate_KiaV2,       "Kia V2",        500, 1000, 53, false },
     [SubGhzProtoPirate_KiaV7]       = { SubGhzProtoPirate_KiaV7,       "Kia V7",        250,  500, 64, true  },
     [SubGhzProtoPirate_RenaultV0]   = { SubGhzProtoPirate_RenaultV0,   "Renault V0",    250,  500, 64, false },
-    [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   270,  540, 64, false },
+    [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   300, 3400, 80, false },
     [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       250,  500, 64, false },
-    [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        620, 1620, 64, false },
+    [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        800, 1600, 64, false },
     [SubGhzProtoPirate_StarLine]    = { SubGhzProtoPirate_StarLine,    "Star Line",     250,  500, 64, false },
 
     /* --- Tier B --- */
@@ -1144,21 +1144,37 @@ static uint32_t encode_chrysler_v0(const SubGhzKeyParams *params,
                                     uint32_t max_pairs,
                                     uint8_t reps)
 {
-    uint8_t plain_a[9], plain_b[9];
-    memset(plain_a, 0, 9);
-    memset(plain_b, 0, 9);
-    for (int i = 0; i < 9 && i < (int)sizeof(params->extra); i++) plain_a[i] = params->extra[i];
-    memcpy(plain_b, plain_a, 9);
+    /* A saved capture carries the full 80-bit wire frame: Key (64 bits) plus
+     * the 16-bit second word in extra[9..10] (loaded from the upstream
+     * "Key_2:" field; extra[0..8] stays reserved for the plaintext block of
+     * the rebuild path).  Replay it verbatim in both passes; only files
+     * without Key_2 take the plaintext rebuild path. */
+    const uint16_t saved_key2 = ((uint16_t)params->extra[9] << 8) |
+                                (uint16_t)params->extra[10];
+    const bool verbatim = saved_key2 != 0;
 
-    uint8_t header_low2 = (uint8_t)(params->key_value & 0x03U);
-    uint8_t button = params->btn ? (uint8_t)params->btn : 1;
-    uint8_t counter = (uint8_t)(params->cnt & 0x3FU);
-    if (counter & 1U) counter = (uint8_t)((counter - 1U) & 0x3FU);
-    uint8_t counter_b = (counter == 0) ? 0x3FU : (uint8_t)(counter - 1U);
+    uint8_t plain_a[9], plain_b[9];
+    uint8_t header_low2 = 0;
+    uint8_t button = 1;
+    uint8_t counter = 0, counter_b = 0x3F;
+    if (!verbatim) {
+        memset(plain_a, 0, 9);
+        memset(plain_b, 0, 9);
+        for (int i = 0; i < 9 && i < (int)sizeof(params->extra); i++) plain_a[i] = params->extra[i];
+        memcpy(plain_b, plain_a, 9);
+
+        header_low2 = (uint8_t)(params->key_value & 0x03U);
+        button = params->btn ? (uint8_t)params->btn : 1;
+        counter = (uint8_t)(params->cnt & 0x3FU);
+        if (counter & 1U) counter = (uint8_t)((counter - 1U) & 0x3FU);
+        counter_b = (counter == 0) ? 0x3FU : (uint8_t)(counter - 1U);
+    }
 
     uint8_t payload_a[10], payload_b[10];
-    chrysler_v0_build_payload(plain_a, counter, button, header_low2, payload_a);
-    chrysler_v0_build_payload(plain_b, counter_b, button, header_low2, payload_b);
+    if (!verbatim) {
+        chrysler_v0_build_payload(plain_a, counter, button, header_low2, payload_a);
+        chrysler_v0_build_payload(plain_b, counter_b, button, header_low2, payload_b);
+    }
 
     const uint32_t pairs_per_rep =
         (CHRYSLER_V0_PREAMBLE_PAIRS * 2 + 2 + 80 * 2) * 2;
@@ -1176,7 +1192,14 @@ static uint32_t encode_chrysler_v0(const SubGhzKeyParams *params,
             pair(out, &idx, max_pairs, CHRYSLER_V0_TE_SHORT, 0);
             pair(out, &idx, max_pairs, 0, CHRYSLER_V0_FRAME_GAP);
             for (uint8_t bit = 0; bit < 80; bit++) {
-                bool value = ((payload[bit >> 3] >> (7 - (bit & 7))) & 1U) != 0U;
+                bool value;
+                if (verbatim) {
+                    value = (bit < 64)
+                        ? (((params->key_value >> (63 - bit)) & 1ULL) != 0ULL)
+                        : (((saved_key2 >> (79 - bit)) & 1U) != 0U);
+                } else {
+                    value = ((payload[bit >> 3] >> (7 - (bit & 7))) & 1U) != 0U;
+                }
                 pair(out, &idx, max_pairs,
                      value ? CHRYSLER_V0_TE_ONE_SHORT : CHRYSLER_V0_TE_SHORT, 0);
                 pair(out, &idx, max_pairs, 0,

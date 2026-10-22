@@ -1184,6 +1184,29 @@ endif()
 add_test(NAME renault_v0_decode COMMAND test_renault_v0_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate Mazda V0 / Subaru / Chrysler V0 decoders
+# ------------------------------------------------------------------
+add_executable(test_mazda_subaru_chrysler_decode
+    test_mazda_subaru_chrysler_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_mazda_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_subaru_pp_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_chrysler_v0_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_mazda_subaru_chrysler_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_mazda_subaru_chrysler_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mazda_subaru_chrysler_decode PRIVATE sanitizers)
+endif()
+add_test(NAME mazda_subaru_chrysler_decode COMMAND test_mazda_subaru_chrysler_decode)
+
+# ------------------------------------------------------------------
 # Module under test: ProtoPirate saved-capture identity matching and storage
 # ------------------------------------------------------------------
 add_executable(test_subghz_saved_capture
@@ -3729,6 +3752,7 @@ add_executable(test_subghz_proto_pirate
     ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v5_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v0_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_chrysler_v0_decode.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
@@ -3739,7 +3763,7 @@ add_executable(test_subghz_proto_pirate
     ${STUBS_DIR}/subghz_decode_stubs.c
     ${STUBS_DIR}/protopirate_keys_test_data.c
 )
-target_compile_definitions(test_subghz_proto_pirate PRIVATE M1_TEST_REAL_KIA_V5_DECODE M1_TEST_REAL_RENAULT_V0_DECODE)
+target_compile_definitions(test_subghz_proto_pirate PRIVATE M1_TEST_REAL_KIA_V5_DECODE M1_TEST_REAL_RENAULT_V0_DECODE M1_TEST_REAL_CHRYSLER_V0_DECODE)
 target_include_directories(test_subghz_proto_pirate PRIVATE
     ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc

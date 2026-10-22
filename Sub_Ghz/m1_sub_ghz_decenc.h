@@ -387,6 +387,7 @@ static inline bool subghz_psa_capture_needs_bruteforce(uint16_t protocol,
  *    rolling_code by the decoder.
  *  - Renault V0: 3 bytes (the 18-bit "Key2" tail word), stored in key2.
  *  - Renault V1: 3 bytes (frame bytes 8..10), stored in the key2 field.
+ *  - Chrysler V0: 2 bytes (the 16-bit second wire word), stored in key2.
  *  - Ford V1: 8 bytes (full Key_2), stored in the key2 field.
  *  - Ford V2: 5 bytes (TailRaw), stored in the key2 field.
  *  - Fiat V1: 8 bytes (m1_fiat_v1_pack_key2: 6-byte matched Hitag2 key,
@@ -402,6 +403,8 @@ static inline uint8_t subghz_capture_key2_len(uint16_t protocol,
         return 3u;
     if (protocol == (uint16_t)RENAULT_V1)
         return 3u;
+    if (protocol == (uint16_t)CHRYSLER_V0)
+        return 2u;
     if (protocol == (uint16_t)FIAT_V1)
         return 8u;
     if (protocol == (uint16_t)FORD_V1)

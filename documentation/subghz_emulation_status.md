@@ -71,7 +71,8 @@ and waveform decoders under `Sub_Ghz/protocols/`: Honda Static/V1/V2
 polarity wrappers, `m1_kia_v5_decode.c`, `m1_kia_v7_decode.c`), Fiat
 V0/V1/V2 (`m1_fiat_v0_decode.c`, `m1_fiat_v1_decode.c`,
 `m1_fiat_v2_decode.c`), Renault V0/V1 (`m1_renault_v0_decode.c`,
-`m1_renault_v1_decode.c`), PSA
+`m1_renault_v1_decode.c`), Mazda V0 (`m1_mazda_v0_decode.c`), Subaru
+(`m1_subaru_pp_decode.c`), Chrysler V0 (`m1_chrysler_v0_decode.c`), PSA
 (`m1_psa_decode.c`), Ford V3 (`m1_ford_v3_decode.c`), Kia V6
 (`m1_kia_v6_decode.c`), and VAG (`m1_vag_decode.c`). These handle frame
 recognition and the protocol-specific fields documented by each decoder; they
@@ -89,7 +90,7 @@ full-key path still lacks a public key source.
 | Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
 | Models DB | **Portable with radio adaptation** | Parse the public v2 database, but translate AM/FM and the published Honda custom profile to SI4463 settings; never write the database's CC1101 register blobs to M1 hardware. |
 | Remote Analyzer | **Portable with radio/UI redesign** | Reuse the detection concepts, not the CC1101 worker or Flipper plugin UI. Implement an asynchronous SI4463 scene with existing M1 scan/RSSI infrastructure and hardware validation. |
-| Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. 16 of 19 done (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0); 3 remain (Mazda V0, Subaru, Chrysler V0). |
+| Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. **All 19 done** (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0, Mazda V0, Subaru, Chrysler V0). |
 | Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
 
 Implementation phases (each requires host tests, a firmware build, and a RAM
@@ -152,7 +153,23 @@ headroom check):
    with normal button presses.  Fiat V1's key-dependent TX/key-resolution
    features beyond this and the Renault V1 full-key path stay out of
    scope.
-6. **Remaining automotive decoders** — Mazda V0, Subaru, and Chrysler V0.
+6. **Remaining automotive decoders — implemented in this branch.** Mazda V0
+   (Manchester, 0xD7/0x5A sync-tail bytes, bytewise-sum checksum), Subaru
+   (PWM 800/1600 µs, structural only — upstream has no checksum and its own
+   validity flag is inconsistent even for upstream-encoder output, kept
+   faithful), and Chrysler V0 (300 µs short marks, 3400/3700 µs long marks,
+   80-bit dual payload with seed/XOR-transform blocks and a 16-bit second
+   wire word) are real host-tested waveform decoders.  Chrysler's upstream
+   decoder arms on the 15.6 ms frame gap that M1's capture model
+   hard-separates, so the M1 decoder additionally re-runs the upstream
+   machine pre-armed in its Data state — both passes are structural-gate
+   protected.  Chrysler's second wire word persists as a 2-byte `Key_2` and
+   reloads into a verbatim replay path (extra[9..10]) that coexists with the
+   encoder's plaintext-block rebuild path; the full loop (plaintext rebuild
+   → decode → verbatim replay → identical decode) is host-tested.  Subaru
+   (800/1600/200 µs) and Chrysler (300/3400/3700 µs, 80-bit) registry
+   timings were corrected to upstream, the proto-pirate catalog entries
+   match, and the generic PWM replay flags were removed from all three.
 7. **Models DB** — bounded parser, preset mapping, receiver integration, and SD
    installation documentation.
 8. **Remote Analyzer** — pure classification helpers, asynchronous SI4463 scene,

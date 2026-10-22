@@ -33,7 +33,7 @@
 
 ### Phase 6 — Mazda, Subaru, and Chrysler decoders
 - **Description**: Replace the remaining Mazda V0, Subaru, and Chrysler V0 placeholders with host-tested frame parsers and waveform decoders; persist their protocol-specific second-key/check fields where needed.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Port remaining ProtoPirate automotive decoders`
 
 ### Phase 7 — Models database

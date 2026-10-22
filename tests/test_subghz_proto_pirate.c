@@ -31,6 +31,8 @@ void tearDown(void) {}
 uint16_t m1_kia_v5_mixer_decode(uint32_t encrypted, uint64_t mfkey);
 /* Real Renault V0 decoder (linked into this target) + its checksum helper. */
 uint8_t subghz_decode_renault_v0(uint16_t protocol_index, uint16_t pulse_count);
+/* Real Chrysler V0 decoder (linked into this target). */
+uint8_t subghz_decode_chrysler_v0(uint16_t protocol_index, uint16_t pulse_count);
 
 /* Expand encoder pairs to the merged pulse_times view the RX decoders see
  * (even index = HIGH). */
@@ -1011,6 +1013,55 @@ void test_renault_v0_encode_upstream_timings(void)
     TEST_ASSERT_EQUAL_UINT32(250, out[npairs - 1].low_us);
 }
 
+/* ===================================================================
+ * Chrysler V0 — full loop: plaintext rebuild -> real decode -> verbatim
+ * replay from Key + Key_2 (the saved-capture path) -> identical decode.
+ * =================================================================== */
+
+void test_chrysler_v0_rebuild_capture_verbatim_round_trip(void)
+{
+    /* Plaintext block + framing that passes the upstream structural gate
+     * (same vector as the decoder suite's known-answer tests). */
+    SubGhzKeyParams params = make_params("Chrysler V0", 0x02u, 80);
+    const uint8_t plain[9] = {0x51, 0x22, 0x33, 0x44, 0x92, 0x55, 0x77, 0x88, 0x99};
+    memcpy(params.extra, plain, sizeof(plain));
+    params.btn = 0x01u;
+    params.cnt = 0x2Au; /* even counter */
+
+    SubGhzRawPair out[450];
+    uint32_t npairs = subghz_proto_pirate_encode(&params, out, 450, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    uint16_t npulses = pairs_to_pulse_times(out, npairs);
+    TEST_ASSERT_LESS_THAN_UINT16(PACKET_PULSE_COUNT_MAX, npulses);
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_chrysler_v0(CHRYSLER_V0, npulses));
+
+    const uint64_t captured_key = subghz_decenc_ctl.n64_decodedvalue;
+    const uint64_t captured_key2 = subghz_decenc_ctl.n32_key2;
+    const uint32_t captured_serial = subghz_decenc_ctl.n32_serialnumber;
+    const uint8_t captured_btn = subghz_decenc_ctl.n8_buttonid;
+    TEST_ASSERT_GREATER_THAN_UINT64(0, captured_key);
+
+    /* Verbatim replay exactly as the loader maps a saved capture:
+     * Key + the 16-bit second word in extra[9..10]. */
+    SubGhzKeyParams saved = make_params("Chrysler V0", captured_key, 80);
+    saved.extra[9] = (uint8_t)(captured_key2 >> 8);
+    saved.extra[10] = (uint8_t)captured_key2;
+
+    SubGhzRawPair out2[450];
+    npairs = subghz_proto_pirate_encode(&saved, out2, 450, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    npulses = pairs_to_pulse_times(out2, npairs);
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_chrysler_v0(CHRYSLER_V0, npulses));
+    TEST_ASSERT_EQUAL_HEX64(captured_key, subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_HEX32(captured_key2 & 0xFFFFu,
+                            subghz_decenc_ctl.n32_key2 & 0xFFFFu);
+    TEST_ASSERT_EQUAL_HEX32(captured_serial,
+                            subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX8(captured_btn, subghz_decenc_ctl.n8_buttonid);
+}
+
 
 void test_kia_v1_encode_nonzero(void)
 {
@@ -1452,6 +1503,7 @@ int main(void)
     RUN_TEST(test_renault_v0_encode_verbatim_round_trip);
     RUN_TEST(test_renault_v0_encode_rebuild_round_trip);
     RUN_TEST(test_renault_v0_encode_upstream_timings);
+    RUN_TEST(test_chrysler_v0_rebuild_capture_verbatim_round_trip);
     RUN_TEST(test_kia_v1_encode_nonzero);
     RUN_TEST(test_kia_v2_encode_nonzero);
     RUN_TEST(test_renault_v0_encode_nonzero);

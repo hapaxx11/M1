@@ -1216,7 +1216,9 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [MAZDA_V0] = {
         .name   = "Mazda V0",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=250, .te_long=500, .te_delta=100,
                     .min_count_bit_for_found=64 },
@@ -1291,10 +1293,14 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [CHRYSLER_V0] = {
         .name   = "Chrysler V0",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=270, .te_long=540, .te_delta=80,
-                    .min_count_bit_for_found=64 },
+        /* te_short 300; the long marks are 3400/3700 us (variant A/B) —
+         * the registry carries the A value for display/TE fallback. */
+        .timing = { .te_short=300, .te_long=3400, .te_delta=150,
+                    .min_count_bit_for_found=80 },
         .decode = subghz_decode_chrysler_v0,
     },
     [FIAT_V0] = {
@@ -1311,9 +1317,11 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [SUBARU_PP] = {
         .name   = "Subaru",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=620, .te_long=1620, .te_delta=160,
+        .timing = { .te_short=800, .te_long=1600, .te_delta=200,
                     .min_count_bit_for_found=64 },
         .decode = subghz_decode_subaru_pp,
     },
