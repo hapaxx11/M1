@@ -43,7 +43,7 @@
 
 ### Phase 8 — SI4463 Remote Analyzer
 - **Description**: Implement the Remote Analyzer as an asynchronous M1 scene using existing SI4463 RSSI/frequency-scan infrastructure. Extract pure frequency-pair/modulation classification for host tests, preserve radio cleanup/cancellation, and validate detection on hardware.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete (on-device detection validation outstanding)
 - **Commit**: `Add SI4463 Remote Analyzer scene`
 
 ### Phase 9 — Parity validation and documentation closeout

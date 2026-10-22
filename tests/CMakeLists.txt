@@ -1224,6 +1224,23 @@ endif()
 add_test(NAME models_db COMMAND test_models_db)
 
 # ------------------------------------------------------------------
+# Module under test: Remote Analyzer detection logic (pure)
+# ------------------------------------------------------------------
+add_executable(test_remote_analyzer
+    test_remote_analyzer.c
+    ${M1_ROOT}/Sub_Ghz/subghz_remote_analyzer.c
+)
+target_include_directories(test_remote_analyzer PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_remote_analyzer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_remote_analyzer PRIVATE sanitizers)
+endif()
+add_test(NAME remote_analyzer COMMAND test_remote_analyzer)
+
+# ------------------------------------------------------------------
 # Module under test: ProtoPirate saved-capture identity matching and storage
 # ------------------------------------------------------------------
 add_executable(test_subghz_saved_capture

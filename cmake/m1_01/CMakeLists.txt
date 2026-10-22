@@ -724,6 +724,8 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_models_db.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_emulate.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_bruteforce.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_analyzer.c
+    ../../Sub_Ghz/subghz_remote_analyzer.c
     ../../m1_csrc/m1_subghz_scene_signal_identifier.c
     ../../m1_csrc/m1_subghz_scene_smart_signal_id.c
     ../../m1_csrc/m1_subghz_scene_analyzer_menu.c

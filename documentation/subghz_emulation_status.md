@@ -89,7 +89,7 @@ full-key path still lacks a public key source.
 |------|------------|----------------------------|
 | Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
 | Models DB | **Implemented in this branch** | Bounded host-tested v2 parser (`Sub_Ghz/subghz_models_db.c`) + "Models DB" scene in the Proto Pirate menu: entries map Flipper preset names to M1's SI4463 AM/FM modulation presets (the Honda custom CC1101 blob is acknowledged but never consumed — it maps to FM476); selecting an entry applies the frequency/modulation and opens the Read scene with the ProtoPirate filter. Ships as `subghz_database/models_db/models.txt` → install at `SubGHz/models_db/models.txt`. |
-| Remote Analyzer | **Portable with radio/UI redesign** | Reuse the detection concepts, not the CC1101 worker or Flipper plugin UI. Implement an asynchronous SI4463 scene with existing M1 scan/RSSI infrastructure and hardware validation. |
+| Remote Analyzer | **Implemented in this branch** | Reuse the detection concepts, not the CC1101 worker: two-stage RSSI sweep (6 region-aware hopper frequencies coarse, ±300 kHz @ 20 kHz fine), AM classification by >6 dB neighbor drop, adaptive frequency smoothing, and the 5-frame sample hold are pure host-tested logic (`Sub_Ghz/subghz_remote_analyzer.c`); the async scene (`m1_subghz_scene_proto_pirate_analyzer.c`) tunes the SI4463 directly, pauses/resumes on OK, adjusts the trigger with LEFT/RIGHT, and shares the tuner scene's radio lifecycle. |
 | Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. **All 19 done** (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0, Mazda V0, Subaru, Chrysler V0). |
 | Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
 
@@ -182,8 +182,19 @@ headroom check):
    frequency + modulation through the existing config seam, and opens the
    Read scene with the ProtoPirate filter; a missing/invalid database or an
    unmappable frequency shows a plain info screen.
-8. **Remote Analyzer** — pure classification helpers, asynchronous SI4463 scene,
-   and on-device detection validation.
+8. **Remote Analyzer — implemented in this branch.** The detection core is
+   pure host-tested logic (`Sub_Ghz/subghz_remote_analyzer.c`, 23 tests):
+   coarse/fine peak tracking, AM classification by steep (>6 dB) neighbor
+   drop at the fine peak, adaptive EMA frequency smoothing (with a
+   first-sample initialization fix — upstream's smoother starts from
+   uninitialized heap), the upstream sample-hold delivery policy, and
+   nearest-frequency rounding.  The "Remote Analyzer" scene in the Proto
+   Pirate menu drives the SI4463 directly with a tick-chunked scan
+   (≤ ~25 ms per tick, instant BACK cancellation, the tuner scene's radio
+   lifecycle), pausing on OK and a LEFT/RIGHT trigger adjustment.  M1 has
+   no narrow-BW second stage, so the fine sweep runs with the normal RX
+   config — the documented SI4463 adaptation.  **On-device detection
+   validation is still outstanding** (requires hardware + a live fob).
 9. **Closeout** — full host/firmware validation, RAM review, and documentation
    inventory updates.
 
