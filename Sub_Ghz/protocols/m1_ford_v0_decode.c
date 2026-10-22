@@ -170,6 +170,9 @@ static bool ford_v0_process_data(ford_v0_state_t *state, uint16_t protocol_index
         return false;
 
     const uint16_t key2 = (uint16_t)(state->data_low & 0xFFFFu);
+    if (!m1_ford_v0_verify_crc(state->key1, key2))
+        return false;
+
     uint32_t serial = 0;
     uint32_t count = 0;
     uint8_t button = 0;

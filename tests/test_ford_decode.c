@@ -269,6 +269,18 @@ void test_ford_v0_rejects_truncated_waveform(void)
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v0(FORD_V0, s_pulse_count));
 }
 
+void test_ford_v0_rejects_bad_crc_waveform(void)
+{
+    uint64_t key1 = 0;
+    uint16_t key2 = 0;
+    v0_make_frame(&key1, &key2);
+    key2 ^= 1u;
+    TEST_ASSERT_FALSE(m1_ford_v0_verify_crc(key1, key2));
+
+    v0_build_waveform(key1, key2);
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v0(FORD_V0, s_pulse_count));
+}
+
 static uint16_t v1_crc16(const uint8_t *data, size_t len)
 {
     uint16_t remainder = 0;
@@ -584,6 +596,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_ford_v0_fields_crc_and_waveform);
     RUN_TEST(test_ford_v0_rejects_truncated_waveform);
+    RUN_TEST(test_ford_v0_rejects_bad_crc_waveform);
     RUN_TEST(test_ford_v1_frame_and_full_preamble_waveform);
     RUN_TEST(test_ford_v1_rejects_bad_crc);
     RUN_TEST(test_ford_v2_frame_and_waveform);

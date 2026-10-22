@@ -125,12 +125,16 @@ bool m1_honda_v2_parse_frame(const uint8_t raw[10], bool extra_bit,
         sig = HONDA_V2_SIG_LOCK;
     }
 
+    const uint8_t button_value = honda_v2_button_from_signature(sig);
+    if (button_value == 0u)
+        return false;
+
     if (key) *key = data;
     if (tail) *tail = tail_value;
     if (signature) *signature = sig;
     if (serial) *serial = sn;
     if (count) *count = cnt;
-    if (button) *button = honda_v2_button_from_signature(sig);
+    if (button) *button = button_value;
     if (check) *check = raw[7] & 0x07u;
     return true;
 }

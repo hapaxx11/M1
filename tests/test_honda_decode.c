@@ -477,6 +477,19 @@ void test_honda_v2_waveform_decode_and_check_rejection(void)
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_honda_v2(HONDA_V2, s_pulse_count));
 }
 
+void test_honda_v2_rejects_unknown_signature(void)
+{
+    const uint32_t count = 0x125;
+    uint8_t raw[10];
+    v2_raw(raw, v2_key(0x112233, 0x123456, count), v2_tail(count));
+
+    TEST_ASSERT_FALSE(m1_honda_v2_parse_frame(
+        raw, true, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+
+    build_v2_waveform(v2_key(0x112233, 0x123456, count), v2_tail(count), true);
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_honda_v2(HONDA_V2, s_pulse_count));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -487,5 +500,6 @@ int main(void)
     RUN_TEST(test_honda_v1_waveform_decode_and_button_rejection);
     RUN_TEST(test_honda_v2_frame_validation);
     RUN_TEST(test_honda_v2_waveform_decode_and_check_rejection);
+    RUN_TEST(test_honda_v2_rejects_unknown_signature);
     return UNITY_END();
 }
