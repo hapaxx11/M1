@@ -6,10 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "flipper_file.h"
 
 #define SUBGHZ_DEFAULT_PRESET "FuriHalSubGhzPresetOok650Async"
 #define SUBGHZ_FSK_PRESET     "FuriHalSubGhzPreset2FSKDev476Async"
 #define SUBGHZ_ASK_PRESET     "FuriHalSubGhzPresetASK"
+#define SUBGHZ_SAVED_CAPTURE_PATH_MAX 128u
+#define SUBGHZ_SAVED_CAPTURE_MAX_DEPTH 4u
 
 static bool parse_u64(const char *text, uint64_t *out)
 {
@@ -105,6 +108,7 @@ bool subghz_saved_capture_read_identity(
     if (!ff_open(&ff, path))
         return false;
 
+    bool has_seed = false;
     while (ff_read_line(&ff))
     {
         if (!ff_parse_kv(&ff))
@@ -140,52 +144,73 @@ bool subghz_saved_capture_read_identity(
         {
             out->has_counter = parse_u32(value, &out->counter);
         }
+        else if (strcmp(key, "Seed") == 0)
+        {
+            has_seed = true;
+        }
     }
 
     ff_close(&ff);
+    out->is_recovered_psa = has_seed && strcmp(out->protocol, "PSA") == 0;
     return out->protocol[0] != '\0' && (out->has_serial || out->has_key);
 }
 
-bool subghz_saved_capture_find_match(
-    const char *directory, const SubGHz_Dec_Info_t *received,
-    const char *protocol_name, char *out_path, size_t out_path_size)
+static bool subghz_saved_capture_join_path(
+    char *out, size_t out_size, const char *directory, const char *name)
 {
-    if (!directory || !received || !protocol_name || !out_path ||
-        out_path_size == 0)
-        return false;
+    const size_t dir_len = strlen(directory);
+    const char *separator = dir_len > 0 && directory[dir_len - 1] == '/' ? "" : "/";
+    const int length = snprintf(out, out_size, "%s%s%s", directory, separator, name);
+    return length >= 0 && (size_t)length < out_size;
+}
 
-    out_path[0] = '\0';
-    subghz_saved_match_identity_t rx;
-    subghz_saved_capture_identity_from_info(received, protocol_name, &rx);
-    if ((!rx.has_serial && !rx.has_key) || rx.protocol[0] == '\0')
-        return false;
-
+static bool subghz_saved_capture_find_match_in_directory(
+    const char *directory, const subghz_saved_match_identity_t *received,
+    char *out_path, size_t out_path_size, uint8_t depth)
+{
     DIR dir;
     if (f_opendir(&dir, directory) != FR_OK)
         return false;
 
     bool found = false;
-    const size_t dir_len = strlen(directory);
-    const char *separator = dir_len > 0 && directory[dir_len - 1] == '/' ? "" : "/";
     while (!found)
     {
         FILINFO info;
         memset(&info, 0, sizeof(info));
         if (f_readdir(&dir, &info) != FR_OK || info.fname[0] == '\0')
             break;
-        if ((info.fattrib & AM_DIR) || !has_capture_extension(info.fname) ||
+
+        if (info.fattrib & AM_DIR)
+        {
+            if (depth < SUBGHZ_SAVED_CAPTURE_MAX_DEPTH &&
+                strcmp(info.fname, ".") != 0 &&
+                strcmp(info.fname, "..") != 0)
+            {
+                char nested[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+                if (subghz_saved_capture_join_path(
+                        nested, sizeof(nested), directory, info.fname))
+                {
+                    found = subghz_saved_capture_find_match_in_directory(
+                        nested, received, out_path, out_path_size,
+                        (uint8_t)(depth + 1u));
+                }
+            }
+            continue;
+        }
+
+        if (!has_capture_extension(info.fname) ||
             strcmp(info.fname, "_flipper_tmp.sgh") == 0)
             continue;
 
-        char path[128];
-        const int length = snprintf(path, sizeof(path), "%s%s%s", directory,
-                                    separator, info.fname);
-        if (length < 0 || (size_t)length >= sizeof(path))
+        char path[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+        if (!subghz_saved_capture_join_path(
+                path, sizeof(path), directory, info.fname))
             continue;
 
         subghz_saved_match_identity_t saved;
         if (subghz_saved_capture_read_identity(path, &saved) &&
-            subghz_saved_match_identity(&rx, &saved))
+            !saved.is_recovered_psa &&
+            subghz_saved_match_identity(received, &saved))
         {
             const int out_length = snprintf(out_path, out_path_size, "%s", path);
             if (out_length >= 0 && (size_t)out_length < out_path_size)
@@ -195,6 +220,66 @@ bool subghz_saved_capture_find_match(
 
     f_closedir(&dir);
     return found;
+}
+
+bool subghz_saved_capture_find_match(
+    const char *directory, const SubGHz_Dec_Info_t *received,
+    const char *protocol_name, bool allow_serial_match,
+    char *out_path, size_t out_path_size)
+{
+    if (!directory || !received || !protocol_name || !out_path ||
+        out_path_size == 0)
+        return false;
+
+    out_path[0] = '\0';
+    subghz_saved_match_identity_t rx;
+    subghz_saved_capture_identity_from_info(received, protocol_name, &rx);
+    rx.allow_serial_match = allow_serial_match;
+    if ((!rx.has_serial && !rx.has_key) || rx.protocol[0] == '\0')
+        return false;
+
+    return subghz_saved_capture_find_match_in_directory(
+        directory, &rx, out_path, out_path_size, 0);
+}
+
+bool subghz_saved_capture_update(
+    const char *path, bool m1_native,
+    const flipper_subghz_key_capture_t *capture,
+    subghz_saved_capture_writer_t writer)
+{
+    if (!path || !capture || !writer)
+        return false;
+
+    char temporary[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+    char backup[SUBGHZ_SAVED_CAPTURE_PATH_MAX];
+    int length = snprintf(temporary, sizeof(temporary), "%s.update.tmp", path);
+    if (length < 0 || (size_t)length >= sizeof(temporary))
+        return false;
+    length = snprintf(backup, sizeof(backup), "%s.update.bak", path);
+    if (length < 0 || (size_t)length >= sizeof(backup))
+        return false;
+
+    (void)f_unlink(temporary);
+    if (!writer(temporary, m1_native, capture))
+    {
+        (void)f_unlink(temporary);
+        return false;
+    }
+
+    if (f_rename(path, backup) != FR_OK)
+    {
+        (void)f_unlink(temporary);
+        return false;
+    }
+    if (f_rename(temporary, path) != FR_OK)
+    {
+        (void)f_rename(backup, path);
+        (void)f_unlink(temporary);
+        return false;
+    }
+
+    (void)f_unlink(backup);
+    return true;
 }
 
 bool subghz_saved_capture_get_format(

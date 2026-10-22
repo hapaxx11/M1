@@ -1105,7 +1105,7 @@ bool flipper_subghz_save_vag(const char *path,
 	if (result)
 		result = ff_write_kv_uint32(&ff, "Type", type);
 
-	ff_close(&ff);
+	result = ff_close(&ff) && result;
 	return result;
 }
 
@@ -1185,7 +1185,7 @@ bool flipper_subghz_save_kia_v6(const char *path,
 	if (result)
 		result = ff_write_kv_uint32(&ff, "Fx", fx);
 
-	ff_close(&ff);
+	result = ff_close(&ff) && result;
 	return result;
 }
 
@@ -1564,7 +1564,7 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 	if (result && is_kia_v6)
 		result = ff_write_kv_uint32(&ff, "Fx", capture->fx);
 
-	ff_close(&ff);
+	result = ff_close(&ff) && result;
 	return result;
 }
 
@@ -1668,7 +1668,7 @@ static bool subghz_save_flipper_key_capture(
 	if (result && is_kia_v0 && capture->type != 0)
 		result = ff_write_kv_uint32(&ff, "Type", capture->type);
 
-	ff_close(&ff);
+	result = ff_close(&ff) && result;
 	return result;
 }
 

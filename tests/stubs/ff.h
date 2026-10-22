@@ -121,10 +121,18 @@ static inline FRESULT f_open(FIL *fp, const char *path, unsigned char mode)
 	return fp->f ? FR_OK : FR_DISK_ERR;
 }
 
+FRESULT ff_stub_close_result __attribute__((weak)) = FR_OK;
+
 static inline FRESULT f_close(FIL *fp)
 {
-	if (fp && fp->f) { fclose(fp->f); fp->f = NULL; }
-	return FR_OK;
+	if (fp && fp->f)
+	{
+		const int result = fclose(fp->f);
+		fp->f = NULL;
+		if (result != 0)
+			return FR_DISK_ERR;
+	}
+	return ff_stub_close_result;
 }
 
 static inline FRESULT f_read(FIL *fp, void *buf, UINT btr, UINT *br)

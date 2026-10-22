@@ -25,9 +25,10 @@ bool subghz_saved_match_identity(
         strcmp(received->protocol, saved->protocol) != 0)
         return false;
 
-    if (received->has_serial)
+    if (received->allow_serial_match && received->has_serial &&
+        saved->has_serial)
     {
-        if (!saved->has_serial || received->serial != saved->serial)
+        if (received->serial != saved->serial)
             return false;
     }
     else

@@ -28,6 +28,7 @@
 /* Declaration from flipper_subghz.h — we include the header directly */
 #include "flipper_subghz.h"
 #include "subghz_psa_bruteforce.h"  /* subghz_psa_bf_result_t */
+#include "ff.h"
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -1520,6 +1521,23 @@ void test_save_vag_key_capture_preserves_native_fields(void)
 	remove(path);
 }
 
+void test_save_key_capture_reports_close_failure(void)
+{
+	const char *path = "/tmp/test_capture_close_failure.sub";
+	const flipper_subghz_key_capture_t capture = {
+		.frequency = 433920000,
+		.protocol = "Ford V1",
+		.bit_count = 64,
+		.key = 1,
+	};
+
+	ff_stub_close_result = FR_DISK_ERR;
+	const bool saved = flipper_subghz_save_key_capture(path, false, &capture);
+	ff_stub_close_result = FR_OK;
+	TEST_ASSERT_FALSE(saved);
+	remove(path);
+}
+
 void test_save_kia_v6_key_capture_preserves_native_fields(void)
 {
 	const char *path = "/tmp/test_kia_v6_capture_native.sgh";
@@ -2031,6 +2049,7 @@ int main(void)
 	RUN_TEST(test_save_key_plain_writes_no_key2_line);
 	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
 	RUN_TEST(test_save_vag_key_capture_preserves_native_fields);
+	RUN_TEST(test_save_key_capture_reports_close_failure);
 	RUN_TEST(test_save_kia_v6_key_capture_preserves_native_fields);
 	RUN_TEST(test_save_decoded_key_capture_preserves_identity_fields);
 	RUN_TEST(test_save_decoded_native_capture_preserves_identity_fields);

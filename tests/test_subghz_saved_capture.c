@@ -9,6 +9,9 @@
 #include <unistd.h>
 
 #define TEST_DIR "/tmp/m1_saved_capture_test"
+#define TEST_CAPTURE_PATH TEST_DIR "/capture.sgh"
+#define TEST_UPDATE_TMP TEST_CAPTURE_PATH ".update.tmp"
+#define TEST_UPDATE_BAK TEST_CAPTURE_PATH ".update.bak"
 
 static void write_tmp(const char *path, const char *text)
 {
@@ -20,11 +23,16 @@ static void write_tmp(const char *path, const char *text)
 
 static void remove_test_files(void)
 {
+    unlink(TEST_DIR "/nested/capture.sub");
+    rmdir(TEST_DIR "/nested");
     unlink(TEST_DIR "/capture.sgh");
     unlink(TEST_DIR "/other.sub");
     unlink(TEST_DIR "/notes.txt");
     unlink(TEST_DIR "/format.sub");
     unlink(TEST_DIR "/format.sgh");
+    unlink(TEST_DIR "/capture.sub");
+    unlink(TEST_UPDATE_TMP);
+    unlink(TEST_UPDATE_BAK);
 }
 
 void setUp(void)
@@ -50,6 +58,7 @@ static subghz_saved_match_identity_t identity(const char *protocol,
     value.counter = counter;
     value.has_serial = true;
     value.has_counter = true;
+    value.allow_serial_match = true;
     return value;
 }
 
@@ -75,6 +84,21 @@ void test_saved_match_serial_and_counter_margin(void)
     TEST_ASSERT_FALSE(subghz_saved_match_identity(&rx, &saved));
 }
 
+void test_saved_match_static_protocol_requires_full_key(void)
+{
+    subghz_saved_match_identity_t rx = identity("Hormann HSM", 0x1234, 0);
+    subghz_saved_match_identity_t saved = identity("Hormann HSM", 0x1234, 0);
+    rx.allow_serial_match = false;
+    saved.key = 0x0102030405060708ULL;
+    rx.key = 0x0102030405060709ULL;
+    rx.has_key = true;
+    saved.has_key = true;
+
+    TEST_ASSERT_FALSE(subghz_saved_match_identity(&rx, &saved));
+    rx.key = saved.key;
+    TEST_ASSERT_TRUE(subghz_saved_match_identity(&rx, &saved));
+}
+
 void test_saved_match_key_fallback_and_missing_counter(void)
 {
     subghz_saved_match_identity_t rx = identity("Fiat V2", 0, 0);
@@ -96,6 +120,24 @@ void test_saved_match_key_fallback_and_missing_counter(void)
     saved.has_counter = true;
     saved.counter = UINT32_MAX;
     TEST_ASSERT_TRUE(subghz_saved_match_identity(&rx, &saved));
+}
+
+void test_saved_match_serial_received_key_only_saved_falls_back_to_key(void)
+{
+    subghz_saved_match_identity_t rx = identity("PSA", 0x12345678, 100);
+    subghz_saved_match_identity_t saved;
+    memset(&saved, 0, sizeof(saved));
+    snprintf(saved.protocol, sizeof(saved.protocol), "%s", "PSA");
+    saved.key = 0x123A445566778899ULL;
+    saved.has_key = true;
+
+    rx.allow_serial_match = true;
+    rx.has_key = true;
+    rx.key = saved.key;
+    TEST_ASSERT_TRUE(subghz_saved_match_identity(&rx, &saved));
+
+    saved.key ^= 1u;
+    TEST_ASSERT_FALSE(subghz_saved_match_identity(&rx, &saved));
 }
 
 void test_saved_capture_read_flipper_and_native_identities(void)
@@ -159,13 +201,124 @@ void test_saved_capture_find_match_scans_sub_and_sgh(void)
 
     char path[128];
     TEST_ASSERT_TRUE(subghz_saved_capture_find_match(
-        TEST_DIR, &received, "PSA", path, sizeof(path)));
+        TEST_DIR, &received, "PSA", true, path, sizeof(path)));
     TEST_ASSERT_EQUAL_STRING(TEST_DIR "/capture.sgh", path);
 
     received.rolling_code = 151;
     TEST_ASSERT_FALSE(subghz_saved_capture_find_match(
-        TEST_DIR, &received, "PSA", path, sizeof(path)));
+        TEST_DIR, &received, "PSA", true, path, sizeof(path)));
     TEST_ASSERT_EQUAL_UINT8(0, path[0]);
+}
+
+void test_saved_capture_find_match_searches_nested_directories(void)
+{
+    TEST_ASSERT_EQUAL_INT(0, mkdir(TEST_DIR "/nested", 0755));
+    write_tmp(TEST_DIR "/nested/capture.sub",
+              "Filetype: Flipper SubGhz Key File\r\n"
+              "Version: 1\r\n"
+              "Protocol: PSA\r\n"
+              "Key: 12 3A 44 55 66 77 88 99\r\n"
+              "Serial: 305419896\r\n"
+              "Cnt: 100\r\n");
+
+    SubGHz_Dec_Info_t received;
+    memset(&received, 0, sizeof(received));
+    received.key = 0x123A445566778899ULL;
+    received.serial_number = 0x12345678;
+    received.rolling_code = 100;
+
+    char path[128];
+    TEST_ASSERT_TRUE(subghz_saved_capture_find_match(
+        TEST_DIR, &received, "PSA", true, path, sizeof(path)));
+    TEST_ASSERT_EQUAL_STRING(TEST_DIR "/nested/capture.sub", path);
+}
+
+void test_saved_capture_does_not_offer_update_for_recovered_psa(void)
+{
+    write_tmp(TEST_DIR "/capture.sub",
+              "Filetype: Flipper SubGhz Key File\r\n"
+              "Version: 1\r\n"
+              "Protocol: PSA\r\n"
+              "Key: 12 3A 44 55 66 77 88 99\r\n"
+              "Serial: 305419896\r\n"
+              "Btn: 2\r\n"
+              "Cnt: 100\r\n"
+              "Type: 54\r\n"
+              "CRC: 66\r\n"
+              "Seed: 332553\r\n");
+
+    subghz_saved_match_identity_t parsed;
+    TEST_ASSERT_TRUE(subghz_saved_capture_read_identity(
+        TEST_DIR "/capture.sub", &parsed));
+    TEST_ASSERT_TRUE(parsed.is_recovered_psa);
+
+    SubGHz_Dec_Info_t received;
+    memset(&received, 0, sizeof(received));
+    received.key = 0x123A445566778899ULL;
+    received.serial_number = 0x12345678;
+    received.rolling_code = 100;
+
+    char path[128];
+    TEST_ASSERT_FALSE(subghz_saved_capture_find_match(
+        TEST_DIR, &received, "PSA", true, path, sizeof(path)));
+}
+
+static const char *s_update_text;
+static bool s_update_writer_success;
+
+static bool test_capture_writer(const char *path, bool m1_native,
+                                const flipper_subghz_key_capture_t *capture)
+{
+    (void)m1_native;
+    (void)capture;
+    FILE *file = fopen(path, "wb");
+    if (!file)
+        return false;
+    const size_t length = strlen(s_update_text);
+    const bool complete = fwrite(s_update_text, 1, length, file) == length;
+    const bool closed = fclose(file) == 0;
+    return s_update_writer_success && complete && closed;
+}
+
+static void assert_file_equals(const char *path, const char *expected)
+{
+    char actual[256];
+    FILE *file = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL(file);
+    const size_t length = fread(actual, 1, sizeof(actual) - 1u, file);
+    TEST_ASSERT_EQUAL_INT(0, fclose(file));
+    actual[length] = '\0';
+    TEST_ASSERT_EQUAL_STRING(expected, actual);
+}
+
+void test_saved_capture_update_preserves_original_on_write_failure(void)
+{
+    const char *original = "original capture\n";
+    write_tmp(TEST_CAPTURE_PATH, original);
+
+    const flipper_subghz_key_capture_t capture = {0};
+    s_update_text = "partial replacement";
+    s_update_writer_success = false;
+    TEST_ASSERT_FALSE(subghz_saved_capture_update(
+        TEST_CAPTURE_PATH, false, &capture, test_capture_writer));
+    assert_file_equals(TEST_CAPTURE_PATH, original);
+    TEST_ASSERT_FALSE(access(TEST_UPDATE_TMP, F_OK) == 0);
+}
+
+void test_saved_capture_update_replaces_only_after_success(void)
+{
+    const char *original = "original capture\n";
+    const char *replacement = "complete replacement\n";
+    write_tmp(TEST_CAPTURE_PATH, original);
+
+    const flipper_subghz_key_capture_t capture = {0};
+    s_update_text = replacement;
+    s_update_writer_success = true;
+    TEST_ASSERT_TRUE(subghz_saved_capture_update(
+        TEST_CAPTURE_PATH, false, &capture, test_capture_writer));
+    assert_file_equals(TEST_CAPTURE_PATH, replacement);
+    TEST_ASSERT_FALSE(access(TEST_UPDATE_TMP, F_OK) == 0);
+    TEST_ASSERT_FALSE(access(TEST_UPDATE_BAK, F_OK) == 0);
 }
 
 void test_saved_capture_get_format_preserves_preset_and_native_modulation(void)
@@ -226,9 +379,15 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_saved_match_serial_and_counter_margin);
+    RUN_TEST(test_saved_match_static_protocol_requires_full_key);
     RUN_TEST(test_saved_match_key_fallback_and_missing_counter);
+    RUN_TEST(test_saved_match_serial_received_key_only_saved_falls_back_to_key);
     RUN_TEST(test_saved_capture_read_flipper_and_native_identities);
     RUN_TEST(test_saved_capture_find_match_scans_sub_and_sgh);
+    RUN_TEST(test_saved_capture_find_match_searches_nested_directories);
+    RUN_TEST(test_saved_capture_does_not_offer_update_for_recovered_psa);
+    RUN_TEST(test_saved_capture_update_preserves_original_on_write_failure);
+    RUN_TEST(test_saved_capture_update_replaces_only_after_success);
     RUN_TEST(test_saved_capture_get_format_preserves_preset_and_native_modulation);
     RUN_TEST(test_saved_capture_from_history_preserves_decoded_fields);
     return UNITY_END();

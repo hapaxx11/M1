@@ -17,6 +17,8 @@ typedef struct {
     bool has_key;
     bool has_serial;
     bool has_counter;
+    bool allow_serial_match;
+    bool is_recovered_psa;
 } subghz_saved_match_identity_t;
 
 bool subghz_saved_match_counter_compatible(

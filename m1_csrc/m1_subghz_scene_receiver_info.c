@@ -41,6 +41,7 @@ static void scene_on_enter(SubGhzApp *app)
     {
         has_match = subghz_saved_capture_find_match(
             "/SUBGHZ", &e->info, protocol_text[e->info.protocol],
+            !subghz_protocol_is_static_ext(e->info.protocol),
             app->file_path, sizeof(app->file_path));
     }
     subghz_scene_set_state(app, SubGhzSceneReceiverInfo,
@@ -86,8 +87,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     subghz_saved_capture_from_history(
                         e, protocol_text[e->info.protocol], &capture);
                     capture.preset = preset;
-                    if (flipper_subghz_save_key_capture(
-                            app->file_path, m1_native, &capture))
+                    if (subghz_saved_capture_update(
+                            app->file_path, m1_native, &capture,
+                            flipper_subghz_save_key_capture))
                     {
                         subghz_scene_push(app, SubGhzSceneSaveSuccess);
                         return true;

@@ -18,10 +18,10 @@
 
 ### Phase 3 — Saved capture matching and updates
 - **Description**: Fix static/rolling identity matching and nested search; make updates failure-safe and preserve recovered capture metadata.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Make saved capture updates safe`
 
 ### Phase 4 — Validation and final cleanup
 - **Description**: Run focused host tests and firmware build/RAM check when available, review all changes, remove this checklist, and reply to review threads.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
