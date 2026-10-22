@@ -38,7 +38,7 @@
 
 ### Phase 7 — Models database
 - **Description**: Add a bounded, host-tested v2 models-file parser and receiver preset selection. Map standard Flipper AM/FM presets and the published Honda custom profile to M1 SI4463 configuration rather than consuming CC1101 register writes; document SD installation and validation.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Add ProtoPirate models database support`
 
 ### Phase 8 — SI4463 Remote Analyzer

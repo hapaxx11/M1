@@ -18,6 +18,15 @@ repository.
 - **License**: **GNU General Public License v3.0** (see `LICENSE` in this
   directory)
 
+`models_db/models.txt` (the ProtoPirate car-models receiver-preset database)
+was imported from
+[RocketGod-git/ProtoPirate](https://github.com/RocketGod-git/ProtoPirate)
+commit `dc3446b9` (GPLv3), import date 2026-10-22.  Install to
+`SubGHz/models_db/models.txt` on the SD card; the M1 parser reads the preset
+names and frequencies only — CC1101 custom-preset register blobs are
+acknowledged but never consumed (the published Honda custom profile maps to
+M1's FM476 SI4463 preset).
+
 ## Imported Categories
 
 | M1 Directory       | Source Directory          | Files | Notes |

@@ -88,7 +88,7 @@ full-key path still lacks a public key source.
 | Item | Assessment | M1 implementation boundary |
 |------|------------|----------------------------|
 | Saved-capture match/update | **Portable** | Match protocol plus serial (or key when no serial is available), apply the upstream 50-count margin, and update the matched `.sub` or `.sgh` file from Receiver Info. |
-| Models DB | **Portable with radio adaptation** | Parse the public v2 database, but translate AM/FM and the published Honda custom profile to SI4463 settings; never write the database's CC1101 register blobs to M1 hardware. |
+| Models DB | **Implemented in this branch** | Bounded host-tested v2 parser (`Sub_Ghz/subghz_models_db.c`) + "Models DB" scene in the Proto Pirate menu: entries map Flipper preset names to M1's SI4463 AM/FM modulation presets (the Honda custom CC1101 blob is acknowledged but never consumed — it maps to FM476); selecting an entry applies the frequency/modulation and opens the Read scene with the ProtoPirate filter. Ships as `subghz_database/models_db/models.txt` → install at `SubGHz/models_db/models.txt`. |
 | Remote Analyzer | **Portable with radio/UI redesign** | Reuse the detection concepts, not the CC1101 worker or Flipper plugin UI. Implement an asynchronous SI4463 scene with existing M1 scan/RSSI infrastructure and hardware validation. |
 | Name-only automotive decoders | **Portable as RX decoders** | Replace all 19 placeholders with host-tested parsers and waveform decoders. A real decoder does not by itself add TX, key recovery, or private key material. **All 19 done** (Honda ×3, Ford ×3, Kia ×7, Fiat V0/V1, Renault V0, Mazda V0, Subaru, Chrysler V0). |
 | Renault V1 Hitag2 full-key path | **Still blocked** | No public full-key source exists upstream. The existing IV/seed recovery and TX-after-recovery remain unchanged; Renault V0 decoding is a separate, feasible item. |
@@ -170,8 +170,18 @@ headroom check):
    (800/1600/200 µs) and Chrysler (300/3400/3700 µs, 80-bit) registry
    timings were corrected to upstream, the proto-pirate catalog entries
    match, and the generic PWM replay flags were removed from all three.
-7. **Models DB** — bounded parser, preset mapping, receiver integration, and SD
-   installation documentation.
+7. **Models DB — implemented in this branch.** The v2 models-file parser
+   (`Sub_Ghz/subghz_models_db.c`, pure logic, 20 host tests) validates the
+   header, bounds names/frequencies, skips unknown presets and out-of-range
+   frequencies, and maps Flipper preset names to M1's SI4463 modulation
+   presets (Ook270/Ook650/2FSKDev238/2FSKDev476; the published Honda
+   `FuriHalSubGhzPresetCustom` CC1101 blob is acknowledged but never
+   consumed — it maps to FM476).  The "Models DB" scene in the Proto Pirate
+   menu lists entries from `SubGHz/models_db/models.txt` on the SD card
+   (shipped in the repo as `subghz_database/models_db/models.txt`), applies
+   frequency + modulation through the existing config seam, and opens the
+   Read scene with the ProtoPirate filter; a missing/invalid database or an
+   unmappable frequency shows a plain info screen.
 8. **Remote Analyzer** — pure classification helpers, asynchronous SI4463 scene,
    and on-device detection validation.
 9. **Closeout** — full host/firmware validation, RAM review, and documentation

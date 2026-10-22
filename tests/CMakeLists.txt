@@ -1207,6 +1207,23 @@ endif()
 add_test(NAME mazda_subaru_chrysler_decode COMMAND test_mazda_subaru_chrysler_decode)
 
 # ------------------------------------------------------------------
+# Module under test: ProtoPirate models database parser (pure logic)
+# ------------------------------------------------------------------
+add_executable(test_models_db
+    test_models_db.c
+    ${M1_ROOT}/Sub_Ghz/subghz_models_db.c
+)
+target_include_directories(test_models_db PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_models_db PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_models_db PRIVATE sanitizers)
+endif()
+add_test(NAME models_db COMMAND test_models_db)
+
+# ------------------------------------------------------------------
 # Module under test: ProtoPirate saved-capture identity matching and storage
 # ------------------------------------------------------------------
 add_executable(test_subghz_saved_capture

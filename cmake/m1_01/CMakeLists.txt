@@ -720,6 +720,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_signal_settings.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_models.c
+    ../../Sub_Ghz/subghz_models_db.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_emulate.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_bruteforce.c
     ../../m1_csrc/m1_subghz_scene_signal_identifier.c

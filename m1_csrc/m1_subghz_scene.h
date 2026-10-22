@@ -88,6 +88,7 @@ typedef enum {
     SubGhzSceneProtoPirateTuner,   /**< Proto Pirate async Timing Tuner */
     SubGhzSceneProtoPirateEmulate, /**< Proto Pirate Emulate: pick automotive protocol + send */
     SubGhzSceneProtoPirateBruteForce, /**< Proto Pirate PSA TEA brute-force key recovery */
+    SubGhzSceneProtoPirateModels,  /**< Proto Pirate Models DB: pick car model → apply preset → Read */
     SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
     SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then RF Rosetta identifier */
     SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID + RF analysis tools) */
@@ -590,6 +591,7 @@ extern const SubGhzSceneHandlers subghz_scene_proto_pirate_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_proto_pirate_tuner_handlers;
 extern const SubGhzSceneHandlers subghz_scene_proto_pirate_emulate_handlers;
 extern const SubGhzSceneHandlers subghz_scene_proto_pirate_bruteforce_handlers;
+extern const SubGhzSceneHandlers subghz_scene_proto_pirate_models_handlers;
 extern const SubGhzSceneHandlers subghz_scene_signal_identifier_handlers;
 extern const SubGhzSceneHandlers subghz_scene_smart_signal_id_handlers;
 extern const SubGhzSceneHandlers subghz_scene_analyzer_menu_handlers;
