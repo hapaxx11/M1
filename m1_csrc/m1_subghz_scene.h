@@ -231,7 +231,7 @@ typedef struct {
     char    *raw_filepath;
 
     /* --- Save flow --- */
-    char     file_path[64];           /**< Current file path for save */
+    char     file_path[SUBGHZ_SAVED_PATH_MAX]; /**< Current Sub-GHz file path */
     char     file_name[32];           /**< Suggested filename */
 
     /* --- Computed / derived --- */

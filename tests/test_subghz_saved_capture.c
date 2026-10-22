@@ -2,6 +2,7 @@
 
 #include "unity.h"
 #include "subghz_saved_capture.h"
+#include "subghz_saved_path.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -12,6 +13,8 @@
 #define TEST_CAPTURE_PATH TEST_DIR "/capture.sgh"
 #define TEST_UPDATE_TMP TEST_CAPTURE_PATH ".update.tmp"
 #define TEST_UPDATE_BAK TEST_CAPTURE_PATH ".update.bak"
+#define TEST_LONG_CAPTURE_PATH \
+    TEST_DIR "/capture_name_long_enough_to_exceed_the_old_sixty_four_byte_path_limit.sub"
 
 static void write_tmp(const char *path, const char *text)
 {
@@ -36,6 +39,7 @@ static void remove_test_files(void)
     unlink(TEST_DIR "/format.sub");
     unlink(TEST_DIR "/format.sgh");
     unlink(TEST_DIR "/capture.sub");
+    unlink(TEST_LONG_CAPTURE_PATH);
     unlink(TEST_UPDATE_TMP);
     unlink(TEST_UPDATE_BAK);
 }
@@ -236,6 +240,42 @@ void test_saved_capture_find_match_searches_nested_directories(void)
     TEST_ASSERT_TRUE(subghz_saved_capture_find_match(
         TEST_DIR, &received, "PSA", true, path, sizeof(path)));
     TEST_ASSERT_EQUAL_STRING(TEST_DIR "/nested/capture.sub", path);
+}
+
+void test_saved_capture_scan_returns_paths_longer_than_old_limit(void)
+{
+    TEST_ASSERT_GREATER_THAN_UINT32(64u, strlen(TEST_LONG_CAPTURE_PATH));
+    write_tmp(TEST_LONG_CAPTURE_PATH,
+              "Filetype: Flipper SubGhz Key File\r\n"
+              "Version: 1\r\n"
+              "Protocol: PSA\r\n"
+              "Key: 12 3A 44 55 66 77 88 99\r\n"
+              "Serial: 305419896\r\n"
+              "Cnt: 100\r\n");
+
+    SubGHz_Dec_Info_t received;
+    memset(&received, 0, sizeof(received));
+    received.key = 0x123A445566778899ULL;
+    received.serial_number = 0x12345678;
+    received.rolling_code = 100;
+
+    subghz_saved_capture_scan_t *scan = subghz_saved_capture_scan_start(
+        TEST_DIR, &received, "PSA", true);
+    TEST_ASSERT_NOT_NULL(scan);
+
+    char path[SUBGHZ_SAVED_PATH_MAX];
+    subghz_saved_capture_scan_result_t result =
+        SubGhzSavedCaptureScanPending;
+    uint16_t steps = 0;
+    while (result == SubGhzSavedCaptureScanPending && steps < 100u)
+    {
+        result = subghz_saved_capture_scan_step(scan, path, sizeof(path));
+        steps++;
+    }
+    subghz_saved_capture_scan_destroy(scan);
+
+    TEST_ASSERT_EQUAL(SubGhzSavedCaptureScanFound, result);
+    TEST_ASSERT_EQUAL_STRING(TEST_LONG_CAPTURE_PATH, path);
 }
 
 void test_saved_capture_scan_is_incremental_and_rejects_wrong_protocol_early(void)
@@ -477,6 +517,7 @@ int main(void)
     RUN_TEST(test_saved_capture_read_flipper_and_native_identities);
     RUN_TEST(test_saved_capture_find_match_scans_sub_and_sgh);
     RUN_TEST(test_saved_capture_find_match_searches_nested_directories);
+    RUN_TEST(test_saved_capture_scan_returns_paths_longer_than_old_limit);
     RUN_TEST(test_saved_capture_scan_is_incremental_and_rejects_wrong_protocol_early);
     RUN_TEST(test_saved_capture_with_replay_metadata_is_not_offered_for_update);
     RUN_TEST(test_saved_capture_does_not_offer_update_for_recovered_psa);

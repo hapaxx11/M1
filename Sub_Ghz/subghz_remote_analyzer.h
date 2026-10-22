@@ -25,6 +25,9 @@
 #define SUBGHZ_RA_SWEEP_STEP_HZ        20000u
 #define SUBGHZ_RA_SWEEP_HALF_SPAN_HZ   300000u
 #define SUBGHZ_RA_TRIGGER_DBM          (-97)
+#define SUBGHZ_RA_TRIGGER_MIN_DBM      (-110)
+#define SUBGHZ_RA_TRIGGER_MAX_DBM      (-60)
+#define SUBGHZ_RA_TRIGGER_STEP_DB      3
 #define SUBGHZ_RA_AM_NEIGHBOR_DROP_DB  6
 #define SUBGHZ_RA_HOLD_FRAMES          5u
 
@@ -52,6 +55,9 @@ typedef struct {
 } subghz_ra_frame_t;
 
 void subghz_ra_reset(subghz_ra_state_t *st);
+
+/** Adjust the user trigger by one step while keeping it within its limits. */
+int16_t subghz_ra_adjust_trigger(int16_t trigger_dbm, bool increase);
 
 /** Feed one coarse-stage sample (frequency, RSSI dBm). */
 void subghz_ra_coarse_feed(subghz_ra_state_t *st, uint32_t freq_hz, int16_t rssi);

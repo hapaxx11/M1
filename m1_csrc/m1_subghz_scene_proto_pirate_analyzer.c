@@ -96,11 +96,6 @@ typedef enum {
 /** Fine-sweep points collected per tick (keeps the handler ≤ ~25 ms). */
 #define RA_FINE_POINTS_PER_TICK  8u
 
-/** Trigger adjustment bounds and step (dBm). */
-#define RA_TRIGGER_MIN_DBM   (-110)
-#define RA_TRIGGER_MAX_DBM   (-60)
-#define RA_TRIGGER_STEP_DB   3
-
 /** RSSI bar geometry */
 #define RA_BAR_X    2
 #define RA_BAR_Y    31
@@ -374,14 +369,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventLeft:
-            if (s_trigger > RA_TRIGGER_MIN_DBM)
-                s_trigger -= RA_TRIGGER_STEP_DB;
+            s_trigger = subghz_ra_adjust_trigger(s_trigger, false);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventRight:
-            if (s_trigger < RA_TRIGGER_MAX_DBM)
-                s_trigger += RA_TRIGGER_STEP_DB;
+            s_trigger = subghz_ra_adjust_trigger(s_trigger, true);
             app->need_redraw = true;
             return true;
 

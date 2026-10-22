@@ -59,6 +59,15 @@ void test_coarse_feed_after_reset(void) {
     TEST_ASSERT_EQUAL_UINT32(868350000u, st.coarse.best_freq);
 }
 
+void test_trigger_adjustment_clamps_to_limits(void) {
+    TEST_ASSERT_EQUAL_INT16(SUBGHZ_RA_TRIGGER_MIN_DBM,
+                            subghz_ra_adjust_trigger(-109, false));
+    TEST_ASSERT_EQUAL_INT16(SUBGHZ_RA_TRIGGER_MAX_DBM,
+                            subghz_ra_adjust_trigger(-59, true));
+    TEST_ASSERT_EQUAL_INT16(-107, subghz_ra_adjust_trigger(-110, true));
+    TEST_ASSERT_EQUAL_INT16(-63, subghz_ra_adjust_trigger(-60, false));
+}
+
 /* ------------------------------------------------------------------ */
 /* Fine stage / AM classification                                      */
 /* ------------------------------------------------------------------ */
@@ -451,6 +460,7 @@ int main(void) {
     RUN_TEST(test_coarse_feed_tracks_max);
     RUN_TEST(test_coarse_feed_tie_keeps_first);
     RUN_TEST(test_coarse_feed_after_reset);
+    RUN_TEST(test_trigger_adjustment_clamps_to_limits);
 
     RUN_TEST(test_fine_analyze_sharp_peak_is_am);
     RUN_TEST(test_fine_analyze_broad_plateau_not_am);

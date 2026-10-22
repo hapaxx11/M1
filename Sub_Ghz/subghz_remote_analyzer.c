@@ -19,6 +19,17 @@
 
 #define SUBGHZ_RA_JUMP_HZ 500000u /* |new - state| above this -> fast k */
 
+int16_t subghz_ra_adjust_trigger(int16_t trigger_dbm, bool increase) {
+    int32_t adjusted = (int32_t)trigger_dbm +
+                       (increase ? SUBGHZ_RA_TRIGGER_STEP_DB
+                                 : -SUBGHZ_RA_TRIGGER_STEP_DB);
+    if (adjusted < SUBGHZ_RA_TRIGGER_MIN_DBM)
+        adjusted = SUBGHZ_RA_TRIGGER_MIN_DBM;
+    else if (adjusted > SUBGHZ_RA_TRIGGER_MAX_DBM)
+        adjusted = SUBGHZ_RA_TRIGGER_MAX_DBM;
+    return (int16_t)adjusted;
+}
+
 void subghz_ra_reset(subghz_ra_state_t *st) {
     st->coarse.best_rssi = INT16_MIN;
     st->coarse.best_freq = 0;

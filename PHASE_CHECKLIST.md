@@ -18,10 +18,10 @@
 
 ### Phase 3 — Scene bounds
 - **Description**: Clamp analyzer trigger adjustments and size Receiver Info path storage for scanner output.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Bound analyzer trigger and capture path`
 
 ### Phase 4 — Verification
 - **Description**: Run host tests and firmware build/RAM check, then remove this temporary checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
