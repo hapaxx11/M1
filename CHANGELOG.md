@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.19] - 2026-10-23
+
+### Fixed
+
+- **ESP32: brain CD3 (m1-native) WiFi scan and all M1_RPC features broken** — the
+  M1 Link SPI mutex was never initialised (its init function had no call site), so
+  every M1 Link transfer failed before clocking a byte and AP scans always ended
+  with "AP scan failed". The lock now creates the mutex lazily on first use.
+- **ESP32: multi-second freeze and watchdog boot loops with Bluetooth Direct
+  enabled** — the ESP32 probe chain (reachable from the high-priority RPC task
+  during Bluetooth Direct bring-up) busy-spun in HAL_Delay, up to ~10 s at a
+  stretch in the AT-fallback retry loop, starving the UI and the watchdog feeder.
+  Those waits now yield to the scheduler once it is running.
+- **ESP32: RPC status poll now honours its timeout argument** —
+  m1_esp32_rpc_rpc_status_timeout() ignored its timeout_sec parameter and always
+  used a hardcoded 1 s budget.
+- **ESP32: RPC transport hardening** — m1_esp32_init()/m1_esp32_deinit() now take
+  the RPC transaction mutex with a bounded wait instead of portMAX_DELAY, so a
+  stuck transaction can no longer wedge (de)init forever; the brain-CD3 WiFi scan
+  worker stack grew from 512 to 768 words (the old margin sat ~200 B above the
+  worst-case call chain), and the AP-scan UI wait is now bounded with a cancel +
+  drain path instead of polling the worker forever.
+- **Testing: source-invariant ESP32 test suites tolerate CRLF checkouts** — the
+  source-grep read_file() helpers normalise CRLF to LF, so the suites pass on
+  Windows working trees with core.autocrlf=true, matching CI behaviour.
+
 ## [0.9.4.18] - 2026-10-23
 
 ### Added
