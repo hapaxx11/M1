@@ -118,6 +118,7 @@ static const rf_protocol_sig_t test_sig_fixed = {
     .mod = RF_MOD_OOK,
     .bands = (RF_BAND_315 | RF_BAND_433),
     .security = RF_SEC_FIXED,
+    .registry_index = -1,
 };
 
 static const rf_protocol_sig_t test_sig_rolling = {
@@ -126,6 +127,7 @@ static const rf_protocol_sig_t test_sig_rolling = {
     .mod = RF_MOD_OOK,
     .bands = (RF_BAND_315 | RF_BAND_433),
     .security = RF_SEC_ROLLING,
+    .registry_index = -1,
 };
 
 static const rf_protocol_sig_t test_sig_weather = {
@@ -134,6 +136,7 @@ static const rf_protocol_sig_t test_sig_weather = {
     .mod = RF_MOD_FSK,
     .bands = RF_BAND_868,
     .security = RF_SEC_FIXED,
+    .registry_index = -1,
 };
 
 static const rf_protocol_sig_t test_sig_no_tag = {
@@ -142,6 +145,7 @@ static const rf_protocol_sig_t test_sig_no_tag = {
     .mod = RF_MOD_FSK,
     .bands = (RF_BAND_315 | RF_BAND_433),
     .security = RF_SEC_FIXED,
+    .registry_index = -1,
 };
 
 void test_format_hit_basic(void)

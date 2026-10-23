@@ -144,6 +144,47 @@ void test_best_match_no_confident_result(void)
     TEST_ASSERT_NULL(r.sig);
 }
 
+/*============================================================================*/
+/* Per-protocol automotive signatures beat the generic catch-all rows          */
+/*============================================================================*/
+
+void test_best_match_subaru_not_generic(void)
+{
+    /* Subaru keyfob: te_short 800 us OOK at 433 MHz, 64-bit frame.  Before
+     * the specific rows this fell into the garage/weather windows. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_OOK, 800, 64);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Subaru", r.sig->name);
+    TEST_ASSERT_TRUE(r.sig->registry_index >= 0);
+}
+
+void test_best_match_ford_v1_not_tpms(void)
+{
+    /* Ford V1 keyfob: te_short 65 us FSK at 433 MHz, 136-bit frame — sits
+     * squarely in the generic TPMS window, so the specific row must win. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_FSK, 65, 136);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Ford V1", r.sig->name);
+    TEST_ASSERT_TRUE(r.sig->registry_index >= 0);
+}
+
+void test_best_match_generic_fob_still_catches_unknown(void)
+{
+    /* A 350 us OOK 32-bit fixed fob fits no specific automotive row
+     * (their bit floors are all >= 53) and must still land on the generic
+     * fixed-fob catch-all. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_OOK, 350, 32);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (fixed)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -160,6 +201,10 @@ int main(void)
     RUN_TEST(test_best_match_identifies_ble);
     RUN_TEST(test_best_match_null_fp);
     RUN_TEST(test_best_match_no_confident_result);
+
+    RUN_TEST(test_best_match_subaru_not_generic);
+    RUN_TEST(test_best_match_ford_v1_not_tpms);
+    RUN_TEST(test_best_match_generic_fob_still_catches_unknown);
 
     return UNITY_END();
 }
