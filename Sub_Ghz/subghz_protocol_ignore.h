@@ -23,7 +23,7 @@
  *
  *   - Read              (live capture — subghz_pulse_handler)
  *   - Read Raw / Decode Raw / Playlist decode
- *   - RF Rosetta Signal ID and Smart ID     (subghz_registry_decode_try_fn)
+ *   - Smart ID sweep decode stage (subghz_registry_decode_try_fn)
  *
  * Design notes
  * ------------

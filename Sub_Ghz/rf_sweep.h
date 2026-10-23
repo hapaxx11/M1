@@ -3,8 +3,8 @@
 /*
  * rf_sweep.h
  *
- * Ranked "sweep report" aggregator for the RF Rosetta identification pipeline
- * (github.com/joelewis012/RF_Rosetta).
+ * Ranked "sweep report" aggregator for the Smart ID identification pipeline,
+ * evolved from RF Rosetta (github.com/joelewis012/RF_Rosetta).
  *
  * A Signal Identifier sweep visits many frequencies and, whenever it catches a
  * signal, produces an rf_fingerprint_t and scores it with rf_match_best().

@@ -3,13 +3,13 @@
 /*
  * rf_match.h
  *
- * Fingerprint × database scoring engine for the RF Rosetta identification
- * pipeline (github.com/joelewis012/RF_Rosetta).
+ * Fingerprint × database scoring engine for the Smart ID identification
+ * pipeline, evolved from RF Rosetta (github.com/joelewis012/RF_Rosetta).
  *
  * Given an rf_fingerprint_t (measured physical characteristics) this module
  * scores it against every rf_protocol_sig_t in the database and returns the
  * best match with a 0..100 confidence — the "Car Key Fob / KeeLoq Rolling /
- * 87% confidence" line at the heart of RF Rosetta's report.
+ * 87% confidence" line at the heart of Smart ID's report.
  *
  * Scoring is a transparent weighted sum of independent feature agreements
  * (band, modulation, timing window, payload size) so it is fully deterministic

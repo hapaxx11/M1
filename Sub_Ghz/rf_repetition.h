@@ -4,7 +4,7 @@
  * rf_repetition.h
  *
  * Repeated-burst detection for RAW Sub-GHz captures — the "[x2]" repeat
- * badge from RF Rosetta (github.com/joelewis012/RF_Rosetta).
+ * badge Smart ID inherits from RF Rosetta (github.com/joelewis012/RF_Rosetta).
  *
  * Most Sub-GHz remotes transmit their payload several times in a row,
  * separated by a long inter-packet gap, so the receiver has multiple

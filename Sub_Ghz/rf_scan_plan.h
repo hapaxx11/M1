@@ -3,7 +3,7 @@
 /*
  * rf_scan_plan.h
  *
- * Frequency probe plan + cursor for the RF Rosetta Signal Identifier sweep.
+ * Frequency probe plan + cursor for the Smart ID sweep.
  *
  * The Signal Identifier visits a curated list of common Sub-GHz ISM
  * frequencies, dwelling briefly on each to look for activity.  This module is

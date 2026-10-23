@@ -11,7 +11,7 @@
  * protocol-aware receiver for rolling-code capture.
  *
  * Menu items:
- *   1. Smart ID           — pushes SubGhzSceneSmartSignalId (pre-scan + RF Rosetta)
+ *   1. Smart ID           — pushes SubGhzSceneSmartSignalId (pre-scan + Smart ID)
  *   2. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
  *   3. Spectrum Analyzer  — pushes SubGhzSceneSpectrumAnalyzer
  *   4. RSSI Meter         — pushes SubGhzSceneRssiMeter

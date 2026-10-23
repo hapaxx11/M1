@@ -42,7 +42,7 @@ bool subghz_registry_decode_try_fn(const uint16_t *pulse_buf,
     {
         /* Skip protocols the user has chosen to ignore (Protocol Filter).
          * Applies to every offline/raw decode caller — Read Raw, Decode Raw,
-         * Playlist, and the RF Rosetta Signal ID / Smart ID decode stage. */
+         * Playlist, and the Smart ID decode stage. */
         if (subghz_ignore_is_ignored(p))
             continue;
 

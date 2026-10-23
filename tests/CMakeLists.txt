@@ -1631,7 +1631,7 @@ endif()
 add_test(NAME subghz_mod_suggest COMMAND test_subghz_mod_suggest)
 
 # ------------------------------------------------------------------
-# RF Rosetta cross-sensor identification core (pure logic, no hardware).
+# Smart ID cross-sensor identification core (pure logic, no hardware).
 #   rf_repetition  — repeated-burst detection ("[x2]" badge)
 #   rf_fingerprint — sensor-agnostic fingerprint extractor (composes
 #                    subghz_mod_suggest + rf_repetition)

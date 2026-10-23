@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_smart_signal_id.c
- * @brief  Sub-GHz Smart ID Scene — pre-scan then RF Rosetta identification.
+ * @brief  Sub-GHz Smart ID Scene — pre-scan then fingerprint identification.
  *
  * Delegates to sub_ghz_smart_signal_id(), which first performs a single quick
  * frequency scan across all four ISM bands to discover active channels, then

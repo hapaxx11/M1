@@ -84,7 +84,7 @@ static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
  * gets a hint whether to retry the capture in OOK/AM or FSK/FM. */
 static SubGhzModSuggestResult s_mod_suggest;
 
-/* RF Rosetta identification (decode-miss value-add): when no decoder matches,
+/* Smart ID identification (decode-miss value-add): when no decoder matches,
  * the captured waveform is fingerprinted (frequency band + modulation + timing
  * + repetition) and scored against the protocol-signature database so the
  * operator gets a best-guess category + security posture instead of a bare
@@ -461,7 +461,7 @@ static void draw(SubGhzApp *app)
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-        /* RF Rosetta decode-miss identification: best-guess category +
+        /* Smart ID decode-miss identification: best-guess category +
          * security posture from the waveform fingerprint. */
         if (s_ident.sig != NULL)
         {

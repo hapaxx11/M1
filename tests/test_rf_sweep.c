@@ -4,8 +4,8 @@
  * test_rf_sweep.c
  *
  * Unit tests for rf_sweep — the ranked sweep-report aggregator that turns a
- * stream of per-detection rf_match_best() results into the RF Rosetta Signal
- * Identifier's live report.  Verifies reset, counting, dedup/merge, ranking,
+ * stream of per-detection rf_match_best() results into the Smart ID live
+ * report.  Verifies reset, counting, dedup/merge, ranking,
  * capacity eviction, and the top accessor.
  *
  * Build:

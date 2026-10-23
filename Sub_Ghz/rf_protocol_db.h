@@ -3,8 +3,9 @@
 /*
  * rf_protocol_db.h
  *
- * Protocol *signature* database + security metadata for the RF Rosetta
- * identification pipeline (github.com/joelewis012/RF_Rosetta).
+ * Protocol *signature* database + security metadata for the Smart ID
+ * identification pipeline, evolved from RF Rosetta
+ * (github.com/joelewis012/RF_Rosetta).
  *
  * Unlike the M1 protocol *decoder* registry (subghz_protocol_registry.h),
  * which knows how to demodulate and decode a payload, this database describes

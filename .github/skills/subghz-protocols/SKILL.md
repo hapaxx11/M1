@@ -359,7 +359,7 @@ order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
 |---|-------|----------|----------------|
-| 1 | Smart ID | SubGhzSceneSmartSignalId | Blocking delegate → `sub_ghz_smart_signal_id()` (Hapax pre-scan + RF Rosetta identifier) |
+| 1 | Smart ID | SubGhzSceneSmartSignalId | Blocking delegate → `sub_ghz_smart_signal_id()` (Hapax pre-scan + Smart ID identifier) |
 | 2 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
 | 3 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
 | 4 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
@@ -407,11 +407,11 @@ Every decode loop consults this one function before running a protocol's
 decoder, so the ignore filter is honoured **everywhere protocols are decoded**:
 
 - **Live Read** — `subghz_pulse_handler()` in `Sub_Ghz/m1_sub_ghz_decenc.c`.
-- **Read Raw / Decode Raw / Playlist / RF Rosetta Signal ID + Smart ID** —
+- **Read Raw / Decode Raw / Playlist / Smart ID** —
   `subghz_registry_decode_try_fn()` in `Sub_Ghz/subghz_decode_try_fn.c`
   (the shared `SubGhzRawDecodeTryFn` used by `subghz_decode_raw_offline()`).
 
-Because RF Rosetta's decode stage runs through `subghz_registry_decode_try_fn()`,
+Because Smart ID's decode stage runs through `subghz_registry_decode_try_fn()`,
 protocols in an ignored group never produce a "decoded" hit there either.
 
 ### Rules for new reading/decoding code

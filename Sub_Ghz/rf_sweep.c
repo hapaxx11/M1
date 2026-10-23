@@ -3,7 +3,7 @@
 /*
  * rf_sweep.c
  *
- * Pure-logic sweep-report aggregator for the RF Rosetta Signal Identifier.
+ * Pure-logic sweep-report aggregator for Smart ID.
  * See rf_sweep.h for the design rationale.  No hardware dependencies.
  *
  * M1 Project — Hapax fork

@@ -5979,7 +5979,7 @@ static sigid_capture_result_t subghz_sigid_try_capture(uint32_t freq_hz,
 
 
 /*============================================================================*/
-/* Signal Identifier (RF Rosetta)                                             */
+/* Signal Identifier (Smart ID)                                               */
 /*                                                                            */
 /* Sweeps the curated ISM probe plan (rf_scan_plan), and whenever a frequency */
 /* shows activity above the RSSI threshold it samples a short RSSI burst,      */
@@ -6245,7 +6245,7 @@ void sub_ghz_signal_identifier(void)
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-            snprintf(info_str, sizeof(info_str), "Signal ID  [%ddBm]", threshold);
+            snprintf(info_str, sizeof(info_str), "Smart ID  [%ddBm]", threshold);
             u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
 
             if (report.count == 0)
@@ -6328,7 +6328,7 @@ void sub_ghz_signal_identifier(void)
 
 
 /*============================================================================*/
-/* Smart Signal Identifier (RF Rosetta + pre-scan)                           */
+/* Smart Signal Identifier (Smart ID with pre-scan)                          */
 /*                                                                            */
 /* Pre-scan: Freq Scanner feeds Signal ID.                                     */
 /*                                                                            */

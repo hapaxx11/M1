@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_signal_identifier.c
- * @brief  Sub-GHz Signal Identifier Scene — RF Rosetta sweep + fingerprint.
+ * @brief  Sub-GHz Signal Identifier Scene — Smart ID sweep + fingerprint.
  *
  * Delegates to the existing sub_ghz_signal_identifier() blocking loop, which
  * sweeps the ISM probe plan, fingerprints caught signals, matches them against
