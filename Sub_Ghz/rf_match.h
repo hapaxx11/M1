@@ -61,4 +61,61 @@ uint8_t rf_match_score(const rf_fingerprint_t  *fp,
  */
 rf_match_result_t rf_match_best(const rf_fingerprint_t *fp);
 
+/*============================================================================*/
+/* RAW-capture confirmation policy (Signal ID)                                */
+/*============================================================================*/
+
+/**
+ * Wall-clock cost of one real-capture confirmation attempt (ms): the bounded
+ * edge-collection window the Signal ID delegates use (400 ms hard cap).
+ * The delegates size their per-pass capture budget in multiples of this.
+ */
+#define RF_SIGID_CAPTURE_COST_MS   400U
+
+/** Decision returned by rf_sigid_capture_decide(). */
+typedef enum {
+    RF_CAPTURE_NEVER = 0,  /**< No decoder link, no evidence, or already tried */
+    RF_CAPTURE_DEFER,      /**< Would exceed the remaining per-pass time budget */
+    RF_CAPTURE_NOW,        /**< Attempt the real RAW capture + decode */
+} rf_capture_decision_t;
+
+/**
+ * Decide whether a fingerprint-matched signal is worth a real edge-capture
+ * decode attempt.
+ *
+ * Policy: a matched signature with a decoder link (registry_index >= 0) is
+ * always worth ONE attempt, regardless of how low its confidence is — the
+ * fingerprint match only has to clear rf_match_best()'s reporting floor to
+ * reach the caller, and the real decoder is the arbiter of the capture, so
+ * imposing a higher confidence bar would only suppress legitimate
+ * confirmations.  Attempts are bounded two ways: at most one per unique
+ * signature+band (@p attempts_made, deduped via rf_capture_attempted()), and
+ * a per-pass time budget (@p spent_ms + RF_SIGID_CAPTURE_COST_MS must fit in
+ * @p budget_ms, otherwise the attempt is deferred to a later pass).
+ *
+ * @param registry_index  The matched signature's decoder-registry link (-1 = none).
+ * @param confidence      Match confidence (0 = no evidence at all).
+ * @param attempts_made   Attempts already made for this signature+band.
+ * @param spent_ms        Capture time already spent this sweep pass.
+ * @param budget_ms       Per-pass capture time budget.
+ */
+rf_capture_decision_t rf_sigid_capture_decide(int16_t registry_index,
+                                              uint8_t confidence,
+                                              uint8_t attempts_made,
+                                              uint32_t spent_ms,
+                                              uint32_t budget_ms);
+
+/** One recorded capture attempt, deduped by (signature pointer, band). */
+typedef struct {
+    const rf_protocol_sig_t *sig;   /**< Matched signature */
+    uint16_t                 band;  /**< rf_band_flag_t the match was seen on */
+} rf_capture_attempt_t;
+
+/**
+ * Look up whether a capture was already attempted for @p sig on @p band.
+ * NULL list or sig returns false.
+ */
+bool rf_capture_attempted(const rf_capture_attempt_t *list, uint8_t count,
+                          const rf_protocol_sig_t *sig, uint16_t band);
+
 #endif /* RF_MATCH_H */

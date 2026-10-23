@@ -454,6 +454,102 @@ void test_nearest_frequency_empty_or_all_zero(void) {
     TEST_ASSERT_EQUAL_UINT32(0u, subghz_ra_nearest_frequency(zeros, 3, 433920000u));
 }
 
+/* ------------------------------------------------------------------ */
+/* Refinement plan builder                                             */
+/* ------------------------------------------------------------------ */
+
+#define BAND_MIN 250000000u
+#define BAND_MAX 960000000u
+
+void test_refine_plan_strongest_first_order(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {315000000u, -90},
+        {433920000u, -60}, /* strongest */
+        {868350000u, -75},
+    };
+    uint32_t out[4] = {0};
+    TEST_ASSERT_EQUAL_UINT8(3, subghz_ra_build_refine_plan(
+        cands, 3, BAND_MIN, BAND_MAX, out, 4));
+    TEST_ASSERT_EQUAL_UINT32(433920000u, out[0]);
+    TEST_ASSERT_EQUAL_UINT32(868350000u, out[1]);
+    TEST_ASSERT_EQUAL_UINT32(315000000u, out[2]);
+}
+
+void test_refine_plan_dedup_keeps_stronger(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {433920000u, -80}, /* within 500 kHz of the stronger entry below */
+        {434100000u, -65}, /* 180 kHz away — dedups the -80 entry */
+        {315000000u, -85},
+    };
+    uint32_t out[4] = {0};
+    TEST_ASSERT_EQUAL_UINT8(2, subghz_ra_build_refine_plan(
+        cands, 3, BAND_MIN, BAND_MAX, out, 4));
+    TEST_ASSERT_EQUAL_UINT32(434100000u, out[0]);
+    TEST_ASSERT_EQUAL_UINT32(315000000u, out[1]);
+}
+
+void test_refine_plan_dedup_boundary_500khz(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {433920000u, -70},
+        {434420000u, -65}, /* exactly 500 kHz away: NOT a dup (strictly '<') */
+    };
+    uint32_t out[4] = {0};
+    TEST_ASSERT_EQUAL_UINT8(2, subghz_ra_build_refine_plan(
+        cands, 2, BAND_MIN, BAND_MAX, out, 4));
+}
+
+void test_refine_plan_skips_out_of_band(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {100000000u, -50}, /* below band — skipped despite being strongest */
+        {433920000u, -80},
+        {970000000u, -60}, /* above band — skipped */
+    };
+    uint32_t out[4] = {0};
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_ra_build_refine_plan(
+        cands, 3, BAND_MIN, BAND_MAX, out, 4));
+    TEST_ASSERT_EQUAL_UINT32(433920000u, out[0]);
+}
+
+void test_refine_plan_respects_max_out(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {300000000u, -90},
+        {315000000u, -60},
+        {433920000u, -70},
+        {868350000u, -80},
+    };
+    uint32_t out[2] = {0};
+    TEST_ASSERT_EQUAL_UINT8(2, subghz_ra_build_refine_plan(
+        cands, 4, BAND_MIN, BAND_MAX, out, 2));
+    /* Only the two strongest survive the cap. */
+    TEST_ASSERT_EQUAL_UINT32(315000000u, out[0]);
+    TEST_ASSERT_EQUAL_UINT32(433920000u, out[1]);
+}
+
+void test_refine_plan_tie_keeps_first(void) {
+    static const subghz_ra_candidate_t cands[] = {
+        {315000000u, -75},
+        {433920000u, -75}, /* tie: first candidate wins (strict '>') */
+    };
+    uint32_t out[4] = {0};
+    TEST_ASSERT_EQUAL_UINT8(2, subghz_ra_build_refine_plan(
+        cands, 2, BAND_MIN, BAND_MAX, out, 4));
+    TEST_ASSERT_EQUAL_UINT32(315000000u, out[0]);
+    TEST_ASSERT_EQUAL_UINT32(433920000u, out[1]);
+}
+
+void test_refine_plan_null_and_empty(void) {
+    uint32_t out[2] = {0};
+    static const subghz_ra_candidate_t cands[] = {{433920000u, -70}};
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_ra_build_refine_plan(
+        NULL, 1, BAND_MIN, BAND_MAX, out, 2));
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_ra_build_refine_plan(
+        cands, 0, BAND_MIN, BAND_MAX, out, 2));
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_ra_build_refine_plan(
+        cands, 1, BAND_MIN, BAND_MAX, NULL, 2));
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_ra_build_refine_plan(
+        cands, 1, BAND_MIN, BAND_MAX, out, 0));
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -486,6 +582,14 @@ int main(void) {
     RUN_TEST(test_nearest_frequency_below_and_above_range);
     RUN_TEST(test_nearest_frequency_skips_zeros);
     RUN_TEST(test_nearest_frequency_empty_or_all_zero);
+
+    RUN_TEST(test_refine_plan_strongest_first_order);
+    RUN_TEST(test_refine_plan_dedup_keeps_stronger);
+    RUN_TEST(test_refine_plan_dedup_boundary_500khz);
+    RUN_TEST(test_refine_plan_skips_out_of_band);
+    RUN_TEST(test_refine_plan_respects_max_out);
+    RUN_TEST(test_refine_plan_tie_keeps_first);
+    RUN_TEST(test_refine_plan_null_and_empty);
 
     return UNITY_END();
 }

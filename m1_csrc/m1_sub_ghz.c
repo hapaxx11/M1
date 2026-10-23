@@ -48,6 +48,7 @@
 #include "rf_smart_scan.h"
 #include "rf_ook_fsk.h"
 #include "rf_timing_capture.h"
+#include "subghz_remote_analyzer.h"
 #include "subghz_raw_decoder.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
@@ -5747,6 +5748,237 @@ void sub_ghz_freq_scanner(void)
 
 
 /*============================================================================*/
+/* Shared fine-sweep helpers (Remote Analyzer scene + Smart ID refinement)    */
+/*                                                                            */
+/* The 31-point fine sweep (center +/-300 kHz, 20 kHz steps) used to live     */
+/* inline in the Remote Analyzer scene.  It is shared here so the Smart ID    */
+/* pre-scan can refine its detected centers with the exact same radio         */
+/* sequence: frontend mux per band, READY state before FREQ_CONTROL (VCO      */
+/* recalibrates on the READY->RX transition), 2 ms AGC settle, clear pending  */
+/* interrupts.  Each point costs ~3 ms, so a full 31-point sweep is ~95 ms   */
+/* — bounded and short; callers that must stay responsive (the RA scene)      */
+/* collect in chunks via subghz_fine_sweep_points_ext().                      */
+/*============================================================================*/
+
+void subghz_fine_sweep_points_ext(uint32_t base_hz, uint8_t start_idx,
+                                  uint8_t count, int16_t *out_rssi)
+{
+    struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+
+    for (uint8_t i = 0; i < count; i++)
+    {
+        uint32_t freq = base_hz - SUBGHZ_RA_SWEEP_HALF_SPAN_HZ
+                        + (uint32_t)(start_idx + i) * SUBGHZ_RA_SWEEP_STEP_HZ;
+
+        if (freq >= 850000000UL)
+            SI446x_Select_Frontend(SUB_GHZ_BAND_915);
+        else if (freq >= 390000000UL)
+            SI446x_Select_Frontend(SUB_GHZ_BAND_433_92);
+        else
+            SI446x_Select_Frontend(SUB_GHZ_BAND_315);
+
+        SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_READY);
+        SI446x_Set_Frequency(freq);
+        SI446x_Start_Rx(0);
+        HAL_Delay(2); /* AGC settle — bounded; ~3 ms per sweep point */
+
+        SI446x_Get_IntStatus(0, 0, 0);
+        pmodemstat = SI446x_Get_ModemStatus(0x00);
+        out_rssi[i] = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+    }
+}
+
+bool subghz_fine_sweep_refine_ext(uint32_t center_hz, uint32_t *out_center_hz,
+                                  int16_t *out_peak_dbm, bool *out_is_am)
+{
+    int16_t sweep[SUBGHZ_RA_SWEEP_POINTS];
+    subghz_ra_state_t ra;
+    bool is_am = false;
+
+    if (out_center_hz == NULL || out_is_am == NULL)
+        return false;
+
+    /* Full 31-point sweep in one call — ~95 ms worst case, bounded. */
+    subghz_fine_sweep_points_ext(center_hz, 0, SUBGHZ_RA_SWEEP_POINTS, sweep);
+
+    subghz_ra_reset(&ra);
+    if (!subghz_ra_fine_analyze(sweep, SUBGHZ_RA_SWEEP_POINTS, center_hz,
+                                &ra, &is_am))
+        return false;
+
+    *out_center_hz = ra.fine.best_freq;
+    if (out_peak_dbm != NULL)
+        *out_peak_dbm = ra.fine.best_rssi;
+    *out_is_am = is_am;
+    return true;
+}
+
+
+/*============================================================================*/
+/* RAW-capture confirmation (Signal ID)                                       */
+/*                                                                            */
+/* When a fingerprint match carries a decoder-linked signature                */
+/* (registry_index >= 0), the identifier pauses the RSSI sweep and makes ONE  */
+/* real edge-capture decode attempt on the hit frequency: the proven Read/    */
+/* Tuner RX sequence arms TIM1 input capture, edges are drained from the      */
+/* main queue into the live pulse handler (weather-station drain pattern),    */
+/* and a committed decode upgrades the heuristic fingerprint hit to a 100%    */
+/* decode-confirmed report entry.  The window is hard-capped at               */
+/* RF_SIGID_CAPTURE_COST_MS (400 ms); failures are silent — the fingerprint   */
+/* hit stands.  BACK is consumed inside the window so exit works mid-capture. */
+/*============================================================================*/
+
+/* Per-pass capture time budget: bounds total capture attempts per sweep
+ * pass (1600 ms = 4 x 400 ms window, arm/teardown overhead included). */
+#define SIGID_CAPTURE_BUDGET_MS  1600U
+
+typedef enum {
+    SIGID_CAPTURE_NONE = 0,  /* window expired without a decode */
+    SIGID_CAPTURE_DECODED,   /* a protocol decoder committed */
+    SIGID_CAPTURE_ABORTED,   /* BACK pressed inside the window */
+} sigid_capture_result_t;
+
+/*
+ * Arm edge-capture RX on an arbitrary frequency.  Mirrors
+ * sub_ghz_weather_rx_arm() (itself the proven Read-scene sequence), with two
+ * differences: the OOK peak-detector PDTC fix is applied unconditionally (the
+ * Read/Tuner scenes do this for every OOK arm, not only the 433.92 preset
+ * band), and the modulation is chosen by the caller's AM verdict.
+ */
+static void subghz_sigid_capture_rx_arm(bool is_am, uint32_t frequency_hz)
+{
+    /* Tear down any capture already running (safe no-op when the timer was
+     * never started — both helpers are channel/state guarded). */
+    sub_ghz_rx_pause();
+    sub_ghz_rx_deinit();
+
+    subghz_pulse_handler_reset();
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+
+    if (!is_am)
+    {
+        /* 2FSK: only the 915 modem config carries 2FSK settings, so load it
+         * via the CUSTOM band path and retune (sub_ghz_set_opmode handles the
+         * load + retune + frontend select). */
+        subghz_scan_config.band       = SUB_GHZ_BAND_CUSTOM;
+        subghz_scan_config.modulation = MODULATION_FSK;
+        subghz_custom_freq_hz         = frequency_hz;
+        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_CUSTOM, 0, 0);
+    }
+    else
+    {
+        S_M1_SubGHz_Band band = subghz_freq_hz_to_band(frequency_hz);
+        subghz_scan_config.band       = band;
+        subghz_scan_config.modulation = MODULATION_OOK;
+        subghz_custom_freq_hz         = frequency_hz;
+        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, band, 0, 0);
+        SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+    }
+
+    sub_ghz_rx_init();
+    sub_ghz_rx_start();
+}
+
+/*
+ * Collect edges for up to RF_SIGID_CAPTURE_COST_MS (400 ms hard cap) and run
+ * the live decoders over them.  The drain follows the weather-station
+ * pattern: batch-drain queued edge events into the pulse handler, stop when
+ * a decoder commits, and keep consuming keypad events so BACK cancels from
+ * inside the window.  Each xQueueReceive waits at most 50 ms, so BACK
+ * latency is bounded well under the window itself.
+ */
+static sigid_capture_result_t subghz_sigid_capture_window(SubGHz_Dec_Info_t *out_decoded)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    uint32_t deadline = HAL_GetTick() + RF_SIGID_CAPTURE_COST_MS;
+
+    for (;;)
+    {
+        uint32_t now = HAL_GetTick();
+        if ((int32_t)(deadline - now) <= 0)
+            return SIGID_CAPTURE_NONE;
+
+        uint32_t remaining = deadline - now;
+        if (remaining > 50U)
+            remaining = 50U;
+
+        if (xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(remaining)) != pdTRUE)
+            continue;
+
+        if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            /* Keep the two button queues in sync (IR TX rule) */
+            if (xQueueReceive(button_events_q_hdl, &btn, 0) == pdTRUE &&
+                btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                return SIGID_CAPTURE_ABORTED;
+            continue;
+        }
+
+        if (q_item.q_evt_type == Q_EVENT_SUBGHZ_RX &&
+            subghz_decenc_ctl.subghz_pulse_handler)
+        {
+            for (;;)
+            {
+                S_M1_Main_Q_t peek;
+                uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
+                uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
+
+                if (pdet == PULSE_DET_EOP || pdet == PULSE_DET_IDLE)
+                    subghz_decenc_ctl.pulse_det_stat = pdet;
+
+                if (subghz_decenc_ctl.subghz_data_ready &&
+                    subghz_decenc_ctl.subghz_data_ready())
+                    break;
+
+                if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE)
+                    break;
+                if (peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
+                    break;
+                xQueueReceive(main_q_hdl, &q_item, 0);
+            }
+
+            if (subghz_decenc_ctl.subghz_data_ready &&
+                subghz_decenc_ctl.subghz_data_ready() &&
+                subghz_decenc_read(out_decoded, false) &&
+                out_decoded->key != 0)
+            {
+                return SIGID_CAPTURE_DECODED;
+            }
+        }
+    }
+}
+
+/*
+ * One bounded capture + decode attempt on @p freq_hz.  Self-contained: arms
+ * capture RX, runs the window, tears capture down, and restores the RSSI
+ * sweep radio config the scan loops expect (OOK init for the hit's band +
+ * antenna RX), so the caller can simply continue scanning.
+ */
+static sigid_capture_result_t subghz_sigid_try_capture(uint32_t freq_hz,
+                                                       bool is_am,
+                                                       SubGHz_Dec_Info_t *out_decoded)
+{
+    sigid_capture_result_t res;
+
+    subghz_sigid_capture_rx_arm(is_am, freq_hz);
+    res = subghz_sigid_capture_window(out_decoded);
+
+    sub_ghz_rx_pause();
+    sub_ghz_rx_deinit();
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
+
+    /* Restore the RSSI-sweep radio (same init idiom as the scan loops). */
+    radio_init_rx_tx((freq_hz >= RF_SCAN_915_BOUNDARY_HZ)
+                         ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                     MODEM_MOD_TYPE_OOK, true);
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+
+    return res;
+}
+
+
+/*============================================================================*/
 /* Signal Identifier (RF Rosetta)                                             */
 /*                                                                            */
 /* Sweeps the curated ISM probe plan (rf_scan_plan), and whenever a frequency */
@@ -5766,6 +5998,7 @@ void sub_ghz_freq_scanner(void)
 #define SIGID_THRESHOLD_MAX   (-40)
 #define SIGID_VISIBLE_ROWS    4U
 #define SIGID_MIN_HITS        2U    /* require N hits before showing confidence */
+#define SIGID_REFINE_MAX      8U    /* Smart ID: fine-sweep refine the N strongest */
 
 static inline int8_t subghz_sigid_default_threshold(void)
 {
@@ -5796,10 +6029,22 @@ void sub_ghz_signal_identifier(void)
     int8_t   threshold = subghz_sigid_default_threshold();
     bool     cur_915 = false;
 
+    /* RAW-capture confirmation state: one attempt per unique signature+band
+     * (stack, 8 x 8 B), bounded per pass by SIGID_CAPTURE_BUDGET_MS. */
+    rf_capture_attempt_t capture_attempts[RF_SWEEP_MAX_HITS];
+    uint8_t  capture_attempt_count = 0;
+    uint32_t capture_spent_ms = 0;
+
     rf_sweep_report_reset(&report);
     rf_scan_cursor_reset(&cursor);
 
     menu_sub_ghz_init();
+
+    /* Decoder subsystem for the live capture path (weather-station
+     * precedent); also clear any stale raw-record mode the Read Raw scene
+     * may have left armed — it would divert edges away from the decoders. */
+    subghz_decenc_init();
+    subghz_record_mode_flag = 0;
 
     /* Initialise the radio for the first probe point's band. */
     {
@@ -5814,6 +6059,7 @@ void sub_ghz_signal_identifier(void)
     {
         /* ---- one full sweep pass over the probe plan ---- */
         bool pass_done = false;
+        capture_spent_ms = 0;   /* per-pass capture budget resets each pass */
         while (!pass_done)
         {
             const rf_scan_point_t *pt = rf_scan_cursor_point(&cursor);
@@ -5928,7 +6174,59 @@ void sub_ghz_signal_identifier(void)
                     if (rf_fingerprint_is_discriminating(&fp))
                     {
                         rf_match_result_t m = rf_match_best(&fp);
-                        rf_sweep_report_add(&report, &fp, &m);
+                        bool reported = false;
+
+                        /* RAW-capture confirmation: a decoder-linked signature
+                         * gets one real edge-capture decode attempt (bounded
+                         * 400 ms window).  On a commit the 100% decode-
+                         * confirmed hit replaces the heuristic fingerprint
+                         * hit — rf_sweep dedups decoded hits by (name, band)
+                         * and fingerprint hits by (sig, band), so reporting
+                         * only one of them avoids a double entry. */
+                        if (m.sig != NULL &&
+                            rf_sigid_capture_decide(
+                                m.sig->registry_index, m.confidence,
+                                rf_capture_attempted(capture_attempts,
+                                                     capture_attempt_count,
+                                                     m.sig, fp.band) ? 1U : 0U,
+                                capture_spent_ms,
+                                SIGID_CAPTURE_BUDGET_MS) == RF_CAPTURE_NOW)
+                        {
+                            SubGHz_Dec_Info_t cap;
+                            uint32_t t0 = HAL_GetTick();
+                            sigid_capture_result_t cres = subghz_sigid_try_capture(
+                                pt->freq_hz, (fp.mod != RF_MOD_FSK), &cap);
+                            capture_spent_ms += HAL_GetTick() - t0;
+
+                            if (capture_attempt_count < RF_SWEEP_MAX_HITS)
+                            {
+                                capture_attempts[capture_attempt_count].sig  = m.sig;
+                                capture_attempts[capture_attempt_count].band = fp.band;
+                                capture_attempt_count++;
+                            }
+
+                            if (cres == SIGID_CAPTURE_ABORTED)
+                            {
+                                running = false;
+                                break;
+                            }
+                            if (cres == SIGID_CAPTURE_DECODED)
+                            {
+                                const char *name =
+                                    subghz_protocol_get_name(cap.protocol);
+                                if (name != NULL)
+                                {
+                                    rf_sweep_report_add_decoded(
+                                        &report, pt->freq_hz, fp.band,
+                                        peak, name);
+                                    reported = true;
+                                    decoded  = true;
+                                }
+                            }
+                        }
+
+                        if (!reported)
+                            rf_sweep_report_add(&report, &fp, &m);
                     }
                     else
                     {
@@ -5999,6 +6297,7 @@ void sub_ghz_signal_identifier(void)
             {
                 rf_sweep_report_reset(&report);
                 rf_scan_cursor_reset(&cursor);
+                capture_attempt_count = 0;
                 scroll_pos = 0;
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
@@ -6051,6 +6350,7 @@ void sub_ghz_smart_signal_id(void)
 
     /* ---- pre-scan state ---- */
     uint32_t  detected_hz[RF_SMART_SCAN_MAX_FREQS];
+    int16_t   detected_rssi[RF_SMART_SCAN_MAX_FREQS];
     uint8_t   detected_count = 0;
 
     /* Dynamic probe plan built from the pre-scan hits */
@@ -6064,8 +6364,18 @@ void sub_ghz_smart_signal_id(void)
     bool     running = true;
     int8_t   threshold = subghz_sigid_default_threshold();
 
+    /* RAW-capture confirmation state (see sub_ghz_signal_identifier) */
+    rf_capture_attempt_t capture_attempts[RF_SWEEP_MAX_HITS];
+    uint8_t  capture_attempt_count = 0;
+    uint32_t capture_spent_ms = 0;
+
     rf_sweep_report_reset(&report);
     menu_sub_ghz_init();
+
+    /* Decoder subsystem for the live capture path; clear stale raw-record
+     * mode (see sub_ghz_signal_identifier). */
+    subghz_decenc_init();
+    subghz_record_mode_flag = 0;
 
     /* ---------------------------------------------------------------------- */
     /* Pre-scan phase                                                          */
@@ -6129,10 +6439,69 @@ void sub_ghz_smart_signal_id(void)
                     }
                 }
                 if (!dup)
-                    detected_hz[detected_count++] = freq;
+                {
+                    detected_hz[detected_count]   = freq;
+                    detected_rssi[detected_count] = rssi;
+                    detected_count++;
+                }
             }
 
             freq += step;
+        }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Refine the strongest detected centers with the RA fine sweep           */
+    /*                                                                        */
+    /* The pre-scan's 50 kHz step floor leaves each detection up to ~25 kHz   */
+    /* off the real carrier.  The Remote Analyzer's 31-point fine sweep       */
+    /* (±300 kHz, 20 kHz steps) re-centers the strongest candidates to their  */
+    /* actual peak and produces an AM/FM verdict that the ID loop below       */
+    /* prefers over the burst-based rf_ook_fsk classification (the fine       */
+    /* sweep is the better measurement: 31 tuned points vs. one 128 ms RSSI   */
+    /* burst).  cand_refined/cand_is_am stay parallel to detected_hz[].       */
+    /* ---------------------------------------------------------------------- */
+
+    bool cand_refined[RF_SMART_SCAN_MAX_FREQS] = {false};
+    bool cand_is_am[RF_SMART_SCAN_MAX_FREQS]   = {false};
+
+    if (detected_count > 0)
+    {
+        subghz_ra_candidate_t cands[RF_SMART_SCAN_MAX_FREQS];
+        uint32_t refine_centers[SIGID_REFINE_MAX];
+
+        for (uint8_t i = 0; i < detected_count; i++)
+        {
+            cands[i].freq_hz  = detected_hz[i];
+            cands[i].rssi_dbm = detected_rssi[i];
+        }
+
+        uint8_t n_refine = subghz_ra_build_refine_plan(
+            cands, detected_count,
+            RF_SMART_SCAN_FREQ_MIN_HZ, RF_SMART_SCAN_FREQ_MAX_HZ,
+            refine_centers, SIGID_REFINE_MAX);
+
+        /* ~95 ms per refinement, at most SIGID_REFINE_MAX of them: bounded
+         * ~0.8 s total, spent while the "Scanning..." splash is up. */
+        for (uint8_t i = 0; i < n_refine; i++)
+        {
+            uint32_t refined = 0;
+            bool     is_am   = false;
+
+            if (!subghz_fine_sweep_refine_ext(refine_centers[i], &refined,
+                                              NULL, &is_am))
+                continue;
+
+            for (uint8_t j = 0; j < detected_count; j++)
+            {
+                if (detected_hz[j] == refine_centers[i])
+                {
+                    detected_hz[j]  = refined;
+                    cand_refined[j] = true;
+                    cand_is_am[j]   = is_am;
+                    break;
+                }
+            }
         }
     }
 
@@ -6144,6 +6513,25 @@ void sub_ghz_smart_signal_id(void)
     {
         dyn_count = rf_smart_scan_build_plan(detected_hz, detected_count,
                                              dyn_plan, RF_SMART_SCAN_MAX_FREQS);
+    }
+
+    /* rf_smart_scan_build_plan() may drop entries (dedup), so re-map the
+     * refinement verdicts onto the surviving plan points by exact frequency
+     * match — build_plan copies freq_hz verbatim, so equality is exact. */
+    bool dyn_refined[RF_SMART_SCAN_MAX_FREQS] = {false};
+    bool dyn_is_am[RF_SMART_SCAN_MAX_FREQS]   = {false};
+
+    for (uint8_t i = 0; i < dyn_count; i++)
+    {
+        for (uint8_t j = 0; j < detected_count; j++)
+        {
+            if (dyn_plan[i].freq_hz == detected_hz[j])
+            {
+                dyn_refined[i] = cand_refined[j];
+                dyn_is_am[i]   = cand_is_am[j];
+                break;
+            }
+        }
     }
 
     /* ---------------------------------------------------------------------- */
@@ -6176,6 +6564,7 @@ void sub_ghz_smart_signal_id(void)
     {
         /* ---- one pass over whichever probe list is active ---- */
         bool pass_done = false;
+        capture_spent_ms = 0;   /* per-pass capture budget resets each pass */
 
         if (dyn_count > 0)
         {
@@ -6269,12 +6658,71 @@ void sub_ghz_smart_signal_id(void)
                         fp.rssi_dbm       = peak;
                     }
 
+                    /* The RA fine-sweep verdict overrides the burst-based
+                     * rf_ook_fsk classification when they disagree — the
+                     * 31-point fine sweep is the better measurement. */
+                    if (!decoded && dyn_refined[i])
+                    {
+                        fp.mod            = dyn_is_am[i] ? RF_MOD_OOK : RF_MOD_FSK;
+                        fp.mod_confidence = 3;
+                    }
+
                     if (!decoded)
                     {
                         if (rf_fingerprint_is_discriminating(&fp))
                         {
                             rf_match_result_t m = rf_match_best(&fp);
-                            rf_sweep_report_add(&report, &fp, &m);
+                            bool reported = false;
+
+                            /* RAW-capture confirmation (see
+                             * sub_ghz_signal_identifier): on a commit the
+                             * 100% decode-confirmed hit replaces the
+                             * fingerprint hit.  fp.mod already carries the
+                             * RA verdict when this point was refined. */
+                            if (m.sig != NULL &&
+                                rf_sigid_capture_decide(
+                                    m.sig->registry_index, m.confidence,
+                                    rf_capture_attempted(capture_attempts,
+                                                         capture_attempt_count,
+                                                         m.sig, fp.band) ? 1U : 0U,
+                                    capture_spent_ms,
+                                    SIGID_CAPTURE_BUDGET_MS) == RF_CAPTURE_NOW)
+                            {
+                                SubGHz_Dec_Info_t cap;
+                                uint32_t t0 = HAL_GetTick();
+                                sigid_capture_result_t cres = subghz_sigid_try_capture(
+                                    pt->freq_hz, (fp.mod != RF_MOD_FSK), &cap);
+                                capture_spent_ms += HAL_GetTick() - t0;
+
+                                if (capture_attempt_count < RF_SWEEP_MAX_HITS)
+                                {
+                                    capture_attempts[capture_attempt_count].sig  = m.sig;
+                                    capture_attempts[capture_attempt_count].band = fp.band;
+                                    capture_attempt_count++;
+                                }
+
+                                if (cres == SIGID_CAPTURE_ABORTED)
+                                {
+                                    running = false;
+                                    break;
+                                }
+                                if (cres == SIGID_CAPTURE_DECODED)
+                                {
+                                    const char *name =
+                                        subghz_protocol_get_name(cap.protocol);
+                                    if (name != NULL)
+                                    {
+                                        rf_sweep_report_add_decoded(
+                                            &report, pt->freq_hz, fp.band,
+                                            peak, name);
+                                        reported = true;
+                                        decoded  = true;
+                                    }
+                                }
+                            }
+
+                            if (!reported)
+                                rf_sweep_report_add(&report, &fp, &m);
                         }
                         else
                         {
@@ -6383,7 +6831,54 @@ void sub_ghz_smart_signal_id(void)
                         if (rf_fingerprint_is_discriminating(&fp))
                         {
                             rf_match_result_t m = rf_match_best(&fp);
-                            rf_sweep_report_add(&report, &fp, &m);
+                            bool reported = false;
+
+                            /* RAW-capture confirmation (see
+                             * sub_ghz_signal_identifier). */
+                            if (m.sig != NULL &&
+                                rf_sigid_capture_decide(
+                                    m.sig->registry_index, m.confidence,
+                                    rf_capture_attempted(capture_attempts,
+                                                         capture_attempt_count,
+                                                         m.sig, fp.band) ? 1U : 0U,
+                                    capture_spent_ms,
+                                    SIGID_CAPTURE_BUDGET_MS) == RF_CAPTURE_NOW)
+                            {
+                                SubGHz_Dec_Info_t cap;
+                                uint32_t t0 = HAL_GetTick();
+                                sigid_capture_result_t cres = subghz_sigid_try_capture(
+                                    pt->freq_hz, (fp.mod != RF_MOD_FSK), &cap);
+                                capture_spent_ms += HAL_GetTick() - t0;
+
+                                if (capture_attempt_count < RF_SWEEP_MAX_HITS)
+                                {
+                                    capture_attempts[capture_attempt_count].sig  = m.sig;
+                                    capture_attempts[capture_attempt_count].band = fp.band;
+                                    capture_attempt_count++;
+                                }
+
+                                if (cres == SIGID_CAPTURE_ABORTED)
+                                {
+                                    running = false;
+                                    break;
+                                }
+                                if (cres == SIGID_CAPTURE_DECODED)
+                                {
+                                    const char *name =
+                                        subghz_protocol_get_name(cap.protocol);
+                                    if (name != NULL)
+                                    {
+                                        rf_sweep_report_add_decoded(
+                                            &report, pt->freq_hz, fp.band,
+                                            peak, name);
+                                        reported = true;
+                                        decoded  = true;
+                                    }
+                                }
+                            }
+
+                            if (!reported)
+                                rf_sweep_report_add(&report, &fp, &m);
                         }
                         else
                         {
@@ -6459,6 +6954,7 @@ void sub_ghz_smart_signal_id(void)
             {
                 rf_sweep_report_reset(&report);
                 rf_scan_cursor_reset(&cursor);
+                capture_attempt_count = 0;
                 scroll_pos = 0;
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)

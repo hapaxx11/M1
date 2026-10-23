@@ -125,3 +125,33 @@ rf_match_result_t rf_match_best(const rf_fingerprint_t *fp)
 
     return best;
 }
+
+rf_capture_decision_t rf_sigid_capture_decide(int16_t registry_index,
+                                              uint8_t confidence,
+                                              uint8_t attempts_made,
+                                              uint32_t spent_ms,
+                                              uint32_t budget_ms)
+{
+    if (registry_index < 0)
+        return RF_CAPTURE_NEVER;    /* no decoder to confirm with */
+    if (attempts_made > 0U)
+        return RF_CAPTURE_NEVER;    /* once per signature+band */
+    if (confidence == 0U)
+        return RF_CAPTURE_NEVER;    /* no match evidence at all */
+    if (spent_ms + RF_SIGID_CAPTURE_COST_MS > budget_ms)
+        return RF_CAPTURE_DEFER;    /* per-pass time budget exhausted */
+    return RF_CAPTURE_NOW;
+}
+
+bool rf_capture_attempted(const rf_capture_attempt_t *list, uint8_t count,
+                          const rf_protocol_sig_t *sig, uint16_t band)
+{
+    if (list == NULL || sig == NULL)
+        return false;
+    for (uint8_t i = 0; i < count; i++)
+    {
+        if (list[i].sig == sig && list[i].band == band)
+            return true;
+    }
+    return false;
+}

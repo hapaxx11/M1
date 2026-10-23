@@ -185,6 +185,71 @@ void test_best_match_generic_fob_still_catches_unknown(void)
     TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
 }
 
+/*============================================================================*/
+/* RAW-capture confirmation policy                                             */
+/*============================================================================*/
+
+void test_capture_decide_now_for_linked_signature(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 85, 0, 0, 1600));
+}
+
+void test_capture_decide_now_even_at_low_confidence(void)
+{
+    /* The reporting floor is enforced by rf_match_best(); the capture policy
+     * deliberately imposes no higher bar — the real decoder is the arbiter. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 1, 0, 0, 1600));
+}
+
+void test_capture_decide_never_without_decoder_link(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(-1, 100, 0, 0, 1600));
+}
+
+void test_capture_decide_never_without_evidence(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(107, 0, 0, 0, 1600));
+}
+
+void test_capture_decide_never_when_already_attempted(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(107, 85, 1, 0, 1600));
+}
+
+void test_capture_decide_defer_when_budget_exceeded(void)
+{
+    /* 1300 spent + 400 cost > 1600 budget -> defer. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_DEFER,
+        rf_sigid_capture_decide(107, 85, 0, 1300, 1600));
+    /* Exactly at the limit fits. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 85, 0, 1200, 1600));
+}
+
+void test_capture_attempted_lookup(void)
+{
+    rf_protocol_sig_t sig_a = make_sig(RF_MOD_OOK, RF_BAND_433, 0, 0, 0, 0);
+    rf_protocol_sig_t sig_b = make_sig(RF_MOD_OOK, RF_BAND_315, 0, 0, 0, 0);
+    rf_capture_attempt_t list[2] = {
+        { &sig_a, RF_BAND_433 },
+        { &sig_b, RF_BAND_315 },
+    };
+
+    TEST_ASSERT_TRUE(rf_capture_attempted(list, 2, &sig_a, RF_BAND_433));
+    /* Same signature on a different band is a different attempt. */
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, &sig_a, RF_BAND_315));
+    /* Same band, different signature. */
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, &sig_b, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 0, &sig_a, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(NULL, 2, &sig_a, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, NULL, RF_BAND_433));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -205,6 +270,14 @@ int main(void)
     RUN_TEST(test_best_match_subaru_not_generic);
     RUN_TEST(test_best_match_ford_v1_not_tpms);
     RUN_TEST(test_best_match_generic_fob_still_catches_unknown);
+
+    RUN_TEST(test_capture_decide_now_for_linked_signature);
+    RUN_TEST(test_capture_decide_now_even_at_low_confidence);
+    RUN_TEST(test_capture_decide_never_without_decoder_link);
+    RUN_TEST(test_capture_decide_never_without_evidence);
+    RUN_TEST(test_capture_decide_never_when_already_attempted);
+    RUN_TEST(test_capture_decide_defer_when_budget_exceeded);
+    RUN_TEST(test_capture_attempted_lookup);
 
     return UNITY_END();
 }

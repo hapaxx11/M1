@@ -162,6 +162,19 @@ void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);
 void sub_ghz_signal_identifier(void);
 void sub_ghz_smart_signal_id(void);
+
+/* Shared 31-point fine sweep (center +/-300 kHz, 20 kHz steps) — the Remote
+ * Analyzer scene's radio-side measurement, shared with Smart ID refinement.
+ * subghz_fine_sweep_points_ext() collects count RSSI samples (dBm) starting at
+ * sweep index start_idx into out_rssi (~3 ms per point, bounded).
+ * subghz_fine_sweep_refine_ext() runs the full sweep plus analysis in one
+ * ~95 ms bounded call and returns the refined center, peak RSSI and the AM
+ * verdict.  The radio must already be initialised (menu_sub_ghz_init) and in
+ * RX-capable state. */
+void subghz_fine_sweep_points_ext(uint32_t base_hz, uint8_t start_idx,
+                                  uint8_t count, int16_t *out_rssi);
+bool subghz_fine_sweep_refine_ext(uint32_t center_hz, uint32_t *out_center_hz,
+                                  int16_t *out_peak_dbm, bool *out_is_am);
 uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 
 /**
