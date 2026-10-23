@@ -55,6 +55,21 @@ static char *read_file(const char *relpath)
     TEST_ASSERT_EQUAL_size_t((size_t)size, fread(buf, 1U, (size_t)size, fp));
     buf[size] = '\0';
     fclose(fp);
+
+    /* Normalise CRLF -> LF in place: on Windows checkouts with
+     * core.autocrlf=true the working tree is CRLF, and needles that span a
+     * newline would never match even though the committed (LF) source and CI
+     * are correct. */
+    {
+        char *rd = buf;
+        char *wr = buf;
+        while (*rd != '\0') {
+            if (*rd != '\r')
+                *wr++ = *rd;
+            rd++;
+        }
+        *wr = '\0';
+    }
     return buf;
 }
 
@@ -188,6 +203,69 @@ void test_esp32_cmd_module_has_no_bare_hal_delay_waits(void)
     free(content);
 }
 
+/* ----- Hardening: bounded transaction lock in (de)init --------------------- */
+
+void test_esp32_init_deinit_use_bounded_transaction_lock(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_hal.c");
+
+    /* m1_esp32_init()/m1_esp32_deinit() must not wait on the RPC transaction
+     * mutex with portMAX_DELAY: a stuck transaction holder (e.g. a wedged
+     * WiFi scan worker) would wedge (de)init — and its caller — forever. */
+    TEST_ASSERT_EQUAL_size_t_MESSAGE(0u,
+        count_occurrences(content, "m1_esp32_rpc_transaction_lock()"),
+        "(de)init must not use the unbounded transaction lock");
+    TEST_ASSERT_GREATER_THAN_size_t_MESSAGE(1u,
+        count_occurrences(content, "m1_esp32_rpc_transaction_lock_timed("),
+        "(de)init must use the bounded transaction lock variant");
+
+    free(content);
+}
+
+/* ----- Hardening: WiFi scan worker stack and bounded UI wait --------------- */
+
+void test_wifi_scan_worker_stack_has_margin(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_rpc_features.c");
+
+    /* The worker's worst-case chain (RPC call staging + 2 x 512 B M1 Link
+     * frame buffers + HAL) is ~1.6-1.8 KiB; a 512-word (2 KiB) stack left
+     * almost no margin. */
+    const char *create = strstr(content, "xTaskCreate(wifi_scan_worker");
+    TEST_ASSERT_NOT_NULL_MESSAGE(create, "wifi_scan_worker xTaskCreate not found");
+    /* Scan only the argument list (next ~120 chars) for the old 512-word
+     * stack size. */
+    int found_old_stack = 0;
+    for (int i = 0; i < 120 && create[i] != '\0' && create[i] != ';'; i++) {
+        if (strncmp(&create[i], "512u", 4) == 0) {
+            found_old_stack = 1;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE_MESSAGE(found_old_stack,
+        "wifi_scan_worker stack must exceed 512 words");
+
+    free(content);
+}
+
+void test_wifi_do_scan_poll_loop_is_bounded(void)
+{
+    char *content = read_file("m1_csrc/m1_wifi.c");
+
+    /* An unbounded async_poll loop hangs the UI forever if the scan worker
+     * dies without signalling; the loop must be able to cancel and bail. */
+    const char *poll   = strstr(content,
+                                "m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx)");
+    const char *cancel = poll ? strstr(poll,
+                                "m1_esp32_rpc_wifi_scan_async_cancel(&scan_ctx)")
+                              : NULL;
+    TEST_ASSERT_NOT_NULL(poll);
+    TEST_ASSERT_NOT_NULL_MESSAGE(cancel,
+        "wifi_do_scan() RPC poll loop must have a bounded cancel path");
+
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -195,5 +273,8 @@ int main(void)
     RUN_TEST(test_init_master_hd_retry_loop_yields);
     RUN_TEST(test_reset_slave_delay_yields);
     RUN_TEST(test_esp32_cmd_module_has_no_bare_hal_delay_waits);
+    RUN_TEST(test_esp32_init_deinit_use_bounded_transaction_lock);
+    RUN_TEST(test_wifi_scan_worker_stack_has_margin);
+    RUN_TEST(test_wifi_do_scan_poll_loop_is_bounded);
     return UNITY_END();
 }

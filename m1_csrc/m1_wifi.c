@@ -274,8 +274,31 @@ static uint16_t wifi_do_scan(void)
 			free(rpc_entries);
 			return 0u;
 		}
-		while (!m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx))
-			vTaskDelay(pdMS_TO_TICKS(50));
+		/* Bound the wait: if the worker dies without signalling (e.g. stack
+		 * overflow), an unbounded poll would hang the UI task forever.  Allow
+		 * the full scan timeout plus transport margin, then cancel and drain
+		 * briefly so the semaphore is never deleted out from under a live
+		 * worker (its own transport timeout bounds how long it can lag). */
+		{
+			const uint32_t scan_bound_ms =
+			    ((uint32_t)M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S + 10u) * 1000u;
+			uint32_t waited_ms = 0u;
+			bool done = false;
+			while (!(done = m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx))) {
+				vTaskDelay(pdMS_TO_TICKS(50));
+				waited_ms += 50u;
+				if (waited_ms >= scan_bound_ms) {
+					m1_esp32_rpc_wifi_scan_async_cancel(&scan_ctx);
+					uint32_t drain_ms = 0u;
+					while (!m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx) &&
+					       drain_ms < 2000u) {
+						vTaskDelay(pdMS_TO_TICKS(50));
+						drain_ms += 50u;
+					}
+					break;
+				}
+			}
+		}
 
 		uint8_t rpc_count = scan_ctx.count;
 		m1_esp32_rpc_status_t rpc_st = scan_ctx.status;
