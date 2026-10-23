@@ -117,8 +117,9 @@ void m1_esp32_init(void)
 {
 	GPIO_InitTypeDef gpio_init_structure;
 
-	m1_esp32_rpc_transaction_lock_init();
-	if (!m1_esp32_rpc_transaction_lock())
+	/* Bound the wait: a transaction holder stuck past the longest legitimate
+	 * operation (WiFi scan, ~10 s) must not wedge (de)init forever. */
+	if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(15000u)))
 		return;
 
 	if ( !esp32_init_done )
@@ -444,8 +445,9 @@ void m1_esp32_deinit(void)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-	m1_esp32_rpc_transaction_lock_init();
-	if (!m1_esp32_rpc_transaction_lock())
+	/* Bound the wait: a transaction holder stuck past the longest legitimate
+	 * operation (WiFi scan, ~10 s) must not wedge (de)init forever. */
+	if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(15000u)))
 		return;
 
 	taskENTER_CRITICAL();

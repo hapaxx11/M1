@@ -55,7 +55,6 @@ extern "C" {
  * Matches the ESP-NOW / CD3 detection probe timeout — generous for the prompt
  * single-transaction control commands these features issue. */
 #define M1_ESP32_RPC_FEATURE_TIMEOUT_S  2
-#define M1_ESP32_RPC_STATUS_TIMEOUT_S   1
 
 /* WIFI_SCAN-specific response timeout (seconds) — issue #719 Phase 5.
  *
