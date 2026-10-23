@@ -1665,8 +1665,15 @@ add_test(NAME rf_fingerprint COMMAND test_rf_fingerprint)
 add_executable(test_rf_protocol_db
     test_rf_protocol_db.c
     ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
 )
-target_include_directories(test_rf_protocol_db PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_include_directories(test_rf_protocol_db PRIVATE
+    ${STUBS_DIR}            # HAL/FatFS stubs (registry -> m1_sub_ghz_decenc.h chain)
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
 target_link_libraries(test_rf_protocol_db PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_rf_protocol_db PRIVATE sanitizers)
@@ -3786,8 +3793,15 @@ add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
 add_executable(test_proto_pirate_timing
     test_proto_pirate_timing.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate_timing.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_proto_pirate_timing PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
 )
 target_link_libraries(test_proto_pirate_timing PRIVATE unity)

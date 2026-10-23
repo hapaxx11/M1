@@ -121,13 +121,13 @@ static void run_analysis(void)
     for (uint16_t i = 0; i < count; i++)
         linear[i] = s_samples[(start + i) % TUNER_SAMPLE_MAX];
 
-    const pptime_proto_ref_t *ref =
+    const pptime_proto_ref_t ref =
         (s_proto_idx < pptime_proto_table_count)
-        ? &pptime_proto_table[s_proto_idx]
-        : NULL;
+        ? pptime_proto_ref_get(s_proto_idx)
+        : (pptime_proto_ref_t){ NULL, 0, 0, 0 };
 
-    pptime_analyze(linear, count, ref, &s_stats);
-    s_verdict = pptime_match(&s_stats, ref);
+    pptime_analyze(linear, count, &ref, &s_stats);
+    s_verdict = pptime_match(&s_stats, &ref);
 }
 
 /** Start RX with current app config (freq/mod).  Returns true on success. */
@@ -167,10 +167,10 @@ static void draw(SubGhzApp *app)
 {
     (void)app;
 
-    const pptime_proto_ref_t *ref =
+    const pptime_proto_ref_t ref =
         (s_proto_idx < pptime_proto_table_count)
-        ? &pptime_proto_table[s_proto_idx]
-        : NULL;
+        ? pptime_proto_ref_get(s_proto_idx)
+        : (pptime_proto_ref_t){ NULL, 0, 0, 0 };
 
     char line[40];
 
@@ -183,15 +183,15 @@ static void draw(SubGhzApp *app)
 
     /* Small arrows to indicate UP/DOWN cycling */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 90, 9, ref ? ref->name : "---");
+    u8g2_DrawStr(&m1_u8g2, 90, 9, ref.name ? ref.name : "---");
 
     u8g2_DrawHLine(&m1_u8g2, 0, 11, M1_LCD_DISPLAY_WIDTH);
 
     /* ---- Protocol reference ------------------------------------------- */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    if (ref)
+    if (ref.name)
         snprintf(line, sizeof(line), "Ref S:%u L:%u d:%u",
-                 ref->te_short, ref->te_long, ref->te_delta);
+                 ref.te_short, ref.te_long, ref.te_delta);
     else
         snprintf(line, sizeof(line), "Ref: none");
     u8g2_DrawStr(&m1_u8g2, 2, 21, line);

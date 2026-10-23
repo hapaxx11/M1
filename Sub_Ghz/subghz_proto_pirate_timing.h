@@ -34,11 +34,33 @@ typedef struct {
     uint16_t    te_delta;   /**< Acceptable deviation (µs) */
 } pptime_proto_ref_t;
 
+/**
+ * Table entry: display name + link to the authoritative protocol-registry
+ * timing.  Timing values are NEVER stored here — they are resolved from
+ * subghz_protocol_registry[] (the decoder authority) at access time, so this
+ * table cannot drift from the decoders.
+ */
+typedef struct {
+    const char *name;          /**< Protocol display name */
+    uint16_t    registry_idx;  /**< Index into subghz_protocol_registry[] */
+} pptime_proto_entry_t;
+
 /** Automotive protocol reference table (defined in .c) */
-extern const pptime_proto_ref_t pptime_proto_table[];
+extern const pptime_proto_entry_t pptime_proto_table[];
 
 /** Number of entries in pptime_proto_table */
 extern const uint8_t pptime_proto_table_count;
+
+/**
+ * Resolve a table entry to its timing reference.  Timing values come from
+ * the protocol registry: te_delta when set, otherwise te_short ×
+ * te_tolerance_pct / 100 for legacy percentage-based entries.
+ *
+ * @param index  Entry index (< pptime_proto_table_count).
+ * @return       Reference with display name and timing; all-zero name=NULL
+ *               when @p index is out of range.
+ */
+pptime_proto_ref_t pptime_proto_ref_get(uint8_t index);
 
 /*============================================================================*/
 /* Statistics                                                                  */
