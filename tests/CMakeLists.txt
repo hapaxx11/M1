@@ -800,6 +800,24 @@ endif()
 add_test(NAME esp32_probe_ordering COMMAND test_esp32_probe_ordering)
 
 # ------------------------------------------------------------------
+# Source invariants: M1 Link SPI mutex must be created before first use
+# (CD3 brain RPC regression — every transfer failed with the mutex NULL),
+# and ESP32 probe-path waits must yield instead of busy-spinning in
+# HAL_Delay (Bluetooth Direct boot freeze / watchdog starvation).
+# ------------------------------------------------------------------
+add_executable(test_esp32_link_lock_yield
+    test_esp32_link_lock_yield.c
+)
+target_compile_definitions(test_esp32_link_lock_yield PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_esp32_link_lock_yield PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_link_lock_yield PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_link_lock_yield COMMAND test_esp32_link_lock_yield)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —

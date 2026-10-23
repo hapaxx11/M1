@@ -117,6 +117,13 @@ void esp32_m1link_lifecycle_unlock(void)
 
 bool esp32_m1link_spi_lock(void)
 {
+    /* Create the mutex lazily on first use: no init-time call site ever ran
+     * esp32_m1link_spi_mutex_init(), so s_m1link_spi_mutex stayed NULL and
+     * every M1 Link transfer failed with CTRL_ERR_TRANSPORT_SEND before
+     * clocking a single byte (all brain-CD3 M1_RPC features broken, incl.
+     * WiFi AP scan). */
+    if (!esp32_m1link_spi_mutex_init())
+        return false;
     if (!esp32_m1link_lifecycle_lock())
         return false;
     if (pxMutex != NULL)
@@ -678,12 +685,17 @@ static void m1link_cs_delay(void)
 /* Yield for ~1 ms while waiting. vTaskDelay is only valid once the scheduler
  * is running; before that (or if it is suspended) fall back to HAL_Delay so we
  * still pace the loop without an illegal RTOS call. */
-static void m1link_delay_1ms(void)
+static void esp32_yield_delay_ms(uint32_t ms)
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
-		vTaskDelay(pdMS_TO_TICKS(1));
+		vTaskDelay(pdMS_TO_TICKS(ms));
 	else
-		HAL_Delay(1);
+		HAL_Delay(ms);
+}
+
+static void m1link_delay_1ms(void)
+{
+	esp32_yield_delay_ms(1);
 }
 
 /* Wait for the brain's HANDSHAKE line (PD7) to signal armed/ready, bounded by
@@ -964,7 +976,12 @@ static void init_master_hd(spi_device_handle_t* spi)
             break;  /* Got a valid response from slave */
         }
         spi_mutex_unlock();
-        HAL_Delay(500);  /* Wait 500ms between retries */
+        /* Yield between retries: a bare HAL_Delay here busy-spins for up to
+         * 10 s (20 x 500 ms) at the caller's priority.  When the Bluetooth
+         * Direct bring-up reaches this AT fallback from the high-priority
+         * RPC task, that spin starves the menu task and the watchdog feeder
+         * (multi-second UI freeze, possible IWDG reset / boot loop). */
+        esp32_yield_delay_ms(500);
         spi_mutex_lock();
     }
     if (retry >= 20) {
@@ -1161,8 +1178,10 @@ static void reset_slave(void)
 	esp32_enable();
 	/* Brief delay for ESP32-C6 SPI slave to initialize after reset.
 	 * Stock firmware used hard_delay(200) here (~200ms busy-loop).
-	 * The handshake pin check in esp32_main_init() catches missed events. */
-	HAL_Delay(200);
+	 * The handshake pin check in esp32_main_init() catches missed events.
+	 * Yield so a high-priority caller (e.g. the RPC task during Bluetooth
+	 * Direct bring-up) does not starve the UI / watchdog feeder. */
+	esp32_yield_delay_ms(200);
 }
 
 
