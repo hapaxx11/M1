@@ -59,6 +59,21 @@ static char *read_file(const char *relpath)
     TEST_ASSERT_EQUAL_size_t((size_t)size, fread(buf, 1U, (size_t)size, fp));
     buf[size] = '\0';
     fclose(fp);
+
+    /* Normalise CRLF -> LF in place: on Windows checkouts with
+     * core.autocrlf=true the working tree is CRLF, and needles that span a
+     * newline would never match even though the committed (LF) source and CI
+     * are correct. */
+    {
+        char *rd = buf;
+        char *wr = buf;
+        while (*rd != '\0') {
+            if (*rd != '\r')
+                *wr++ = *rd;
+            rd++;
+        }
+        *wr = '\0';
+    }
     return buf;
 }
 
