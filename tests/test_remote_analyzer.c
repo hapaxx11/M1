@@ -159,6 +159,12 @@ void test_fine_analyze_too_few_samples(void) {
     TEST_ASSERT_EQUAL_INT16(INT16_MIN, st.fine.best_rssi);
 }
 
+void test_refinement_rejects_peak_at_or_below_detection_threshold(void) {
+    TEST_ASSERT_FALSE(subghz_ra_refinement_signal_valid(-80, -80));
+    TEST_ASSERT_FALSE(subghz_ra_refinement_signal_valid(-90, -80));
+    TEST_ASSERT_TRUE(subghz_ra_refinement_signal_valid(-79, -80));
+}
+
 /* ------------------------------------------------------------------ */
 /* Adaptive smoothing                                                  */
 /* ------------------------------------------------------------------ */
@@ -563,6 +569,7 @@ int main(void) {
     RUN_TEST(test_fine_analyze_exactly_6db_not_am);
     RUN_TEST(test_fine_analyze_edge_peak_never_am);
     RUN_TEST(test_fine_analyze_too_few_samples);
+    RUN_TEST(test_refinement_rejects_peak_at_or_below_detection_threshold);
 
     RUN_TEST(test_smooth_first_sample_initializes);
     RUN_TEST(test_smooth_big_jump_fast_convergence);

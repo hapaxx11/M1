@@ -492,6 +492,7 @@ static void sub_ghz_rx_init(void);
 static void sub_ghz_rx_start(void);
 static void sub_ghz_rx_pause(void);
 static void sub_ghz_rx_deinit(void);
+static void sub_ghz_rx_deinit_impl(bool reset_main_q);
 static uint8_t sub_ghz_ring_buffers_init(void);
 static void sub_ghz_ring_buffers_deinit(void);
 static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data);
@@ -3256,7 +3257,7 @@ static void sub_ghz_rx_pause(void)
   * @retval None
   */
 /*============================================================================*/
-static void sub_ghz_rx_deinit(void)
+static void sub_ghz_rx_deinit_impl(bool reset_main_q)
 {
 	if ( timerhdl_subghz_rx.State==HAL_TIM_STATE_READY ) // Make sure that the timer has been initialized!
 	{
@@ -3272,11 +3273,15 @@ static void sub_ghz_rx_deinit(void)
 
 	HAL_GPIO_DeInit(SUBGHZ_RX_GPIO_PORT, SUBGHZ_RX_GPIO_PIN);
 
-	if ( main_q_hdl != NULL)
+	if (reset_main_q && main_q_hdl != NULL)
 		xQueueReset(main_q_hdl);
 	//arrfree(subghz_rx_q);
 } // static void sub_ghz_rx_deinit(void)
 
+static void sub_ghz_rx_deinit(void)
+{
+	sub_ghz_rx_deinit_impl(true);
+}
 
 
 
@@ -5848,9 +5853,10 @@ typedef enum {
 static void subghz_sigid_capture_rx_arm(bool is_am, uint32_t frequency_hz)
 {
     /* Tear down any capture already running (safe no-op when the timer was
-     * never started — both helpers are channel/state guarded). */
+     * never started — both helpers are channel/state guarded).  Keep queued
+     * keypad notifications paired with their button-status events. */
     sub_ghz_rx_pause();
-    sub_ghz_rx_deinit();
+    sub_ghz_rx_deinit_impl(false);
 
     subghz_pulse_handler_reset();
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
@@ -5896,7 +5902,7 @@ static sigid_capture_result_t subghz_sigid_capture_window(SubGHz_Dec_Info_t *out
     for (;;)
     {
         uint32_t now = HAL_GetTick();
-        if ((int32_t)(deadline - now) <= 0)
+        if (rf_sigid_capture_deadline_expired(deadline, now))
             return SIGID_CAPTURE_NONE;
 
         uint32_t remaining = deadline - now;
@@ -5920,6 +5926,9 @@ static sigid_capture_result_t subghz_sigid_capture_window(SubGHz_Dec_Info_t *out
         {
             for (;;)
             {
+                if (rf_sigid_capture_deadline_expired(deadline, HAL_GetTick()))
+                    return SIGID_CAPTURE_NONE;
+
                 S_M1_Main_Q_t peek;
                 uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
                 uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
@@ -5949,6 +5958,36 @@ static sigid_capture_result_t subghz_sigid_capture_window(SubGHz_Dec_Info_t *out
     }
 }
 
+static sigid_capture_result_t subghz_sigid_capture_drain_queue(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    UBaseType_t pending = uxQueueMessagesWaiting(main_q_hdl);
+
+    /* RX is stopped before this bounded pass.  Drop only stale edge events,
+     * consume keypad events with their paired status, and leave other events. */
+    while (pending-- > 0U)
+    {
+        if (xQueuePeek(main_q_hdl, &q_item, 0) != pdTRUE)
+            break;
+
+        rf_capture_queue_action_t action = rf_sigid_capture_queue_action(
+            q_item.q_evt_type == Q_EVENT_SUBGHZ_RX,
+            q_item.q_evt_type == Q_EVENT_KEYPAD);
+        if (action == RF_CAPTURE_QUEUE_PRESERVE_EVENT)
+            break;
+
+        if (xQueueReceive(main_q_hdl, &q_item, 0) != pdTRUE)
+            break;
+        if (action == RF_CAPTURE_QUEUE_CONSUME_KEYPAD &&
+            xQueueReceive(button_events_q_hdl, &btn, 0) == pdTRUE &&
+            btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            return SIGID_CAPTURE_ABORTED;
+    }
+
+    return SIGID_CAPTURE_NONE;
+}
+
 /*
  * One bounded capture + decode attempt on @p freq_hz.  Self-contained: arms
  * capture RX, runs the window, tears capture down, and restores the RSSI
@@ -5965,7 +6004,11 @@ static sigid_capture_result_t subghz_sigid_try_capture(uint32_t freq_hz,
     res = subghz_sigid_capture_window(out_decoded);
 
     sub_ghz_rx_pause();
-    sub_ghz_rx_deinit();
+    if (subghz_sigid_capture_drain_queue() == SIGID_CAPTURE_ABORTED)
+        res = SIGID_CAPTURE_ABORTED;
+    /* Do not reset main_q_hdl here: it may contain keypad notifications whose
+     * corresponding button status is still queued in button_events_q_hdl. */
+    sub_ghz_rx_deinit_impl(false);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
 
     /* Restore the RSSI-sweep radio (same init idiom as the scan loops). */
@@ -6133,7 +6176,7 @@ void sub_ghz_signal_identifier(void)
                             rf_sweep_report_add_decoded(
                                 &report, pt->freq_hz,
                                 rf_band_from_freq(pt->freq_hz),
-                                peak, proto_name);
+                                peak, proto_name, NULL);
                             decoded = true;
                         }
                     }
@@ -6218,7 +6261,7 @@ void sub_ghz_signal_identifier(void)
                                 {
                                     rf_sweep_report_add_decoded(
                                         &report, pt->freq_hz, fp.band,
-                                        peak, name);
+                                        peak, name, m.sig);
                                     reported = true;
                                     decoded  = true;
                                 }
@@ -6487,9 +6530,12 @@ void sub_ghz_smart_signal_id(void)
         {
             uint32_t refined = 0;
             bool     is_am   = false;
+            int16_t  peak_dbm;
 
             if (!subghz_fine_sweep_refine_ext(refine_centers[i], &refined,
-                                              NULL, &is_am))
+                                              &peak_dbm, &is_am))
+                continue;
+            if (!subghz_ra_refinement_signal_valid(peak_dbm, threshold))
                 continue;
 
             for (uint8_t j = 0; j < detected_count; j++)
@@ -6629,7 +6675,7 @@ void sub_ghz_smart_signal_id(void)
                                 rf_sweep_report_add_decoded(
                                     &report, pt->freq_hz,
                                     rf_band_from_freq(pt->freq_hz),
-                                    peak, proto_name);
+                                    peak, proto_name, NULL);
                                 decoded = true;
                             }
                         }
@@ -6714,7 +6760,7 @@ void sub_ghz_smart_signal_id(void)
                                     {
                                         rf_sweep_report_add_decoded(
                                             &report, pt->freq_hz, fp.band,
-                                            peak, name);
+                                            peak, name, m.sig);
                                         reported = true;
                                         decoded  = true;
                                     }
@@ -6797,7 +6843,7 @@ void sub_ghz_smart_signal_id(void)
                                 rf_sweep_report_add_decoded(
                                     &report, pt->freq_hz,
                                     rf_band_from_freq(pt->freq_hz),
-                                    peak, proto_name);
+                                    peak, proto_name, NULL);
                                 decoded = true;
                             }
                         }
@@ -6870,7 +6916,7 @@ void sub_ghz_smart_signal_id(void)
                                     {
                                         rf_sweep_report_add_decoded(
                                             &report, pt->freq_hz, fp.band,
-                                            peak, name);
+                                            peak, name, m.sig);
                                         reported = true;
                                         decoded  = true;
                                     }

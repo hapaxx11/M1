@@ -74,6 +74,10 @@ bool subghz_ra_fine_analyze(const int16_t *sweep_rssi, uint8_t count,
                             uint32_t base_freq_hz, subghz_ra_state_t *st,
                             bool *is_am);
 
+/** A fine-sweep peak is usable only when it exceeds the detection threshold. */
+bool subghz_ra_refinement_signal_valid(int16_t peak_rssi_dbm,
+                                      int16_t threshold_dbm);
+
 /** Adaptive exponential smoother (k = 0.9 on > 500 kHz jumps, else 0.03);
  * the first sample after a reset initializes the state directly (upstream
  * converges from 0, which undershoots early readings — fixed here). */

@@ -37,6 +37,7 @@
 /** One identified signal accumulated during a sweep. */
 typedef struct {
     const rf_protocol_sig_t *sig;        /**< Matched signature, or NULL for decode-confirmed hits */
+    const rf_protocol_sig_t *confirmed_sig; /**< Heuristic signature confirmed by a decoder */
     const char              *decode_name; /**< Decoder protocol name (non-NULL when sig==NULL,
                                               meaning the protocol decoder identified it directly
                                               at 100% confidence; NULL for fingerprint-scored hits) */
@@ -95,6 +96,9 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep);
  * Use this when the protocol decoder recognised the timing burst directly,
  * yielding a definitive protocol name.  The hit is recorded at 100% confidence
  * and deduplication is performed by (protocol_name pointer, band) identity.
+ * When @p confirmed_sig is non-NULL, an earlier heuristic hit for that
+ * signature and band is promoted in place, and later heuristic sightings
+ * continue to merge into the confirmed hit.
  *
  * @param rep           Report to update (NULL is a no-op returning false).
  * @param freq_hz       Centre frequency the signal was captured on (Hz).
@@ -104,6 +108,8 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep);
  *                      subghz_protocol_get_name() — must be a stable pointer
  *                      (e.g. a string literal in the registry table) since the
  *                      hit stores the pointer, not a copy.
+ * @param confirmed_sig Signature associated with the successful capture, or
+ *                      NULL when the raw timing decoded without a prior match.
  *
  * @return true when the hit was stored or merged; false when rep or
  *         protocol_name is NULL, or when the report is full and the new
@@ -113,6 +119,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                                  uint32_t           freq_hz,
                                  uint16_t           band,
                                  int16_t            rssi_dbm,
-                                 const char        *protocol_name);
+                                 const char        *protocol_name,
+                                 const rf_protocol_sig_t *confirmed_sig);
 
 #endif /* RF_SWEEP_H */

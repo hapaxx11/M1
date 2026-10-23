@@ -52,6 +52,19 @@ typedef struct {
 uint8_t rf_match_score(const rf_fingerprint_t  *fp,
                        const rf_protocol_sig_t *sig);
 
+/** Return whether a capture window's deadline has expired, including tick wrap. */
+bool rf_sigid_capture_deadline_expired(uint32_t deadline_ms, uint32_t now_ms);
+
+typedef enum {
+    RF_CAPTURE_QUEUE_DISCARD_RX,
+    RF_CAPTURE_QUEUE_CONSUME_KEYPAD,
+    RF_CAPTURE_QUEUE_PRESERVE_EVENT,
+} rf_capture_queue_action_t;
+
+/** Classify queued events during capture teardown without dropping unrelated events. */
+rf_capture_queue_action_t rf_sigid_capture_queue_action(bool is_rx_event,
+                                                        bool is_keypad_event);
+
 /**
  * Find the best-scoring signature for a fingerprint.
  *

@@ -85,6 +85,11 @@ bool subghz_ra_fine_analyze(const int16_t *sweep_rssi, uint8_t count,
     return true;
 }
 
+bool subghz_ra_refinement_signal_valid(int16_t peak_rssi_dbm,
+                                       int16_t threshold_dbm) {
+    return peak_rssi_dbm > threshold_dbm;
+}
+
 uint32_t subghz_ra_smooth(subghz_ra_state_t *st, uint32_t freq_hz) {
     if(st->fil_val == 0) {
         /* First sample after reset initializes the state directly (M1

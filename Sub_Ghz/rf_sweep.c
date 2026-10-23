@@ -74,6 +74,7 @@ static void fill_slot(rf_sweep_hit_t *slot,
                       const rf_match_result_t *match)
 {
     slot->sig        = match->sig;
+    slot->confirmed_sig = NULL;
     slot->decode_name = NULL;
     slot->freq_hz    = fp->freq_hz;
     slot->band       = fp->band;
@@ -89,9 +90,11 @@ static void fill_slot_decoded(rf_sweep_hit_t *slot,
                               uint32_t        freq_hz,
                               uint16_t        band,
                               int16_t         rssi_dbm,
-                              const char     *protocol_name)
+                              const char     *protocol_name,
+                              const rf_protocol_sig_t *confirmed_sig)
 {
     slot->sig         = NULL;
+    slot->confirmed_sig = confirmed_sig;
     slot->decode_name = protocol_name;
     slot->freq_hz     = freq_hz;
     slot->band        = band;
@@ -100,6 +103,24 @@ static void fill_slot_decoded(rf_sweep_hit_t *slot,
     slot->confidence  = 100;
     slot->rssi_dbm    = rssi_dbm;
     slot->hits        = 1;
+}
+
+static void remove_slot(rf_sweep_report_t *rep, uint8_t index)
+{
+    for (uint8_t i = index; i + 1U < rep->count; i++)
+        rep->hits[i] = rep->hits[i + 1U];
+    rep->count--;
+}
+
+static void merge_decoded_slot(rf_sweep_hit_t *decoded,
+                               const rf_sweep_hit_t *other)
+{
+    uint32_t hits = (uint32_t)decoded->hits + other->hits;
+    decoded->hits = (hits > UINT16_MAX) ? UINT16_MAX : (uint16_t)hits;
+    if (rssi_stronger(other->rssi_dbm, decoded->rssi_dbm)) {
+        decoded->rssi_dbm = other->rssi_dbm;
+        decoded->freq_hz = other->freq_hz;
+    }
 }
 
 /*----------------------------------------------------------------------------*/
@@ -129,7 +150,8 @@ bool rf_sweep_report_add(rf_sweep_report_t      *rep,
 
     /* Same protocol on the same band → merge into the existing slot. */
     for (uint8_t i = 0; i < rep->count; i++) {
-        if (rep->hits[i].sig == match->sig &&
+        if ((rep->hits[i].sig == match->sig ||
+             rep->hits[i].confirmed_sig == match->sig) &&
             rep->hits[i].band == fp->band) {
             merge_into(&rep->hits[i], fp, match);
             resort(rep);
@@ -172,33 +194,97 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                                  uint32_t           freq_hz,
                                  uint16_t           band,
                                  int16_t            rssi_dbm,
-                                 const char        *protocol_name)
+                                 const char        *protocol_name,
+                                 const rf_protocol_sig_t *confirmed_sig)
 {
     if (rep == NULL || protocol_name == NULL)
         return false;
 
+    const rf_protocol_sig_t *associated_sig = confirmed_sig;
+    if (associated_sig == NULL) {
+        for (uint16_t i = 0; i < rf_protocol_db_count(); i++) {
+            const rf_protocol_sig_t *sig = rf_protocol_db_get(i);
+            if (sig != NULL && strcmp(sig->name, protocol_name) == 0) {
+                associated_sig = sig;
+                break;
+            }
+        }
+    }
+
     rep->total_detections++;
     rep->identified_detections++;
 
-    /* Same protocol on the same band → merge (bump hits, update strongest RSSI). */
+    /* If this decoder identity already exists, fold any matching heuristic
+     * slot into it before returning. */
     for (uint8_t i = 0; i < rep->count; i++) {
         if (rep->hits[i].decode_name == protocol_name &&
             rep->hits[i].band == band) {
-            rf_sweep_hit_t *slot = &rep->hits[i];
+            uint8_t decoded_index = i;
+            rf_sweep_hit_t *slot = &rep->hits[decoded_index];
             if (slot->hits < UINT16_MAX)
                 slot->hits++;
             if (rssi_stronger(rssi_dbm, slot->rssi_dbm)) {
                 slot->rssi_dbm = rssi_dbm;
                 slot->freq_hz  = freq_hz;
             }
+            if (slot->confirmed_sig == NULL)
+                slot->confirmed_sig = associated_sig;
+            if (associated_sig != NULL) {
+                for (uint8_t j = 0; j < rep->count; j++) {
+                    if (j != i && rep->hits[j].sig == associated_sig &&
+                        rep->hits[j].band == band) {
+                        merge_decoded_slot(&rep->hits[decoded_index],
+                                           &rep->hits[j]);
+                        remove_slot(rep, j);
+                        break;
+                    }
+                }
+            }
             resort(rep); /* RSSI update may change ordering among 100%-confidence hits */
             return true;
         }
     }
 
+    /* Promote a previously reported heuristic identity in place. */
+    if (associated_sig != NULL) {
+        for (uint8_t i = 0; i < rep->count; i++) {
+            rf_sweep_hit_t *slot = &rep->hits[i];
+            if (slot->sig == associated_sig && slot->band == band) {
+                int8_t decoded_index = -1;
+                for (uint8_t j = 0; j < rep->count; j++) {
+                    if (rep->hits[j].decode_name == protocol_name &&
+                        rep->hits[j].band == band) {
+                        decoded_index = (int8_t)j;
+                        break;
+                    }
+                }
+
+                slot->sig = NULL;
+                slot->confirmed_sig = associated_sig;
+                slot->decode_name = protocol_name;
+                slot->category = RF_CAT_UNKNOWN;
+                slot->security = RF_SEC_UNKNOWN;
+                slot->confidence = 100;
+                if (rssi_stronger(rssi_dbm, slot->rssi_dbm)) {
+                    slot->rssi_dbm = rssi_dbm;
+                    slot->freq_hz = freq_hz;
+                }
+                if (slot->hits < UINT16_MAX)
+                    slot->hits++;
+                if (decoded_index >= 0 && (uint8_t)decoded_index != i) {
+                    merge_decoded_slot(slot, &rep->hits[(uint8_t)decoded_index]);
+                    remove_slot(rep, (uint8_t)decoded_index);
+                }
+                resort(rep);
+                return true;
+            }
+        }
+    }
+
     /* New decode-confirmed identity: take a free slot if available. */
     if (rep->count < RF_SWEEP_MAX_HITS) {
-        fill_slot_decoded(&rep->hits[rep->count], freq_hz, band, rssi_dbm, protocol_name);
+        fill_slot_decoded(&rep->hits[rep->count], freq_hz, band, rssi_dbm,
+                          protocol_name, associated_sig);
         rep->count++;
         resort(rep);
         return true;
@@ -209,7 +295,8 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
      * fingerprint slot that scored below 100. */
     {
         rf_sweep_hit_t candidate;
-        fill_slot_decoded(&candidate, freq_hz, band, rssi_dbm, protocol_name);
+        fill_slot_decoded(&candidate, freq_hz, band, rssi_dbm,
+                          protocol_name, associated_sig);
         rf_sweep_hit_t *weakest = &rep->hits[RF_SWEEP_MAX_HITS - 1];
         if (hit_ranks_above(&candidate, weakest)) {
             *weakest = candidate;

@@ -127,6 +127,42 @@ void test_best_match_identifies_ble(void)
     TEST_ASSERT_EQUAL_UINT16(RF_BAND_2400, (uint16_t)(r.sig->bands & RF_BAND_2400));
 }
 
+void test_data_poor_433_fingerprints_do_not_select_specific_protocols(void)
+{
+    rf_fingerprint_t fsk = make_fp(RF_BAND_433, RF_MOD_FSK, 0, 0);
+    rf_match_result_t r = rf_match_best(&fsk);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (rolling)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+
+    rf_fingerprint_t ook = make_fp(RF_BAND_433, RF_MOD_OOK, 0, 0);
+    r = rf_match_best(&ook);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (fixed)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+}
+
+void test_capture_deadline_expiration_handles_tick_wrap(void)
+{
+    TEST_ASSERT_FALSE(rf_sigid_capture_deadline_expired(400U, 399U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(400U, 400U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(400U, 401U));
+    TEST_ASSERT_FALSE(rf_sigid_capture_deadline_expired(0x00000020U,
+                                                        0xFFFFFFF0U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(0x00000020U,
+                                                       0x00000020U));
+}
+
+void test_capture_queue_cleanup_discards_only_rx_and_pairs_keypad(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_DISCARD_RX,
+                      rf_sigid_capture_queue_action(true, false));
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_CONSUME_KEYPAD,
+                      rf_sigid_capture_queue_action(false, true));
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_PRESERVE_EVENT,
+                      rf_sigid_capture_queue_action(false, false));
+}
+
 void test_best_match_null_fp(void)
 {
     rf_match_result_t r = rf_match_best(NULL);
@@ -264,6 +300,9 @@ int main(void)
 
     RUN_TEST(test_best_match_identifies_car_fob);
     RUN_TEST(test_best_match_identifies_ble);
+    RUN_TEST(test_data_poor_433_fingerprints_do_not_select_specific_protocols);
+    RUN_TEST(test_capture_deadline_expiration_handles_tick_wrap);
+    RUN_TEST(test_capture_queue_cleanup_discards_only_rx_and_pairs_keypad);
     RUN_TEST(test_best_match_null_fp);
     RUN_TEST(test_best_match_no_confident_result);
 
