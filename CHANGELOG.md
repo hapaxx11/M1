@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.18] - 2026-10-23
+
+### Added
+
+- **Sub-GHz: Smart ID fine-sweep refinement** — After the pre-scan, Smart ID now
+  re-centers the 8 strongest detected frequencies with the Remote Analyzer's
+  31-point fine sweep (±300 kHz, 20 kHz steps) and uses the sweep's AM/FM
+  verdict (preferred over the burst-based classifier) when identifying the
+  signal.  The Remote Analyzer scene's fine stage now shares the same radio
+  sweep helper (behavior unchanged).
+- **Sub-GHz: Smart ID decoder confirmation** — When a fingerprint match links
+  to a real protocol decoder (automotive/registry-linked signatures), Smart ID
+  now makes one bounded (400 ms) real edge-capture decode attempt on the hit
+  frequency; a successful decode upgrades the entry to a 100%-confidence
+  decoder-named hit.  Attempts are limited to one per signature+band and a
+  per-pass time budget; failed attempts are silent.
+- **Sub-GHz: automotive keyfob signatures in Smart ID** — The Smart ID fingerprint database now carries per-protocol signatures for the 24 ProtoPirate automotive decoder families (Honda, Ford, Kia, Fiat, Renault, Mazda, Subaru, Chrysler, PSA, VAG) with bands, modulation, timing windows, bit ranges, and rolling-code security metadata drawn from the corrected protocol-registry timings. Each signature links to its registry decoder (new `registry_index` field) for future decode hand-off. Smart ID now names these protocols specifically instead of misclassifying them: Subaru and Kia V1 were labeled garage/weather, Honda V1 as weather, Renault V0 missed the fob floor, and Ford V1 was identified as a TPMS tyre sensor. Specific signatures outrank the generic "Car Key Fob" catch-alls, which still match unknown fobs. Host tests verify window/band/mod consistency with the registry and the specific-before-generic ordering. (Smart ID evolved from the RF Rosetta project.)
+
+### Changed
+
+- **Documentation: Smart ID naming alignment** — The signal-identification feature is now referred to as Smart ID consistently across the README, module headers, scene banners, and the Sub-GHz skill notes, including the on-screen title of the identifier sweep. The RF Rosetta lineage is preserved everywhere as provenance ("evolved from RF Rosetta (github.com/joelewis012/RF_Rosetta)"), and CHANGELOG history is untouched.
+
+### Fixed
+
+- **Sub-GHz: fix stale Proto Pirate timing references** — The Timing Tuner's protocol reference table now derives its values from the protocol registry (the decoder authority) instead of a hand-copied table that had drifted: Subaru was listed as 620/1620 µs (real: 800/1600), Chrysler V0 as 270/540 µs (real: 300/3400), Honda V1 and Kia V1 at half their true timings (1000/2000 and 800/1600), PSA AM doubled (real: 250/500), and CAME Atomo doubled (real: 200/400). Legacy percentage-based tolerance entries resolve to their registry-derived absolute delta. Also syncs two stale (informational-only) catalog timings: Renault V0 250/500 → 125/250 µs and Fiat V0 250/500 → 200/400 µs. New host tests pin the resolved values against the registry and assert catalog↔registry timing agreement so drift fails CI. Note: Star Line's decoder (400/800 µs) and ProtoPirate encoder (250/500 µs) disagree — left as-is pending a real capture, and documented in the test.
+
 ## [0.9.4.17] - 2026-10-22
 
 ### Added
