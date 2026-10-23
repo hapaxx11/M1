@@ -10,6 +10,7 @@
 
 #include "unity.h"
 #include "subghz_proto_pirate_timing.h"
+#include "subghz_protocol_registry.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -272,8 +273,70 @@ void test_proto_table_all_have_names(void)
 void test_proto_table_short_less_than_long(void)
 {
     for (uint8_t i = 0; i < pptime_proto_table_count; i++)
-        TEST_ASSERT_LESS_THAN(pptime_proto_table[i].te_long,
-                              pptime_proto_table[i].te_short);
+    {
+        const pptime_proto_ref_t ref = pptime_proto_ref_get(i);
+        TEST_ASSERT_NOT_NULL(ref.name);
+        TEST_ASSERT_LESS_THAN(ref.te_long, ref.te_short);
+        TEST_ASSERT_GREATER_THAN(0, ref.te_delta);
+    }
+}
+
+/* ---- Registry-derived consistency ------------------------------------------
+ * The table once carried hand-copied values that drifted from the decoders
+ * (Subaru 620/1620 vs 800/1600, Chrysler 270/540 vs 300/3400, Honda V1 and
+ * Kia V1 halved, PSA doubled, CAME Atomo doubled).  These pin the resolved
+ * values to the registry (decoder) authority so the drift cannot return. */
+
+void test_proto_ref_matches_registry_timing(void)
+{
+    for (uint8_t i = 0; i < pptime_proto_table_count; i++)
+    {
+        const pptime_proto_ref_t ref = pptime_proto_ref_get(i);
+        const SubGhzBlockConst *timing =
+            &subghz_protocol_registry[pptime_proto_table[i].registry_idx].timing;
+        TEST_ASSERT_EQUAL_UINT16(timing->te_short, ref.te_short);
+        TEST_ASSERT_EQUAL_UINT16(timing->te_long, ref.te_long);
+        const uint16_t want_delta = timing->te_delta
+            ? timing->te_delta
+            : (uint16_t)(((uint32_t)timing->te_short *
+                          timing->te_tolerance_pct) / 100u);
+        TEST_ASSERT_EQUAL_UINT16(want_delta, ref.te_delta);
+    }
+}
+
+void test_proto_ref_corrected_automotive_values(void)
+{
+    struct { const char *name; uint16_t s, l, d; } expect[] = {
+        { "Chrysler V0", 300, 3400, 150 },
+        { "Subaru",      800, 1600, 200 },
+        { "Honda V1",   1000, 2000, 400 },
+        { "Kia V1",      800, 1600, 200 },
+        { "PSA AM",      250,  500, 100 },
+        { "CAME Atomo",  200,  400,  40 },
+    };
+    for (uint8_t e = 0; e < sizeof(expect) / sizeof(expect[0]); e++)
+    {
+        bool found = false;
+        for (uint8_t i = 0; i < pptime_proto_table_count; i++)
+        {
+            const pptime_proto_ref_t ref = pptime_proto_ref_get(i);
+            if (ref.name && strcmp(ref.name, expect[e].name) == 0)
+            {
+                found = true;
+                TEST_ASSERT_EQUAL_UINT16(expect[e].s, ref.te_short);
+                TEST_ASSERT_EQUAL_UINT16(expect[e].l, ref.te_long);
+                TEST_ASSERT_EQUAL_UINT16(expect[e].d, ref.te_delta);
+            }
+        }
+        TEST_ASSERT_TRUE_MESSAGE(found, expect[e].name);
+    }
+}
+
+void test_proto_ref_out_of_range(void)
+{
+    const pptime_proto_ref_t ref =
+        pptime_proto_ref_get(pptime_proto_table_count);
+    TEST_ASSERT_NULL(ref.name);
 }
 
 /* ---- End-to-end: analyze + match ----------------------------------------- */
@@ -338,6 +401,10 @@ int main(void)
     RUN_TEST(test_proto_table_non_empty);
     RUN_TEST(test_proto_table_all_have_names);
     RUN_TEST(test_proto_table_short_less_than_long);
+
+    RUN_TEST(test_proto_ref_matches_registry_timing);
+    RUN_TEST(test_proto_ref_corrected_automotive_values);
+    RUN_TEST(test_proto_ref_out_of_range);
 
     RUN_TEST(test_e2e_keeloq_match);
     RUN_TEST(test_e2e_keeloq_short_hi_fails);

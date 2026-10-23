@@ -17,6 +17,8 @@
 
 #include "subghz_remote_analyzer.h"
 
+#include <stddef.h>
+
 #define SUBGHZ_RA_JUMP_HZ 500000u /* |new - state| above this -> fast k */
 
 int16_t subghz_ra_adjust_trigger(int16_t trigger_dbm, bool increase) {
@@ -81,6 +83,11 @@ bool subghz_ra_fine_analyze(const int16_t *sweep_rssi, uint8_t count,
      * remembered frame's flag if the fine or coarse path delivers. */
     st->fine_is_am = *is_am;
     return true;
+}
+
+bool subghz_ra_refinement_signal_valid(int16_t peak_rssi_dbm,
+                                       int16_t threshold_dbm) {
+    return peak_rssi_dbm > threshold_dbm;
 }
 
 uint32_t subghz_ra_smooth(subghz_ra_state_t *st, uint32_t freq_hz) {
@@ -197,4 +204,39 @@ uint32_t subghz_ra_nearest_frequency(const uint32_t *freqs, uint8_t count,
     }
 
     return result;
+}
+
+uint8_t subghz_ra_build_refine_plan(const subghz_ra_candidate_t *cands,
+                                    uint8_t count,
+                                    uint32_t band_min_hz, uint32_t band_max_hz,
+                                    uint32_t *out_centers, uint8_t max_out) {
+    if(cands == NULL || out_centers == NULL || max_out == 0) return 0;
+
+    uint8_t n = 0;
+    for(;;) {
+        /* Strongest remaining candidate that is in-band and not within the
+         * dedup radius of an already-selected center.  Selected candidates
+         * are excluded implicitly: they coincide with an output center. */
+        int best = -1;
+        for(uint8_t i = 0; i < count; i++) {
+            if(cands[i].freq_hz < band_min_hz || cands[i].freq_hz > band_max_hz)
+                continue;
+            bool dup = false;
+            for(uint8_t j = 0; j < n; j++) {
+                uint32_t diff = (cands[i].freq_hz > out_centers[j])
+                                ? cands[i].freq_hz - out_centers[j]
+                                : out_centers[j] - cands[i].freq_hz;
+                if(diff < SUBGHZ_RA_REFINE_DEDUP_HZ) {
+                    dup = true;
+                    break;
+                }
+            }
+            if(dup) continue;
+            if(best < 0 || cands[i].rssi_dbm > cands[best].rssi_dbm)
+                best = (int)i;
+        }
+        if(best < 0 || n >= max_out) break;
+        out_centers[n++] = cands[best].freq_hz;
+    }
+    return n;
 }

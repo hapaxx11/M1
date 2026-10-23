@@ -11,8 +11,10 @@
  * (GPLv3), reworked for the SI4463 and M1's radio infrastructure:
  * there is no narrow-BW second stage — the fine sweep runs with the
  * same RX config as the coarse stage (documented M1 adaptation).
- * All detection math lives in Sub_Ghz/subghz_remote_analyzer.c; this
- * file only owns the radio sweep sequencing and the display.
+ * All detection math lives in Sub_Ghz/subghz_remote_analyzer.c and the
+ * per-point radio sweep sequence is shared in m1_sub_ghz.c
+ * (subghz_fine_sweep_points_ext); this file only owns the coarse/fine
+ * staging and the display.
  *
  * Layout (128×64, compact data display — not a selection list):
  *   Row  0–10: Header "Remote Analyzer" + separator
@@ -42,8 +44,10 @@
  * a never-started timer (channel-state guarded), so the exit path is
  * identical to the tuner's.
  *
- * The per-point settle (SI446x_Start_Rx + HAL_Delay(2) + modem status)
- * blocks the handler for ~3 ms per point, ≤ ~25 ms per fine tick.
+ * The per-point radio work (band mux → READY → Set_Frequency → Start_Rx →
+ * 2 ms settle → RSSI read) is shared with Smart ID refinement via
+ * subghz_fine_sweep_points_ext() in m1_sub_ghz.c; each point costs ~3 ms,
+ * so a coarse point is ~3 ms and a fine tick (8 points) is ≤ ~25 ms.
  * Bounded and short, no external-event dependency; an async redesign
  * would add ~200 ms of dead time per sweep point with no UX benefit.
  * Same idiom as the Spectrum/Frequency Analyzer sweeps in m1_sub_ghz.c.
@@ -152,27 +156,16 @@ static void stop_rx(void)
 }
 
 /**
- * Tune to an arbitrary frequency and read RSSI.
- * Same fast-sweep idiom as the Spectrum/Frequency Analyzer in m1_sub_ghz.c:
- * frontend mux per band, READY state before FREQ_CONTROL (VCO recalibrates
- * on the READY→RX transition), 2 ms AGC settle, clear pending interrupts.
+ * Tune to an arbitrary frequency and read RSSI via the shared fine-sweep
+ * collector: sweep index 15 is exactly the sweep center, so a 1-point
+ * "sweep" around (freq) reads at freq itself with the same radio sequence
+ * as the fine stage.
  */
 static int16_t ra_tune_and_read(uint32_t freq_hz)
 {
-    if (freq_hz >= 850000000UL)
-        SI446x_Select_Frontend(SUB_GHZ_BAND_915);
-    else if (freq_hz >= 390000000UL)
-        SI446x_Select_Frontend(SUB_GHZ_BAND_433_92);
-    else
-        SI446x_Select_Frontend(SUB_GHZ_BAND_315);
-
-    SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_READY);
-    SI446x_Set_Frequency(freq_hz);
-    SI446x_Start_Rx(0);
-    HAL_Delay(2); /* AGC settle — bounded; see file header justification */
-
-    SI446x_Get_IntStatus(0, 0, 0);
-    return subghz_read_rssi_ext();
+    int16_t rssi;
+    subghz_fine_sweep_points_ext(freq_hz, 15, 1, &rssi);
+    return rssi;
 }
 
 /*============================================================================*/
@@ -220,16 +213,13 @@ static void scan_tick(void)
     }
     else /* RA_STAGE_FINE */
     {
-        uint8_t n = 0;
-        while (s_fine_idx < SUBGHZ_RA_SWEEP_POINTS && n < RA_FINE_POINTS_PER_TICK)
-        {
-            uint32_t freq = s_fine_base - SUBGHZ_RA_SWEEP_HALF_SPAN_HZ
-                            + (uint32_t)s_fine_idx * SUBGHZ_RA_SWEEP_STEP_HZ;
-            s_sweep[s_fine_idx] = ra_tune_and_read(freq);
-            s_rssi_live = s_sweep[s_fine_idx];
-            s_fine_idx++;
-            n++;
-        }
+        uint8_t n = SUBGHZ_RA_SWEEP_POINTS - s_fine_idx;
+        if (n > RA_FINE_POINTS_PER_TICK)
+            n = RA_FINE_POINTS_PER_TICK;
+        subghz_fine_sweep_points_ext(s_fine_base, s_fine_idx, n,
+                                     &s_sweep[s_fine_idx]);
+        s_rssi_live = s_sweep[s_fine_idx + n - 1];
+        s_fine_idx += n;
 
         if (s_fine_idx >= SUBGHZ_RA_SWEEP_POINTS)
         {

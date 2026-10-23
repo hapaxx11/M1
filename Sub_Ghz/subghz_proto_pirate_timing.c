@@ -8,55 +8,74 @@
  * Timing Tuner scene.  No hardware registers, RTOS, or display state
  * are touched here — the entire file is host-testable.
  *
- * Protocol timing values are sourced from ProtoPirate's protocol registry
- * and cross-referenced with M1's subghz_protocol_registry timings.
+ * Protocol timing values are sourced from the M1 protocol registry — the
+ * decoder authority — via pptime_proto_ref_get(); nothing is copied by hand.
  */
 
 #include "subghz_proto_pirate_timing.h"
+#include "m1_sub_ghz_decenc.h"
+#include "subghz_protocol_registry.h"
 #include <string.h>
 
 /*============================================================================*/
 /* Automotive protocol reference table                                        */
 /*                                                                            */
-/* Values sourced from:                                                       */
-/*   - ProtoPirate protocol definitions (te_short / te_long / te_delta)       */
-/*   - M1 subghz_protocol_registry.c for cross-validation                    */
-/*                                                                            */
-/* Only OOK/AM protocols with clear short+long timing are listed; some entries
- * use Manchester/biphase AM encoding (Honda V1, Kia V1, PSA AM) but still
- * have distinct short+long pulse widths that the tuner can measure.         */
+/* Display names plus the registry index each row draws its timing from.      */
+/* The registry (decoder) values are authoritative; the previous hand-copied  */
+/* numbers had drifted from the real decoders (e.g. Subaru 620/1620 vs the    */
+/* actual 800/1600).                                                          */
 /*============================================================================*/
 
-const pptime_proto_ref_t pptime_proto_table[] = {
-    /* name                  te_short  te_long  te_delta */
-    { "KeeLoq",                400,     800,     100  },
-    { "Star Line",             400,     800,     100  },
-    { "Princeton",             370,    1140,     120  },
-    { "CAME",                  320,     640,      80  },
-    { "Nice FLO",              700,    1400,     140  },
-    { "Holtek HT12X",          340,    1020,     100  },
-    { "GateTX",                350,     700,      80  },
-    { "SMC5326",               300,     900,     100  },
-    { "Chrysler V0",           270,     540,      80  },  /* PWM AM650, ProtoPirate */
-    { "Subaru",                620,    1620,     160  },  /* PPM AM650, ProtoPirate */
-    { "Honda V1",              400,     800,     100  },  /* Manchester AM650, ProtoPirate */
-    { "Kia V1",                400,     800,     100  },  /* Manchester AM650, ProtoPirate */
-    { "PSA AM",                400,     800,     100  },  /* Manchester AM650, ProtoPirate */
-    { "CAME TWEE",             260,     520,      70  },
-    { "CAME Atomo",            400,     800,     100  },
-    { "Alutech AT-4N",         400,     800,     100  },
-    { "Nice FloR-S",           500,    1000,     120  },
-    { "Ansonic",               555,    1110,     130  },
-    { "iDo 117",               450,    1350,     130  },
-    { "BETT",                  340,     680,      80  },
-    { "Nero Radio",            330,     990,     100  },
-    { "Clemsa",                385,    1155,     120  },
-    { "FireFly",               300,     900,     100  },
-    { "Linear",                500,    1500,     150  },
+const pptime_proto_entry_t pptime_proto_table[] = {
+    /* name                  registry index */
+    { "KeeLoq",              KEELOQ          },
+    { "Star Line",           STAR_LINE       },
+    { "Princeton",           PRINCETON       },
+    { "CAME",                CAME_12BIT      },
+    { "Nice FLO",            NICE_FLO        },
+    { "Holtek HT12X",        HOLTEK_HT12E    },
+    { "GateTX",              GATE_TX         },
+    { "SMC5326",             SMC5326         },
+    { "Chrysler V0",         CHRYSLER_V0     },
+    { "Subaru",              SUBARU_PP       },
+    { "Honda V1",            HONDA_V1        },
+    { "Kia V1",              KIA_V1          },
+    { "PSA AM",              PSA             },
+    { "CAME TWEE",           CAME_TWEE       },
+    { "CAME Atomo",          CAME_ATOMO      },
+    { "Alutech AT-4N",       ALUTECH_AT4N    },
+    { "Nice FloR-S",         NICE_FLOR_S     },
+    { "Ansonic",             ANSONIC         },
+    { "iDo 117",             IDO             },
+    { "BETT",                BETT            },
+    { "Nero Radio",          NERO_RADIO      },
+    { "Clemsa",              CLEMSA          },
+    { "FireFly",             FIREFLY         },
+    { "Linear",              LINEAR_10BIT    },
 };
 
 const uint8_t pptime_proto_table_count =
     (uint8_t)(sizeof(pptime_proto_table) / sizeof(pptime_proto_table[0]));
+
+pptime_proto_ref_t pptime_proto_ref_get(uint8_t index)
+{
+    pptime_proto_ref_t ref = { NULL, 0, 0, 0 };
+    if (index >= pptime_proto_table_count)
+        return ref;
+
+    const pptime_proto_entry_t *entry = &pptime_proto_table[index];
+    const SubGhzBlockConst *timing =
+        &subghz_protocol_registry[entry->registry_idx].timing;
+
+    ref.name     = entry->name;
+    ref.te_short = timing->te_short;
+    ref.te_long  = timing->te_long;
+    ref.te_delta = timing->te_delta
+                   ? timing->te_delta
+                   : (uint16_t)(((uint32_t)timing->te_short *
+                                 timing->te_tolerance_pct) / 100u);
+    return ref;
+}
 
 /*============================================================================*/
 /* pptime_analyze                                                              */

@@ -4,8 +4,8 @@
  * test_rf_sweep.c
  *
  * Unit tests for rf_sweep — the ranked sweep-report aggregator that turns a
- * stream of per-detection rf_match_best() results into the RF Rosetta Signal
- * Identifier's live report.  Verifies reset, counting, dedup/merge, ranking,
+ * stream of per-detection rf_match_best() results into the Smart ID live
+ * report.  Verifies reset, counting, dedup/merge, ranking,
  * capacity eviction, and the top accessor.
  *
  * Build:
@@ -223,7 +223,7 @@ void test_decode_confirmed_added_at_100pct(void)
 
     static const char name[] = "Princeton";
     TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(&rep, 433920000UL,
-                                                 RF_BAND_433, -65, name));
+                                                 RF_BAND_433, -65, name, NULL));
     TEST_ASSERT_EQUAL_UINT8(1, rep.count);
     TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
     TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
@@ -239,8 +239,8 @@ void test_decode_confirmed_merges_on_same_name_and_band(void)
     rf_sweep_report_reset(&rep);
 
     static const char name[] = "Princeton";
-    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -65, name);
-    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -60, name);
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -65, name, NULL);
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -60, name, NULL);
 
     TEST_ASSERT_EQUAL_UINT8(1, rep.count);           /* merged, not two slots */
     TEST_ASSERT_EQUAL_UINT16(2, rep.hits[0].hits);
@@ -260,7 +260,7 @@ void test_decode_confirmed_ranks_above_fingerprint(void)
 
     /* Now add a decode-confirmed hit at 100%. */
     static const char name[] = "Princeton";
-    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -72, name);
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -72, name, NULL);
 
     /* Decode-confirmed hit must be rank 0. */
     TEST_ASSERT_EQUAL_UINT8(2, rep.count);
@@ -285,10 +285,98 @@ void test_decode_confirmed_evicts_weakest_when_full(void)
     /* A decode-confirmed hit (100%) must evict the weakest fingerprint slot. */
     static const char name[] = "Princeton";
     TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(&rep, 433920000UL,
-                                                  RF_BAND_433, -55, name));
+                                                  RF_BAND_433, -55, name, NULL));
     TEST_ASSERT_EQUAL_UINT8(RF_SWEEP_MAX_HITS, rep.count);
     TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
     TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+}
+
+void test_decode_confirmation_promotes_heuristic_and_merges_future_sightings(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+    rf_protocol_sig_t sig = make_sig("Honda Static", RF_CAT_AUTOMOTIVE,
+                                     RF_SEC_ROLLING);
+    sig.registry_index = 107;
+    static const char name[] = "Honda Static";
+    rf_fingerprint_t fp = make_fp(RF_BAND_433, 433920000UL, -65);
+    rf_match_result_t match = make_match(&sig, 85);
+
+    /* A deferred capture leaves a heuristic hit in the report over a pass. */
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp, &match));
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp, &match));
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_EQUAL_UINT16(2, rep.hits[0].hits);
+
+    /* A later successful capture upgrades that same row rather than adding one. */
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(
+        &rep, fp.freq_hz, fp.band, -60, name, &sig));
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_NULL(rep.hits[0].sig);
+    TEST_ASSERT_EQUAL_PTR(&sig, rep.hits[0].confirmed_sig);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+    TEST_ASSERT_EQUAL_UINT16(3, rep.hits[0].hits);
+
+    /* Subsequent-pass sightings still merge by the confirmed signature. */
+    fp.freq_hz = 433880000UL;
+    fp.rssi_dbm = -50;
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp, &match));
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_EQUAL_UINT16(4, rep.hits[0].hits);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+    TEST_ASSERT_EQUAL_UINT32(433880000UL, rep.hits[0].freq_hz);
+}
+
+void test_capture_confirmation_merges_existing_decode_and_heuristic(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+    rf_protocol_sig_t sig = make_sig("Capture Test", RF_CAT_AUTOMOTIVE,
+                                     RF_SEC_ROLLING);
+    static const char name[] = "Capture Test";
+    rf_fingerprint_t fp = make_fp(RF_BAND_433, 433920000UL, -70);
+
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(
+        &rep, fp.freq_hz, fp.band, -65, name, NULL));
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp,
+                                         &(rf_match_result_t){0, 80, &sig}));
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(
+        &rep, fp.freq_hz, fp.band, -60, name, &sig));
+
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_PTR(&sig, rep.hits[0].confirmed_sig);
+    TEST_ASSERT_EQUAL_UINT16(3, rep.hits[0].hits);
+}
+
+void test_direct_decode_associates_known_signature_for_later_sightings(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+    const rf_protocol_sig_t *sig = NULL;
+    for (uint16_t i = 0; i < rf_protocol_db_count(); i++) {
+        const rf_protocol_sig_t *candidate = rf_protocol_db_get(i);
+        if (strcmp(candidate->name, "Honda Static") == 0) {
+            sig = candidate;
+            break;
+        }
+    }
+    TEST_ASSERT_NOT_NULL(sig);
+
+    static const char name[] = "Honda Static";
+    rf_fingerprint_t fp = make_fp(RF_BAND_433, 433920000UL, -65);
+    rf_match_result_t match = make_match(sig, 85);
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp, &match));
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(
+        &rep, fp.freq_hz, fp.band, -60, name, NULL));
+    TEST_ASSERT_TRUE(rf_sweep_report_add(&rep, &fp, &match));
+
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_EQUAL_PTR(sig, rep.hits[0].confirmed_sig);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_UINT16(3, rep.hits[0].hits);
 }
 
 /*============================================================================*/
@@ -310,5 +398,8 @@ int main(void)
     RUN_TEST(test_decode_confirmed_merges_on_same_name_and_band);
     RUN_TEST(test_decode_confirmed_ranks_above_fingerprint);
     RUN_TEST(test_decode_confirmed_evicts_weakest_when_full);
+    RUN_TEST(test_decode_confirmation_promotes_heuristic_and_merges_future_sightings);
+    RUN_TEST(test_capture_confirmation_merges_existing_decode_and_heuristic);
+    RUN_TEST(test_direct_decode_associates_known_signature_for_later_sightings);
     return UNITY_END();
 }

@@ -3,8 +3,9 @@
 /*
  * rf_protocol_db.h
  *
- * Protocol *signature* database + security metadata for the RF Rosetta
- * identification pipeline (github.com/joelewis012/RF_Rosetta).
+ * Protocol *signature* database + security metadata for the Smart ID
+ * identification pipeline, evolved from RF Rosetta
+ * (github.com/joelewis012/RF_Rosetta).
  *
  * Unlike the M1 protocol *decoder* registry (subghz_protocol_registry.h),
  * which knows how to demodulate and decode a payload, this database describes
@@ -82,6 +83,15 @@ typedef struct {
     bool            known_vuln;     /**< Has a widely-known vulnerability */
     const char     *device_note;    /**< Brands / devices that use it */
     const char     *security_note;  /**< Plain-English security note */
+    /**
+     * Optional link to the protocol-*decoder* registry: index into
+     * subghz_protocol_registry[] (the enum in m1_sub_ghz_decenc.h), or -1
+     * when this family has no single decoder entry.  Lets the identifier
+     * hand a matched signal straight to the matching decoder.  Must be set
+     * explicitly on every row — a zero-initialised field would silently
+     * alias PRINCETON (index 0).
+     */
+    int16_t         registry_index;
 } rf_protocol_sig_t;
 
 /*============================================================================*/

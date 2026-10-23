@@ -90,8 +90,8 @@ typedef enum {
     SubGhzSceneProtoPirateBruteForce, /**< Proto Pirate PSA TEA brute-force key recovery */
     SubGhzSceneProtoPirateModels,  /**< Proto Pirate Models DB: pick car model → apply preset → Read */
     SubGhzSceneProtoPirateAnalyzer, /**< Proto Pirate Remote Analyzer: async freq/RSSI/modulation sweep */
-    SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
-    SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then RF Rosetta identifier */
+    SubGhzSceneSignalIdentifier, /**< Smart ID sweep + fingerprint identifier */
+    SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then fingerprint identifier */
     SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID + RF analysis tools) */
     SubGhzSceneProtocolFilter, /**< Protocol-group ignore filter (Weather/TPMS/Vehicles/Gates/Sensors/Pagers) */
     SubGhzScenePocsag,         /**< POCSAG pager receiver and message history */

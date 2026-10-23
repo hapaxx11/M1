@@ -127,6 +127,42 @@ void test_best_match_identifies_ble(void)
     TEST_ASSERT_EQUAL_UINT16(RF_BAND_2400, (uint16_t)(r.sig->bands & RF_BAND_2400));
 }
 
+void test_data_poor_433_fingerprints_do_not_select_specific_protocols(void)
+{
+    rf_fingerprint_t fsk = make_fp(RF_BAND_433, RF_MOD_FSK, 0, 0);
+    rf_match_result_t r = rf_match_best(&fsk);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (rolling)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+
+    rf_fingerprint_t ook = make_fp(RF_BAND_433, RF_MOD_OOK, 0, 0);
+    r = rf_match_best(&ook);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (fixed)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+}
+
+void test_capture_deadline_expiration_handles_tick_wrap(void)
+{
+    TEST_ASSERT_FALSE(rf_sigid_capture_deadline_expired(400U, 399U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(400U, 400U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(400U, 401U));
+    TEST_ASSERT_FALSE(rf_sigid_capture_deadline_expired(0x00000020U,
+                                                        0xFFFFFFF0U));
+    TEST_ASSERT_TRUE(rf_sigid_capture_deadline_expired(0x00000020U,
+                                                       0x00000020U));
+}
+
+void test_capture_queue_cleanup_discards_only_rx_and_pairs_keypad(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_DISCARD_RX,
+                      rf_sigid_capture_queue_action(true, false));
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_CONSUME_KEYPAD,
+                      rf_sigid_capture_queue_action(false, true));
+    TEST_ASSERT_EQUAL(RF_CAPTURE_QUEUE_PRESERVE_EVENT,
+                      rf_sigid_capture_queue_action(false, false));
+}
+
 void test_best_match_null_fp(void)
 {
     rf_match_result_t r = rf_match_best(NULL);
@@ -144,6 +180,112 @@ void test_best_match_no_confident_result(void)
     TEST_ASSERT_NULL(r.sig);
 }
 
+/*============================================================================*/
+/* Per-protocol automotive signatures beat the generic catch-all rows          */
+/*============================================================================*/
+
+void test_best_match_subaru_not_generic(void)
+{
+    /* Subaru keyfob: te_short 800 us OOK at 433 MHz, 64-bit frame.  Before
+     * the specific rows this fell into the garage/weather windows. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_OOK, 800, 64);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Subaru", r.sig->name);
+    TEST_ASSERT_TRUE(r.sig->registry_index >= 0);
+}
+
+void test_best_match_ford_v1_not_tpms(void)
+{
+    /* Ford V1 keyfob: te_short 65 us FSK at 433 MHz, 136-bit frame — sits
+     * squarely in the generic TPMS window, so the specific row must win. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_FSK, 65, 136);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Ford V1", r.sig->name);
+    TEST_ASSERT_TRUE(r.sig->registry_index >= 0);
+}
+
+void test_best_match_generic_fob_still_catches_unknown(void)
+{
+    /* A 350 us OOK 32-bit fixed fob fits no specific automotive row
+     * (their bit floors are all >= 53) and must still land on the generic
+     * fixed-fob catch-all. */
+    rf_fingerprint_t f = make_fp(RF_BAND_433, RF_MOD_OOK, 350, 32);
+    rf_match_result_t r = rf_match_best(&f);
+    TEST_ASSERT_TRUE(r.index >= 0);
+    TEST_ASSERT_NOT_NULL(r.sig);
+    TEST_ASSERT_EQUAL_STRING("Car Key Fob (fixed)", r.sig->name);
+    TEST_ASSERT_EQUAL_INT(-1, r.sig->registry_index);
+}
+
+/*============================================================================*/
+/* RAW-capture confirmation policy                                             */
+/*============================================================================*/
+
+void test_capture_decide_now_for_linked_signature(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 85, 0, 0, 1600));
+}
+
+void test_capture_decide_now_even_at_low_confidence(void)
+{
+    /* The reporting floor is enforced by rf_match_best(); the capture policy
+     * deliberately imposes no higher bar — the real decoder is the arbiter. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 1, 0, 0, 1600));
+}
+
+void test_capture_decide_never_without_decoder_link(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(-1, 100, 0, 0, 1600));
+}
+
+void test_capture_decide_never_without_evidence(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(107, 0, 0, 0, 1600));
+}
+
+void test_capture_decide_never_when_already_attempted(void)
+{
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NEVER,
+        rf_sigid_capture_decide(107, 85, 1, 0, 1600));
+}
+
+void test_capture_decide_defer_when_budget_exceeded(void)
+{
+    /* 1300 spent + 400 cost > 1600 budget -> defer. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_DEFER,
+        rf_sigid_capture_decide(107, 85, 0, 1300, 1600));
+    /* Exactly at the limit fits. */
+    TEST_ASSERT_EQUAL(RF_CAPTURE_NOW,
+        rf_sigid_capture_decide(107, 85, 0, 1200, 1600));
+}
+
+void test_capture_attempted_lookup(void)
+{
+    rf_protocol_sig_t sig_a = make_sig(RF_MOD_OOK, RF_BAND_433, 0, 0, 0, 0);
+    rf_protocol_sig_t sig_b = make_sig(RF_MOD_OOK, RF_BAND_315, 0, 0, 0, 0);
+    rf_capture_attempt_t list[2] = {
+        { &sig_a, RF_BAND_433 },
+        { &sig_b, RF_BAND_315 },
+    };
+
+    TEST_ASSERT_TRUE(rf_capture_attempted(list, 2, &sig_a, RF_BAND_433));
+    /* Same signature on a different band is a different attempt. */
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, &sig_a, RF_BAND_315));
+    /* Same band, different signature. */
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, &sig_b, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 0, &sig_a, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(NULL, 2, &sig_a, RF_BAND_433));
+    TEST_ASSERT_FALSE(rf_capture_attempted(list, 2, NULL, RF_BAND_433));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -158,8 +300,23 @@ int main(void)
 
     RUN_TEST(test_best_match_identifies_car_fob);
     RUN_TEST(test_best_match_identifies_ble);
+    RUN_TEST(test_data_poor_433_fingerprints_do_not_select_specific_protocols);
+    RUN_TEST(test_capture_deadline_expiration_handles_tick_wrap);
+    RUN_TEST(test_capture_queue_cleanup_discards_only_rx_and_pairs_keypad);
     RUN_TEST(test_best_match_null_fp);
     RUN_TEST(test_best_match_no_confident_result);
+
+    RUN_TEST(test_best_match_subaru_not_generic);
+    RUN_TEST(test_best_match_ford_v1_not_tpms);
+    RUN_TEST(test_best_match_generic_fob_still_catches_unknown);
+
+    RUN_TEST(test_capture_decide_now_for_linked_signature);
+    RUN_TEST(test_capture_decide_now_even_at_low_confidence);
+    RUN_TEST(test_capture_decide_never_without_decoder_link);
+    RUN_TEST(test_capture_decide_never_without_evidence);
+    RUN_TEST(test_capture_decide_never_when_already_attempted);
+    RUN_TEST(test_capture_decide_defer_when_budget_exceeded);
+    RUN_TEST(test_capture_attempted_lookup);
 
     return UNITY_END();
 }

@@ -8,7 +8,7 @@
  * broad CATEGORIES (e.g. "Vehicles", "Gates") via a short On / Ignored list.
  * Every protocol that belongs to an ignored group is skipped by all Sub-GHz
  * reading features (Read, Read Raw, Decode Raw, Playlist decode, and the RF
- * Rosetta Signal ID / Smart ID decode stage) via subghz_ignore_is_ignored().
+ * Smart ID decode stage) via subghz_ignore_is_ignored().
  *
  * Navigation:
  *   UP/DOWN         = select group

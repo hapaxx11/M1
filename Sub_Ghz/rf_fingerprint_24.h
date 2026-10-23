@@ -3,10 +3,10 @@
 /*
  * rf_fingerprint_24.h
  *
- * ESP32-C6 2.4 GHz fingerprint backend for the RF Rosetta identification
- * pipeline (github.com/joelewis012/RF_Rosetta).
+ * ESP32-C6 2.4 GHz fingerprint backend for the Smart ID identification
+ * pipeline — evolved from RF Rosetta (github.com/joelewis012/RF_Rosetta).
  *
- * The RF Rosetta pipeline is deliberately sensor-agnostic: rf_fingerprint_t is
+ * The Smart ID pipeline is deliberately sensor-agnostic: rf_fingerprint_t is
  * a shared measurement vector and rf_match scores it against a single database.
  * Until now the only *extractor* was the Sub-GHz one
  * (rf_fingerprint_from_subghz_raw()); the ESP32-C6 2.4 GHz domains (BLE

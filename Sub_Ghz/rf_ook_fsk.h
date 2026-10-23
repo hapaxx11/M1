@@ -3,8 +3,8 @@
 /*
  * rf_ook_fsk.h
  *
- * Lightweight OOK-vs-FSK modulation classifier for the RF Rosetta Signal
- * Identifier.  During the sweep the SI4463 delegate cannot afford a full RAW
+ * Lightweight OOK-vs-FSK modulation classifier for the Smart ID
+ * identifier.  During the sweep the SI4463 delegate cannot afford a full RAW
  * timing capture on every candidate, but it *can* cheaply read a short burst
  * of RSSI samples while dwelling on an active frequency.  This module turns
  * that RSSI burst into a modulation-family guess:

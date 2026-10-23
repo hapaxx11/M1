@@ -17,6 +17,7 @@
 #include "unity.h"
 #include "bit_util.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_protocol_registry.h"
 #include "subghz_proto_pirate.h"
 #include "subghz_kia_v6_encoder.h"
 #include "subghz_keeloq.h"
@@ -33,6 +34,54 @@ uint16_t m1_kia_v5_mixer_decode(uint32_t encrypted, uint64_t mfkey);
 uint8_t subghz_decode_renault_v0(uint16_t protocol_index, uint16_t pulse_count);
 /* Real Chrysler V0 decoder (linked into this target). */
 uint8_t subghz_decode_chrysler_v0(uint16_t protocol_index, uint16_t pulse_count);
+
+/* ===================================================================
+ * Catalog <-> registry consistency: the catalog's te values are
+ * informational only (only .name is read by the dispatcher), but stale
+ * copies mislead readers — keep them equal to the registry (decoder
+ * authority) for every name-matched entry.
+ * =================================================================== */
+
+void test_catalog_timings_match_registry(void)
+{
+    /* Known cross-source disagreement, pre-dating the ProtoPirate port:
+     * the Flipper-derived Star Line decoder uses 400/800 us while the
+     * ProtoPirate-ported encoder (and upstream) use 250/500 us.  Resolving
+     * which is right needs a real capture — exclude it here rather than
+     * silently change either side. */
+    const char *skip[] = { "Star Line" };
+    for (uint8_t i = 0; i < subghz_proto_pirate_catalog_count; i++)
+    {
+        const SubGhzProtoPirateDef *def = &subghz_proto_pirate_catalog[i];
+        bool skipped = false;
+        for (uint8_t s = 0; s < sizeof(skip) / sizeof(skip[0]); s++)
+            if (strcmp(skip[s], def->name) == 0)
+                skipped = true;
+        if (skipped)
+            continue;
+        bool found = false;
+        for (uint16_t r = 0; r < subghz_protocol_registry_count; r++)
+        {
+            if (strcmp(subghz_protocol_registry[r].name, def->name) == 0)
+            {
+                found = true;
+                TEST_ASSERT_EQUAL_UINT16(
+                    subghz_protocol_registry[r].timing.te_short,
+                    def->te_short);
+                /* Manchester entries carry half-bit timings in the catalog
+                 * (te_short == te_long); the registry's te_long is the full
+                 * bit cell.  Only PWM (non-Manchester) entries share the
+                 * te_long semantics. */
+                if (!def->manchester)
+                    TEST_ASSERT_EQUAL_UINT16(
+                        subghz_protocol_registry[r].timing.te_long,
+                        def->te_long);
+                break;
+            }
+        }
+        TEST_ASSERT_TRUE_MESSAGE(found, def->name);
+    }
+}
 
 /* Expand encoder pairs to the merged pulse_times view the RX decoders see
  * (even index = HIGH). */
@@ -1602,6 +1651,7 @@ int main(void)
     RUN_TEST(test_renault_v0_encode_rebuild_round_trip);
     RUN_TEST(test_renault_v0_encode_upstream_timings);
     RUN_TEST(test_chrysler_v0_rebuild_capture_verbatim_round_trip);
+    RUN_TEST(test_catalog_timings_match_registry);
     RUN_TEST(test_kia_v1_encode_nonzero);
     RUN_TEST(test_kia_v2_encode_nonzero);
     RUN_TEST(test_renault_v0_encode_nonzero);

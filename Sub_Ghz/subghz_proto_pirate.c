@@ -42,9 +42,9 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
     [SubGhzProtoPirate_KiaV1]       = { SubGhzProtoPirate_KiaV1,       "Kia V1",        800, 1600, 57, false },
     [SubGhzProtoPirate_KiaV2]       = { SubGhzProtoPirate_KiaV2,       "Kia V2",        500, 1000, 53, false },
     [SubGhzProtoPirate_KiaV7]       = { SubGhzProtoPirate_KiaV7,       "Kia V7",        250,  500, 64, true  },
-    [SubGhzProtoPirate_RenaultV0]   = { SubGhzProtoPirate_RenaultV0,   "Renault V0",    250,  500, 64, false },
+    [SubGhzProtoPirate_RenaultV0]   = { SubGhzProtoPirate_RenaultV0,   "Renault V0",    125,  250, 82, false },
     [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   300, 3400, 80, false },
-    [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       250,  500, 64, false },
+    [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       200,  400, 64, false },
     [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        800, 1600, 64, false },
     [SubGhzProtoPirate_StarLine]    = { SubGhzProtoPirate_StarLine,    "Star Line",     250,  500, 64, false },
 

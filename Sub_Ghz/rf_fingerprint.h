@@ -4,10 +4,11 @@
  * rf_fingerprint.h
  *
  * Sensor-agnostic RF signal "fingerprint" — the common physical-characteristic
- * descriptor at the heart of the RF Rosetta identification pipeline
- * (github.com/joelewis012/RF_Rosetta).
+ * descriptor at the heart of the Smart ID identification pipeline, evolved from
+ * RF Rosetta (github.com/joelewis012/RF_Rosetta).
  *
- * RF Rosetta's value is that it identifies a signal not by decoding its
+ * Smart ID's approach (which originates with RF Rosetta) identifies a signal
+ * not by decoding its
  * payload but by measuring its *physical characteristics* — frequency,
  * modulation family, bandwidth/deviation, pulse timing, repetition count,
  * RSSI/noise/SNR — and matching that measurement vector against a database of

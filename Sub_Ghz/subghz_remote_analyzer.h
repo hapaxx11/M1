@@ -74,6 +74,10 @@ bool subghz_ra_fine_analyze(const int16_t *sweep_rssi, uint8_t count,
                             uint32_t base_freq_hz, subghz_ra_state_t *st,
                             bool *is_am);
 
+/** A fine-sweep peak is usable only when it exceeds the detection threshold. */
+bool subghz_ra_refinement_signal_valid(int16_t peak_rssi_dbm,
+                                      int16_t threshold_dbm);
+
 /** Adaptive exponential smoother (k = 0.9 on > 500 kHz jumps, else 0.03);
  * the first sample after a reset initializes the state directly (upstream
  * converges from 0, which undershoots early readings — fixed here). */
@@ -91,5 +95,43 @@ subghz_ra_frame_t subghz_ra_deliver(subghz_ra_state_t *st, int16_t trigger_dbm);
  * are skipped).  Returns 0 when the list holds no usable frequency. */
 uint32_t subghz_ra_nearest_frequency(const uint32_t *freqs, uint8_t count,
                                      uint32_t input_hz);
+
+/*============================================================================*/
+/* Smart ID refinement plan                                                   */
+/*============================================================================*/
+
+/**
+ * Refinement dedup radius.  Two candidates closer than this have fine sweeps
+ * (±300 kHz) that overlap enough that refining both is redundant — only the
+ * stronger one is refined.
+ */
+#define SUBGHZ_RA_REFINE_DEDUP_HZ  500000u
+
+/** One pre-scan candidate: a frequency that showed activity, plus its RSSI. */
+typedef struct {
+    uint32_t freq_hz;
+    int16_t  rssi_dbm;
+} subghz_ra_candidate_t;
+
+/**
+ * Pick which pre-scan candidates are worth a fine-sweep refinement, and in
+ * which order.
+ *
+ * Selection is strongest-first (highest RSSI); a candidate is skipped when it
+ * is out of [band_min_hz, band_max_hz] or within SUBGHZ_RA_REFINE_DEDUP_HZ of
+ * an already-selected center.  RSSI ties keep the earlier candidate (strict
+ * '>' comparison, matching subghz_ra_coarse_feed()).
+ *
+ * @param[in]  cands      Candidate array (NULL yields 0).
+ * @param[in]  count      Number of candidates.
+ * @param[in]  band_min_hz / band_max_hz  Inclusive operating limits.
+ * @param[out] out_centers  Selected centers, strongest first.
+ * @param[in]  max_out    Capacity of @p out_centers.
+ * @return Number of centers written (<= max_out).
+ */
+uint8_t subghz_ra_build_refine_plan(const subghz_ra_candidate_t *cands,
+                                    uint8_t count,
+                                    uint32_t band_min_hz, uint32_t band_max_hz,
+                                    uint32_t *out_centers, uint8_t max_out);
 
 #endif /* SUBGHZ_REMOTE_ANALYZER_H */

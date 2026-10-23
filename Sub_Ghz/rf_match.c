@@ -93,6 +93,21 @@ uint8_t rf_match_score(const rf_fingerprint_t  *fp,
     return (uint8_t)conf;
 }
 
+bool rf_sigid_capture_deadline_expired(uint32_t deadline_ms, uint32_t now_ms)
+{
+    return (int32_t)(deadline_ms - now_ms) <= 0;
+}
+
+rf_capture_queue_action_t rf_sigid_capture_queue_action(bool is_rx_event,
+                                                        bool is_keypad_event)
+{
+    if (is_rx_event)
+        return RF_CAPTURE_QUEUE_DISCARD_RX;
+    if (is_keypad_event)
+        return RF_CAPTURE_QUEUE_CONSUME_KEYPAD;
+    return RF_CAPTURE_QUEUE_PRESERVE_EVENT;
+}
+
 rf_match_result_t rf_match_best(const rf_fingerprint_t *fp)
 {
     rf_match_result_t best;
@@ -107,6 +122,10 @@ rf_match_result_t rf_match_best(const rf_fingerprint_t *fp)
     for (uint16_t i = 0; i < n; i++)
     {
         const rf_protocol_sig_t *sig = rf_protocol_db_get(i);
+        /* Band and modulation alone cannot distinguish a decoder-linked
+         * protocol; leave those sparse fingerprints to generic rows. */
+        if (sig->registry_index >= 0 && fp->te_us == 0U && fp->est_bits == 0U)
+            continue;
         uint8_t s = rf_match_score(fp, sig);
         if (s > best.confidence)
         {
@@ -124,4 +143,34 @@ rf_match_result_t rf_match_best(const rf_fingerprint_t *fp)
     }
 
     return best;
+}
+
+rf_capture_decision_t rf_sigid_capture_decide(int16_t registry_index,
+                                              uint8_t confidence,
+                                              uint8_t attempts_made,
+                                              uint32_t spent_ms,
+                                              uint32_t budget_ms)
+{
+    if (registry_index < 0)
+        return RF_CAPTURE_NEVER;    /* no decoder to confirm with */
+    if (attempts_made > 0U)
+        return RF_CAPTURE_NEVER;    /* once per signature+band */
+    if (confidence == 0U)
+        return RF_CAPTURE_NEVER;    /* no match evidence at all */
+    if (spent_ms + RF_SIGID_CAPTURE_COST_MS > budget_ms)
+        return RF_CAPTURE_DEFER;    /* per-pass time budget exhausted */
+    return RF_CAPTURE_NOW;
+}
+
+bool rf_capture_attempted(const rf_capture_attempt_t *list, uint8_t count,
+                          const rf_protocol_sig_t *sig, uint16_t band)
+{
+    if (list == NULL || sig == NULL)
+        return false;
+    for (uint8_t i = 0; i < count; i++)
+    {
+        if (list[i].sig == sig && list[i].band == band)
+            return true;
+    }
+    return false;
 }
