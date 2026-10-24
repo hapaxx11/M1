@@ -46,6 +46,7 @@
 #include "wifi_multi_target.h"
 #include "wifi_at_scan.h"
 #include "wifi_scan_fail_msg.h"
+#include "wifi_scan_wait.h"
 #include "wifi_ntp_parse.h"
 #include "wifi_hotspot_config.h"
 #include "m1_esp32_caps.h"
@@ -236,6 +237,47 @@ static uint16_t wifi_do_scan_at(void)
 }
 
 
+/* brain-CD3 async scan job.  The worker task keeps touching the job (ctx,
+ * entries buffer, done-semaphore) until it finishes, so the job must NEVER
+ * be freed before the worker has signalled completion — freeing it after a
+ * drain-timeout while the worker is still blocked (its transaction-mutex
+ * wait is not interruptible) is a use-after-free.  A job whose worker
+ * outlives the cancel+drain window is orphaned onto this list instead, and
+ * reaped on the next scan once the worker has signalled. */
+typedef struct wifi_scan_job_s {
+	m1_esp32_rpc_wifi_scan_async_t ctx;
+	m1_esp32_rpc_wifi_scan_result_t *entries;
+	struct wifi_scan_job_s *next;
+} wifi_scan_job_t;
+
+static wifi_scan_job_t *s_orphan_scan_jobs;
+
+/* Free orphaned jobs whose workers have since signalled completion.  The
+ * worker ends with xSemaphoreGive + vTaskDelete and never touches the job
+ * after the give, so polling true means every job resource is dead. */
+static void wifi_scan_job_reap_orphans(void)
+{
+	wifi_scan_job_t **pp = &s_orphan_scan_jobs;
+	while (*pp) {
+		wifi_scan_job_t *job = *pp;
+		if (m1_esp32_rpc_wifi_scan_async_poll(&job->ctx)) {
+			m1_esp32_rpc_wifi_scan_async_cleanup(&job->ctx);
+			free(job->entries);
+			*pp = job->next;
+			free(job);
+		} else {
+			pp = &job->next;
+		}
+	}
+}
+
+static void wifi_scan_job_orphan(wifi_scan_job_t *job)
+{
+	job->next = s_orphan_scan_jobs;
+	s_orphan_scan_jobs = job;
+}
+
+
 static uint16_t wifi_do_scan(void)
 {
 	m1_resp_t resp;
@@ -263,46 +305,64 @@ static uint16_t wifi_do_scan(void)
 	 * the calling task is not blocked for the full 10 s scan window. */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
 		wifi_ap_list_free();
+		wifi_scan_job_reap_orphans();
 
-		m1_esp32_rpc_wifi_scan_result_t *rpc_entries =
-		    (m1_esp32_rpc_wifi_scan_result_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_wifi_scan_result_t));
-		if (!rpc_entries)
+		wifi_scan_job_t *job = (wifi_scan_job_t *)malloc(sizeof(wifi_scan_job_t));
+		if (!job)
 			return 0u;
-
-		m1_esp32_rpc_wifi_scan_async_t scan_ctx;
-		if (!m1_esp32_rpc_wifi_scan_async_start(&scan_ctx, rpc_entries, WIFI_AP_MAX)) {
-			free(rpc_entries);
+		job->entries =
+		    (m1_esp32_rpc_wifi_scan_result_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_wifi_scan_result_t));
+		if (!job->entries) {
+			free(job);
 			return 0u;
 		}
+		if (!m1_esp32_rpc_wifi_scan_async_start(&job->ctx, job->entries, WIFI_AP_MAX)) {
+			free(job->entries);
+			free(job);
+			return 0u;
+		}
+
 		/* Bound the wait: if the worker dies without signalling (e.g. stack
 		 * overflow), an unbounded poll would hang the UI task forever.  Allow
 		 * the full scan timeout plus transport margin, then cancel and drain
-		 * briefly so the semaphore is never deleted out from under a live
-		 * worker (its own transport timeout bounds how long it can lag). */
-		{
-			const uint32_t scan_bound_ms =
-			    ((uint32_t)M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S + 10u) * 1000u;
-			uint32_t waited_ms = 0u;
-			bool done = false;
-			while (!(done = m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx))) {
+		 * briefly. */
+		const uint32_t scan_bound_ms =
+		    ((uint32_t)M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S + 10u) * 1000u;
+		uint32_t waited_ms = 0u;
+		bool done_in_bound = false;
+		bool done_in_drain = false;
+		while (!(done_in_bound = m1_esp32_rpc_wifi_scan_async_poll(&job->ctx))) {
+			vTaskDelay(pdMS_TO_TICKS(50));
+			waited_ms += 50u;
+			if (waited_ms >= scan_bound_ms)
+				break;
+		}
+		if (!done_in_bound) {
+			m1_esp32_rpc_wifi_scan_async_cancel(&job->ctx);
+			uint32_t drain_ms = 0u;
+			while (!(done_in_drain = m1_esp32_rpc_wifi_scan_async_poll(&job->ctx)) &&
+			       drain_ms < 2000u) {
 				vTaskDelay(pdMS_TO_TICKS(50));
-				waited_ms += 50u;
-				if (waited_ms >= scan_bound_ms) {
-					m1_esp32_rpc_wifi_scan_async_cancel(&scan_ctx);
-					uint32_t drain_ms = 0u;
-					while (!m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx) &&
-					       drain_ms < 2000u) {
-						vTaskDelay(pdMS_TO_TICKS(50));
-						drain_ms += 50u;
-					}
-					break;
-				}
+				drain_ms += 50u;
 			}
 		}
 
-		uint8_t rpc_count = scan_ctx.count;
-		m1_esp32_rpc_status_t rpc_st = scan_ctx.status;
-		m1_esp32_rpc_wifi_scan_async_cleanup(&scan_ctx);
+		if (wifi_scan_wait_decide(done_in_bound, done_in_drain) ==
+		    WIFI_SCAN_WAIT_ORPHANED) {
+			/* The worker outlived the cancel+drain window: it may still be
+			 * blocked in its (uninterruptible) transaction-mutex wait and
+			 * will touch the job when it resumes.  Keep every resource alive
+			 * and orphan the job; it is reaped on the next scan once the
+			 * worker signals. */
+			wifi_scan_job_orphan(job);
+			return 0u;
+		}
+
+		uint8_t rpc_count = job->ctx.count;
+		m1_esp32_rpc_status_t rpc_st = job->ctx.status;
+		m1_esp32_rpc_wifi_scan_result_t *rpc_entries = job->entries;
+		m1_esp32_rpc_wifi_scan_async_cleanup(&job->ctx);
+		free(job);
 
 		if (rpc_st != M1_ESP32_RPC_OK || rpc_count == 0u) {
 			free(rpc_entries);

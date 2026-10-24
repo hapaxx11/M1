@@ -818,6 +818,26 @@ endif()
 add_test(NAME esp32_link_lock_yield COMMAND test_esp32_link_lock_yield)
 
 # ------------------------------------------------------------------
+# Module under test: wifi_scan_wait (brain-CD3 async scan wait decision)
+# Pure header-only logic (wifi_scan_wait_decide) plus source invariants
+# for the orphaned-job use-after-free guard in wifi_do_scan().
+# ------------------------------------------------------------------
+add_executable(test_wifi_scan_wait
+    test_wifi_scan_wait.c
+)
+target_compile_definitions(test_wifi_scan_wait PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_include_directories(test_wifi_scan_wait PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_scan_wait PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_scan_wait PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_scan_wait COMMAND test_wifi_scan_wait)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —
