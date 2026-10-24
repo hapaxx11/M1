@@ -3,7 +3,7 @@
 /*
  * test_esp32_link_lock_yield.c
  *
- * Source-level regression checks for two ESP32 transport regressions:
+ * Source-level regression checks for ESP32 transport regressions:
  *
  *   1. CD3 brain (M1_RPC) fully broken — "AP scan failed" on every WiFi
  *      scan: PR #809 introduced esp32_m1link_spi_mutex_init() but never
@@ -19,7 +19,19 @@
  *      task and the watchdog feeder.  Those waits must yield (vTaskDelay)
  *      once the scheduler is running.
  *
- * Both fault sites call concrete HAL/FreeRTOS/hardware entry points with no
+ *   3. Bluetooth Direct probe starving the supervised RPC task: even with
+ *      yielding waits, a multi-second probe iteration stops m1_rpc_task's
+ *      watchdog heartbeat.  rpc_brain_relay_poll() must suspend
+ *      M1_REPORT_ID_RPC_TASK supervision around the probe (mirroring the
+ *      ESP32 flash-op pattern) and the task must reset its heartbeat
+ *      baseline after a probe iteration.
+ *
+ *   4. Scan-job use-after-free guard: the bounded UI wait in
+ *      wifi_do_scan() must orphan (not free) a job whose worker outlives
+ *      the cancel+drain window.  Decision logic is pure-tested in
+ *      test_wifi_scan_wait.c.
+ *
+ * The fault sites call concrete HAL/FreeRTOS/hardware entry points with no
  * injectable seam, so (as in test_esp32_probe_ordering.c) the checks verify
  * the source-code invariants of the fixes directly.
  */
@@ -253,15 +265,68 @@ void test_wifi_do_scan_poll_loop_is_bounded(void)
     char *content = read_file("m1_csrc/m1_wifi.c");
 
     /* An unbounded async_poll loop hangs the UI forever if the scan worker
-     * dies without signalling; the loop must be able to cancel and bail. */
+     * dies without signalling; the loop must be able to cancel and bail.
+     * The async context now lives in the heap-allocated scan job. */
     const char *poll   = strstr(content,
-                                "m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx)");
+                                "m1_esp32_rpc_wifi_scan_async_poll(&job->ctx)");
     const char *cancel = poll ? strstr(poll,
-                                "m1_esp32_rpc_wifi_scan_async_cancel(&scan_ctx)")
+                                "m1_esp32_rpc_wifi_scan_async_cancel(&job->ctx)")
                               : NULL;
     TEST_ASSERT_NOT_NULL(poll);
     TEST_ASSERT_NOT_NULL_MESSAGE(cancel,
         "wifi_do_scan() RPC poll loop must have a bounded cancel path");
+
+    free(content);
+}
+
+/* ----- Watchdog: RPC-task supervision suspended around the boot probe ------ */
+
+void test_relay_poll_suspends_supervision_around_probe(void)
+{
+    char *content = read_file("m1_csrc/m1_rpc.c");
+
+    /* rpc_brain_relay_poll() runs on the watchdog-supervised m1_rpc_task.
+     * Its ESP32 bring-up / capability probe can block for many seconds
+     * (AT-fallback retry loop), so supervision must be suspended BEFORE the
+     * probe and resumed on every path out of the probe section — mirroring
+     * the deferred ESP32 flash-op pattern. */
+    char *body = slice_between(content,
+        "static bool rpc_brain_relay_poll(void)",
+        "void m1_rpc_task(void *param)");
+
+    const char *suspend = strstr(body,
+        "m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK)");
+    const char *probe   = strstr(body, "m1_esp32_init();");
+    TEST_ASSERT_NOT_NULL_MESSAGE(suspend,
+        "relay poll must suspend RPC-task supervision around the probe");
+    TEST_ASSERT_NOT_NULL(probe);
+    TEST_ASSERT_TRUE_MESSAGE(suspend < probe,
+        "supervision suspend must precede the ESP32 probe");
+
+    /* Every exit from the probe section resumes supervision. */
+    TEST_ASSERT_GREATER_THAN_size_t_MESSAGE(2u,
+        count_occurrences(body, "m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK)"),
+        "every probe exit path must resume supervision");
+
+    free(body);
+    free(content);
+}
+
+void test_rpc_task_resets_heartbeat_baseline_after_probe(void)
+{
+    char *content = read_file("m1_csrc/m1_rpc.c");
+
+    /* After a probe iteration the task must reset rpc_wdt_last, otherwise
+     * the probe seconds are reported as loop run-time and trip the
+     * maximum-report-percent check on the next heartbeat. */
+    const char *call = strstr(content, "if (rpc_brain_relay_poll())");
+    TEST_ASSERT_NOT_NULL_MESSAGE(call,
+        "m1_rpc_task must act on rpc_brain_relay_poll()'s probe flag");
+    const char *reset = strstr(call, "rpc_wdt_last = xTaskGetTickCount();");
+    TEST_ASSERT_NOT_NULL_MESSAGE(reset,
+        "heartbeat baseline must be reset after a probe iteration");
+    TEST_ASSERT_TRUE_MESSAGE(reset - call < 400,
+        "baseline reset must sit inside the probe-flag block");
 
     free(content);
 }
@@ -276,5 +341,7 @@ int main(void)
     RUN_TEST(test_esp32_init_deinit_use_bounded_transaction_lock);
     RUN_TEST(test_wifi_scan_worker_stack_has_margin);
     RUN_TEST(test_wifi_do_scan_poll_loop_is_bounded);
+    RUN_TEST(test_relay_poll_suspends_supervision_around_probe);
+    RUN_TEST(test_rpc_task_resets_heartbeat_baseline_after_probe);
     return UNITY_END();
 }
