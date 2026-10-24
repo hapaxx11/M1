@@ -160,7 +160,22 @@ uint8_t subghz_decode_kia_v6(uint16_t protocol_index, uint16_t pulse_count)
             const uint8_t cells_in_pulse = kia_short(duration) ? 1u :
                                            (kia_long(duration) ? 2u : 0u);
             if (cells_in_pulse == 0u) {
-                valid_stream = false;
+                /* The live packetizer appends the closing inter-packet gap
+                 * to the buffer before decode, so a real capture always
+                 * ends in an unclassifiable duration; treat it as
+                 * end-of-frame once a full frame's worth of cells is
+                 * collected instead of invalidating the stream.  A final
+                 * low data pulse additionally merges into the gap, so the
+                 * trailing cell(s) may never arrive — pad them with the
+                 * merged pulse's level; the fx/AES/CRC validation in
+                 * m1_kia_v6_parse() rejects a wrong guess. */
+                if (data_count >= KIA_DATA_BITS_AFTER_SYNC * 2u - 2u) {
+                    for (uint8_t pad = 0;
+                         pad < 2u && data_count < sizeof(data_cells); pad++)
+                        data_cells[data_count++] = (uint8_t)level;
+                } else {
+                    valid_stream = false;
+                }
                 break;
             }
             for (uint8_t cell = 0; cell < cells_in_pulse; cell++) {

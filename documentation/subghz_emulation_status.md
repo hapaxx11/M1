@@ -291,11 +291,20 @@ crypto M1 fully implements:
   auto-increments per TX (reference behaviour).  AUT64 key auto-detection
   trial-decrypts the original capture per key when the file lacks `KeyIdx:`.
 
-Note (decoder robustness, pre-existing): the Kia V6 and VAG decoders read
-fixed pulse windows; uploads whose final data pulse merges with the trailing
-gap into an unclassifiable duration only decode when the packetizer closes
-the packet at the gap threshold — real captures behave this way, and
-synthetic test feeds must exclude the trailing separator.
+Note (decoder robustness): the Kia V6 and VAG decoders read fixed pulse
+windows, and the live packetizer appends the closing inter-packet gap to
+the pulse buffer before decode (`subghz_pulse_handler()` in
+`Sub_Ghz/m1_sub_ghz_decenc.c`), so a real capture always ends in an
+unclassifiable duration — merged with the final data pulse when the frame
+ends low (always the case for VAG: every valid dispatch byte is even, so
+the last wire bit is 1).  Both decoders therefore treat an unclassifiable
+trailing duration as end-of-frame once the window is full, padding the
+merged-away trailing cell(s) with the merged pulse's level (VAG pads up to
+2 cells; Kia V6 pads up to 2, with wrong guesses rejected by the
+fx/AES/CRC validation in `m1_kia_v6_parse()`).  Synthetic test feeds no
+longer need to exclude the trailing separator — the regression suites
+exercise both the merged and separate trailing-gap shapes
+(`tests/test_kia_v6_decode.c`, `tests/test_vag_decode.c`).
 
 Build-injected data is likewise protocol-specific:
 
