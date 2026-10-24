@@ -7,7 +7,7 @@
  * See queens_logic.h for the rules and API.  No HAL/RTOS/u8g2 dependencies:
  * this unit is compiled both into the firmware and into the host test suite.
  *
- * M1 Project
+ * M1 Project -- Hapax fork
  */
 
 #include <string.h>
