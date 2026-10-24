@@ -14,7 +14,7 @@
  * the persistent high-score table.  It is host-testable (no HAL/RTOS/u8g2
  * includes).
  *
- * M1 Project
+ * M1 Project -- Hapax fork
  */
 
 #ifndef QUEENS_LOGIC_H_
