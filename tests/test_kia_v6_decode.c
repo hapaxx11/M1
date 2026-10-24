@@ -78,7 +78,8 @@ static bool append_pulse(bool level, uint16_t duration, uint16_t *count,
     return true;
 }
 
-static uint16_t build_waveform(const uint8_t bits[M1_KIA_V6_FRAME_BITS])
+static uint16_t build_waveform(const uint8_t bits[M1_KIA_V6_FRAME_BITS],
+                              bool *last_level_out)
 {
     uint16_t count = 0;
     bool have_level = false, last_level = false;
@@ -96,6 +97,8 @@ static uint16_t build_waveform(const uint8_t bits[M1_KIA_V6_FRAME_BITS])
         TEST_ASSERT_TRUE(append_pulse(first, 200u, &count, &have_level, &last_level));
         TEST_ASSERT_TRUE(append_pulse(!first, 200u, &count, &have_level, &last_level));
     }
+    if (last_level_out)
+        *last_level_out = last_level;
     return count;
 }
 
@@ -138,7 +141,7 @@ void test_decoder_decodes_manchester_waveform(void)
 {
     uint8_t bits[M1_KIA_V6_FRAME_BITS];
     build_frame(m1_kia_v6_keys_builtin, 0x01020304u, bits);
-    const uint16_t count = build_waveform(bits);
+    const uint16_t count = build_waveform(bits, NULL);
     TEST_ASSERT_LESS_THAN_UINT16(PACKET_PULSE_COUNT_MAX, count);
 
     TEST_ASSERT_EQUAL_UINT8(0u, subghz_decode_kia_v6(KIA_V6, count));
@@ -156,12 +159,55 @@ void test_decoder_accepts_321_pulse_kia_frame(void)
 {
     uint8_t bits[M1_KIA_V6_FRAME_BITS];
     build_frame(m1_kia_v6_keys_builtin, 0x003CF089u, bits);
-    const uint16_t count = build_waveform(bits);
+    const uint16_t count = build_waveform(bits, NULL);
 
     TEST_ASSERT_EQUAL_UINT16(321u, count);
     TEST_ASSERT_EQUAL_UINT8(0u, subghz_decode_kia_v6(KIA_V6, count));
     TEST_ASSERT_EQUAL_HEX32(0x123456u, subghz_decenc_ctl.n32_serialnumber);
     TEST_ASSERT_EQUAL_HEX32(0x003CF089u, subghz_decenc_ctl.n32_rollingcode);
+}
+
+void test_decoder_tolerates_trailing_gap_separate(void)
+{
+    /* Live-capture shape: the frame ends high, so the packetizer's closing
+     * gap arrives as its own unclassifiable pulse after the data. */
+    uint8_t bits[M1_KIA_V6_FRAME_BITS];
+    build_frame(m1_kia_v6_keys_builtin, 0x003CF089u, bits);
+    bool last_level = false;
+    uint16_t count = build_waveform(bits, &last_level);
+    TEST_ASSERT_TRUE(last_level); /* final data pulse is high */
+
+    const uint16_t before = count;
+    bool have_level = true;
+    TEST_ASSERT_TRUE(append_pulse(false, 10000u, &count, &have_level, &last_level));
+    TEST_ASSERT_GREATER_THAN_UINT16(before, count); /* gap is a separate pulse */
+
+    TEST_ASSERT_EQUAL_UINT8(0u, subghz_decode_kia_v6(KIA_V6, count));
+    TEST_ASSERT_EQUAL_HEX32(0x123456u, subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX32(0x003CF089u, subghz_decenc_ctl.n32_rollingcode);
+    TEST_ASSERT_EQUAL_HEX8(2u, subghz_decenc_ctl.n8_buttonid);
+}
+
+void test_decoder_tolerates_trailing_gap_merged(void)
+{
+    /* Live-capture shape: the frame ends low, so there is no edge between
+     * the final data pulse and the closing gap — they merge into a single
+     * unclassifiable duration. */
+    uint8_t bits[M1_KIA_V6_FRAME_BITS];
+    build_frame(m1_kia_v6_keys_builtin, 0x01020304u, bits);
+    bool last_level = true;
+    uint16_t count = build_waveform(bits, &last_level);
+    TEST_ASSERT_FALSE(last_level); /* final data pulse is low */
+
+    const uint16_t before = count;
+    bool have_level = true;
+    TEST_ASSERT_TRUE(append_pulse(false, 10000u, &count, &have_level, &last_level));
+    TEST_ASSERT_EQUAL_UINT16(before, count); /* gap merged into the last pulse */
+
+    TEST_ASSERT_EQUAL_UINT8(0u, subghz_decode_kia_v6(KIA_V6, count));
+    TEST_ASSERT_EQUAL_HEX32(0x123456u, subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX32(0x01020304u, subghz_decenc_ctl.n32_rollingcode);
+    TEST_ASSERT_EQUAL_HEX8(2u, subghz_decenc_ctl.n8_buttonid);
 }
 
 int main(void)
@@ -172,5 +218,7 @@ int main(void)
     RUN_TEST(test_decoder_rejects_noise);
     RUN_TEST(test_decoder_decodes_manchester_waveform);
     RUN_TEST(test_decoder_accepts_321_pulse_kia_frame);
+    RUN_TEST(test_decoder_tolerates_trailing_gap_separate);
+    RUN_TEST(test_decoder_tolerates_trailing_gap_merged);
     return UNITY_END();
 }
