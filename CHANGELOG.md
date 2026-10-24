@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testing: source-invariant ESP32 test suites tolerate CRLF checkouts** — the
   source-grep read_file() helpers normalise CRLF to LF, so the suites pass on
   Windows working trees with core.autocrlf=true, matching CI behaviour.
+- **ESP32: RPC-task watchdog supervision suspended around the Bluetooth Direct
+  boot probe** — the multi-second ESP32 bring-up / capability probe runs on the
+  watchdog-supervised RPC task and could starve its heartbeat even with yielding
+  waits; supervision is now suspended around the probe and the heartbeat
+  baseline reset afterward, mirroring the ESP32 flash-op pattern.
+- **WiFi: bounded AP-scan wait can no longer free resources under a live
+  worker** — the brain-CD3 scan job (async context, results buffer, semaphore)
+  moved to the heap; a worker that outlives the cancel+drain window has its job
+  orphaned and reaped on the next scan only after it signals completion,
+  eliminating the use-after-free in the drain-timeout path.
 
 ## [0.9.4.18] - 2026-10-23
 
