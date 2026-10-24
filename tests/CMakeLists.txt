@@ -4368,3 +4368,20 @@ if(TARGET sanitizers)
     target_link_libraries(test_tpms_receiver PRIVATE sanitizers)
 endif()
 add_test(NAME tpms_receiver COMMAND test_tpms_receiver)
+
+# ------------------------------------------------------------------
+# Module under test: Queens puzzle game pure logic
+# (generator, solver, conflict/win/auto-exclude checks, high scores)
+# ------------------------------------------------------------------
+add_executable(test_queens_logic
+    test_queens_logic.c
+    ${M1_ROOT}/m1_csrc/queens_logic.c
+)
+target_include_directories(test_queens_logic PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_queens_logic PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_queens_logic PRIVATE sanitizers)
+endif()
+add_test(NAME queens_logic COMMAND test_queens_logic)
