@@ -151,9 +151,34 @@ void queens_hs_format(const queens_hs_entry_t *e, char *buf, size_t bufsize);
 /**
  * @brief  Parse a line produced by queens_hs_format().  Tolerant of a
  *         missing trailing field (older files) and of a zero date.
- * @retval true when at least initials+seconds were parsed.
+ *         The seconds field is required and must be a positive number.
+ * @retval true when initials+seconds were parsed.
  */
 bool queens_hs_parse(const char *line, queens_hs_entry_t *e);
+
+/**
+ * @brief  Parse a persisted score-table key of the form "s<d>.<r>=...".
+ *         Splits the difficulty/rank indices and returns a pointer to the
+ *         value (the text after '=').  Safe on truncated tokens: every
+ *         fixed-offset check short-circuits at the string terminator.
+ * @retval true when the key is well-formed and in range.
+ */
+bool queens_hs_parse_key(const char *line, uint8_t *diff, uint8_t *rank,
+                         const char **value);
+
+/**
+ * @brief  "All squares decided but not solved" penalty decision.
+ *
+ * The alert/penalty is deferred by one cell-changing action: with
+ * auto-exclude enabled, the final correct queen's EMPTY->MARK step already
+ * decides every square, and that intermediate step must not count as a
+ * mistake.  Only when a board that was already all-decided is *still*
+ * all-decided (and unsolved) after the next cell change is it penalized.
+ */
+static inline bool queens_stuck_penalty(bool was_stuck, bool is_stuck)
+{
+    return was_stuck && is_stuck;
+}
 
 #ifdef __cplusplus
 }

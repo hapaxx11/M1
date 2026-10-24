@@ -192,14 +192,14 @@ static void queens_load(queens_ctx_t *ctx)
             ctx->initials[3] = '\0';
             sanitize_initials(ctx->initials);
         }
-        else if (line[0] == 's' && line[2] == '.' && line[4] == '=')
+        else
         {
-            uint8_t d = (uint8_t)(line[1] - '0');
-            uint8_t r = (uint8_t)(line[3] - '0');
-            if (d < QUEENS_DIFF_COUNT && r < QUEENS_HS_PER_DIFF)
+            uint8_t d, r;
+            const char *val;
+            if (queens_hs_parse_key(line, &d, &r, &val))
             {
                 queens_hs_entry_t e;
-                if (queens_hs_parse(line + 5, &e))
+                if (queens_hs_parse(val, &e))
                 {
                     sanitize_initials(e.initials);
                     ctx->hs.e[d][r] = e;
@@ -215,6 +215,7 @@ static void queens_save(const queens_ctx_t *ctx)
     char line[40];
     UINT bw;
 
+    f_mkdir("0:/apps");     /* fresh card may not have it yet; ignore result */
     if (f_open(&fp, QUEENS_SAVE_PATH, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
         return;                          /* no SD: scores stay session-only */
 
@@ -885,18 +886,24 @@ static void recompute(queens_ctx_t *ctx, bool placed_queen)
     }
 
     bool was_stuck = ctx->stuck;
-    ctx->stuck = !queens_is_solved(&ctx->puzzle,
-                                   (const uint8_t (*)[QUEENS_MAX_N])ctx->cells) &&
-                 queens_all_decided(&ctx->puzzle,
-                                    (const uint8_t (*)[QUEENS_MAX_N])ctx->cells,
-                                    (const bool (*)[QUEENS_MAX_N])ctx->excl);
-    if (ctx->stuck && !was_stuck && !ctx->stuck_beeped)
+    bool now_stuck = !queens_is_solved(&ctx->puzzle,
+                                       (const uint8_t (*)[QUEENS_MAX_N])ctx->cells) &&
+                     queens_all_decided(&ctx->puzzle,
+                                        (const uint8_t (*)[QUEENS_MAX_N])ctx->cells,
+                                        (const bool (*)[QUEENS_MAX_N])ctx->excl);
+    /* Defer the penalty by one cell-changing action: with auto-exclude on,
+     * the final correct queen's EMPTY->MARK step already decides every
+     * square, and that intermediate step is not a mistake (the MARK->QUEEN
+     * step resolves it immediately). */
+    if (queens_stuck_penalty(was_stuck, now_stuck) && !ctx->stuck_beeped)
     {
-        /* Every square is marked but the board is not a winning one */
+        /* Every square is marked but the board is not a winning one, and
+         * the user's latest change did not resolve it */
         ctx->mistakes = true;
         ctx->stuck_beeped = true;
         m1_buzzer_set(BUZZER_FREQ_01_KHZ, 250);
     }
+    ctx->stuck = now_stuck;
     if (!ctx->stuck)
         ctx->stuck_beeped = false;
 }

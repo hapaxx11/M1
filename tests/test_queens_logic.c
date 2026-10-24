@@ -534,6 +534,113 @@ void test_hs_parse_tolerant_variants(void)
     TEST_ASSERT_FALSE(queens_hs_parse(NULL, &out));
 }
 
+void test_hs_parse_rejects_missing_or_zero_seconds(void)
+{
+    queens_hs_entry_t out;
+
+    /* Missing/non-numeric/zero seconds must not load as an unbeatable
+     * 0-second high score (win_seconds is clamped to >= 1) */
+    TEST_ASSERT_FALSE(queens_hs_parse("AAA,", &out));
+    TEST_ASSERT_FALSE(queens_hs_parse("AAA,garbage", &out));
+    TEST_ASSERT_FALSE(queens_hs_parse("AAA,0,20261024,1", &out));
+
+    /* Smallest legitimate time still parses */
+    TEST_ASSERT_TRUE(queens_hs_parse("AAA,1,20261024,1", &out));
+    TEST_ASSERT_EQUAL_UINT32(1, out.seconds);
+}
+
+void test_hs_parse_key(void)
+{
+    uint8_t d, r;
+    const char *val = NULL;
+
+    TEST_ASSERT_TRUE(queens_hs_parse_key("s3.2=AAA,95,20261024,1", &d, &r, &val));
+    TEST_ASSERT_EQUAL_UINT8(3, d);
+    TEST_ASSERT_EQUAL_UINT8(2, r);
+    TEST_ASSERT_EQUAL_STRING("AAA,95,20261024,1", val);
+
+    /* Other keys are not score keys */
+    TEST_ASSERT_FALSE(queens_hs_parse_key("diff=1", &d, &r, &val));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("ax=1", &d, &r, &val));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("ini=AAA", &d, &r, &val));
+
+    /* Truncated/corrupted tokens: rejected without reading past the NUL */
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s1", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s1.", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s1.2", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("sx.0=", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s1.x=", NULL, NULL, NULL));
+
+    /* Out-of-range indices */
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s4.0=", NULL, NULL, NULL));
+    TEST_ASSERT_FALSE(queens_hs_parse_key("s0.3=", NULL, NULL, NULL));
+
+    TEST_ASSERT_FALSE(queens_hs_parse_key(NULL, NULL, NULL, NULL));
+}
+
+/*--- Stuck-alert deferral -----------------------------------------------------*/
+
+void test_stuck_penalty_truth_table(void)
+{
+    /* Penalty only when a board that was already all-decided is still
+     * all-decided (and unsolved) after the next cell change */
+    TEST_ASSERT_FALSE(queens_stuck_penalty(false, false));
+    TEST_ASSERT_FALSE(queens_stuck_penalty(false, true));   /* first sighting: deferred */
+    TEST_ASSERT_TRUE(queens_stuck_penalty(true, true));     /* unresolved: penalize */
+    TEST_ASSERT_FALSE(queens_stuck_penalty(true, false));   /* resolved */
+}
+
+/* Regression: completing a correct board through normal OK cycles (EMPTY ->
+ * MARK -> QUEEN on each solution cell, auto-exclude on) must never record a
+ * mistake.  With N-1 correct queens placed, auto-exclude decides every cell
+ * except the final solution cell, so the final queen's intermediate MARK
+ * step makes the board all-decided-but-unsolved for one step. */
+void test_correct_playthrough_never_penalizes_intermediate_mark(void)
+{
+    queens_puzzle_t pz;
+    uint32_t rng;
+    queens_rng_seed(&rng, 1234);
+    TEST_ASSERT_TRUE(queens_generate(&pz, 8, &rng));
+
+    uint8_t cells[QUEENS_MAX_N][QUEENS_MAX_N];
+    bool excl[QUEENS_MAX_N][QUEENS_MAX_N];
+    memset(cells, 0, sizeof(cells));
+
+    bool was_stuck = false, penalized = false, naive_penalized = false;
+    bool saw_intermediate_stuck = false;
+
+    for (uint8_t step = 0; step < pz.n * 2u; step++)
+    {
+        uint8_t r = step / 2u;
+        uint8_t c = pz.solution_col[r];
+
+        /* First half of each row's cycle marks, second half places */
+        cells[r][c] = (step % 2u == 0u) ? QUEENS_CELL_MARK : QUEENS_CELL_QUEEN;
+
+        queens_auto_exclude(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells, excl);
+        bool solved = queens_is_solved(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells);
+        bool stuck = !solved && queens_all_decided(&pz,
+                                                   (const uint8_t (*)[QUEENS_MAX_N])cells,
+                                                   (const bool (*)[QUEENS_MAX_N])excl);
+        if (stuck)
+            saw_intermediate_stuck = true;
+        if (queens_stuck_penalty(was_stuck, stuck))
+            penalized = true;
+        if (stuck && !was_stuck)
+            naive_penalized = true;   /* what the pre-fix policy would do */
+        was_stuck = stuck;
+    }
+
+    TEST_ASSERT_TRUE(queens_is_solved(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells));
+    TEST_ASSERT_TRUE_MESSAGE(saw_intermediate_stuck,
+                             "test did not exercise the risky MARK step");
+    TEST_ASSERT_FALSE_MESSAGE(penalized,
+                              "intermediate MARK wrongly counted as a mistake");
+    TEST_ASSERT_TRUE_MESSAGE(naive_penalized,
+                             "sanity: naive policy would have penalized here");
+}
+
 /*--- main ----------------------------------------------------------------------*/
 
 int main(void)
@@ -562,6 +669,11 @@ int main(void)
     RUN_TEST(test_hs_tables_are_per_difficulty);
     RUN_TEST(test_hs_format_parse_roundtrip);
     RUN_TEST(test_hs_parse_tolerant_variants);
+    RUN_TEST(test_hs_parse_rejects_missing_or_zero_seconds);
+    RUN_TEST(test_hs_parse_key);
+
+    RUN_TEST(test_stuck_penalty_truth_table);
+    RUN_TEST(test_correct_playthrough_never_penalizes_intermediate_mark);
 
     return UNITY_END();
 }

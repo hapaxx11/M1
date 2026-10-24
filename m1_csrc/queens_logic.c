@@ -763,6 +763,8 @@ void queens_hs_format(const queens_hs_entry_t *e, char *buf, size_t bufsize)
 bool queens_hs_parse(const char *line, queens_hs_entry_t *e)
 {
     const char *p = line;
+    char *end;
+    unsigned long v;
     uint8_t len = 0;
 
     if (line == NULL || e == NULL)
@@ -778,11 +780,19 @@ bool queens_hs_parse(const char *line, queens_hs_entry_t *e)
     e->initials[len] = '\0';
     p++;
 
-    e->seconds = (uint32_t)strtoul(p, (char **)&p, 10);
+    /* Seconds: required, numeric and positive (a real solve takes >= 1 s;
+     * a missing/garbage field must not load as an unbeatable 0 s score) */
+    v = strtoul(p, &end, 10);
+    if (end == p || v == 0)
+        return false;
+    e->seconds = (uint32_t)v;
+    p = end;
+
     if (*p == ',')
     {
         p++;
-        e->date = (uint32_t)strtoul(p, (char **)&p, 10);
+        e->date = (uint32_t)strtoul(p, &end, 10);
+        p = end;
         if (*p == ',')
         {
             p++;
@@ -791,5 +801,36 @@ bool queens_hs_parse(const char *line, queens_hs_entry_t *e)
     }
 
     e->used = 1;
+    return true;
+}
+
+bool queens_hs_parse_key(const char *line, uint8_t *diff, uint8_t *rank,
+                         const char **value)
+{
+    uint8_t d, r;
+
+    if (line == NULL)
+        return false;
+
+    /* Expected form: "s<d>.<r>=<value>".  Each length-dependant check
+     * short-circuits at the first NUL, so truncated tokens are rejected
+     * without ever reading past the terminator. */
+    if (line[0] != 's')
+        return false;
+    if (line[1] < '0' || line[1] >= (char)('0' + QUEENS_DIFF_COUNT))
+        return false;
+    if (line[2] != '.')
+        return false;
+    if (line[3] < '0' || line[3] >= (char)('0' + QUEENS_HS_PER_DIFF))
+        return false;
+    if (line[4] != '=')
+        return false;
+
+    d = (uint8_t)(line[1] - '0');
+    r = (uint8_t)(line[3] - '0');
+
+    if (diff != NULL)  *diff = d;
+    if (rank != NULL)  *rank = r;
+    if (value != NULL) *value = line + 5;
     return true;
 }
