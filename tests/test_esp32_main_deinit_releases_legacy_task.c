@@ -55,6 +55,21 @@ static char *read_file(const char *relpath)
     TEST_ASSERT_EQUAL_size_t((size_t)size, fread(buf, 1U, (size_t)size, fp));
     buf[size] = '\0';
     fclose(fp);
+
+    /* Normalise CRLF -> LF in place: on Windows checkouts with
+     * core.autocrlf=true the working tree is CRLF, and needles that span a
+     * newline would never match even though the committed (LF) source and CI
+     * are correct. */
+    {
+        char *rd = buf;
+        char *wr = buf;
+        while (*rd != '\0') {
+            if (*rd != '\r')
+                *wr++ = *rd;
+            rd++;
+        }
+        *wr = '\0';
+    }
     return buf;
 }
 
@@ -281,7 +296,7 @@ void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
                                             "m1_esp32_rpc_call_unlocked(")
                                    : NULL;
     const char *deinit_lock =
-        deinit ? strstr(deinit, "if (!m1_esp32_rpc_transaction_lock())") : NULL;
+        deinit ? strstr(deinit, "m1_esp32_rpc_transaction_lock_timed(") : NULL;
     const char *spi_deinit =
         deinit ? strstr(deinit, "HAL_SPI_DeInit(&hspi_esp)") : NULL;
     int has_transaction_mutex =
@@ -294,6 +309,9 @@ void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
     free(rpc_content);
     free(hal_content);
 
+    /* The teardown lock must be the BOUNDED variant: a stuck transaction
+     * holder (e.g. a wedged WiFi scan) must not wedge deinit forever on
+     * portMAX_DELAY. */
     TEST_ASSERT_TRUE(has_transaction_mutex);
     TEST_ASSERT_TRUE(serializes_rpc_exchange);
     TEST_ASSERT_TRUE(serializes_hal_teardown);

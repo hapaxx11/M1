@@ -13,6 +13,8 @@
 #include <stdint.h>
 #include <string.h>
 #include "stm32h5xx_hal.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "main.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_hal.h"
@@ -42,6 +44,20 @@ static void cs_delay(void)
 {
 	/* Short delay (~1us) for ESP32 SPI slave to recognize CS edge */
 	for (volatile int i = 0; i < 50; i++) {}
+}
+
+/* Yield for ~1 ms while polling.  These helpers run on the ESP32 probe paths,
+ * which can be reached from the high-priority RPC task during Bluetooth
+ * Direct bring-up; a bare HAL_Delay busy-spins on uwTick and starves the
+ * lower-priority menu task and watchdog feeder (UI freeze / IWDG reset).
+ * vTaskDelay is only legal once the scheduler runs; fall back to HAL_Delay
+ * before that. */
+static void esp32_cmd_delay_ms(uint32_t ms)
+{
+	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+		vTaskDelay(pdMS_TO_TICKS(ms));
+	else
+		HAL_Delay(ms);
 }
 
 static HAL_StatusTypeDef spi_tx_64(const uint8_t *data)
@@ -76,7 +92,7 @@ static HAL_StatusTypeDef spi_tx_retry_64(const uint8_t *data)
 		ret = spi_tx_64(data);
 		if (ret != HAL_BUSY)
 			return ret;
-		HAL_Delay(1);
+		esp32_cmd_delay_ms(1);
 	} while ((HAL_GetTick() - start) < SPI_BUSY_RETRY_MS);
 
 	return ret;
@@ -124,7 +140,7 @@ static HAL_StatusTypeDef spi_rx_retry_64(uint8_t *data)
 		ret = spi_rx_64(data);
 		if (ret != HAL_BUSY)
 			return ret;
-		HAL_Delay(1);
+		esp32_cmd_delay_ms(1);
 	} while ((HAL_GetTick() - start) < SPI_BUSY_RETRY_MS);
 
 	return ret;
@@ -146,7 +162,7 @@ static int wait_handshake(uint32_t timeout_ms)
 	{
 		if ((HAL_GetTick() - start) > timeout_ms)
 			return -1;
-		HAL_Delay(1);
+		esp32_cmd_delay_ms(1);
 	}
 
 	return 0;
@@ -168,7 +184,7 @@ int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms)
 
 	/* Brief pause so ESP32 SPI slave can re-queue its next receive
 	 * transaction between back-to-back commands (e.g. SCAN_NEXT). */
-	HAL_Delay(2);
+	esp32_cmd_delay_ms(2);
 
 	/* Send the command */
 	hal_ret = spi_tx_retry_64((const uint8_t *)cmd);
@@ -232,7 +248,7 @@ int m1_esp32_send_cmd_raw(const uint8_t *tx_64, uint8_t *rx_64, uint32_t timeout
 {
 	HAL_StatusTypeDef hal_ret;
 
-	HAL_Delay(2);
+	esp32_cmd_delay_ms(2);
 
 	hal_ret = spi_tx_retry_64(tx_64);
 	if (hal_ret != HAL_OK)

@@ -46,6 +46,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "FreeRTOS.h"           /* TickType_t for the timed lock variant */
+
 #include "m1_esp32_caps.h"     /* frame constants + build/parse inline helpers */
 #include "esp32_feature_map.h" /* esp32_transport_t + esp32_firmware_transport */
 
@@ -722,6 +724,8 @@ m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
 void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
 void m1_esp32_rpc_transaction_lock_init(void);
 bool m1_esp32_rpc_transaction_lock(void);
+/** Bounded variant: gives up after @p timeout_ticks instead of waiting forever. */
+bool m1_esp32_rpc_transaction_lock_timed(TickType_t timeout_ticks);
 bool m1_esp32_rpc_transaction_try_lock(void);
 void m1_esp32_rpc_transaction_unlock(void);
 

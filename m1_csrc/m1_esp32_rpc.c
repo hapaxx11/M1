@@ -75,18 +75,21 @@ void m1_esp32_rpc_transaction_lock_init(void)
         s_transaction_mutex = xSemaphoreCreateMutex();
 }
 
-bool m1_esp32_rpc_transaction_lock(void)
+bool m1_esp32_rpc_transaction_lock_timed(TickType_t timeout_ticks)
 {
     m1_esp32_rpc_transaction_lock_init();
     return s_transaction_mutex != NULL &&
-           xSemaphoreTake(s_transaction_mutex, portMAX_DELAY) == pdTRUE;
+           xSemaphoreTake(s_transaction_mutex, timeout_ticks) == pdTRUE;
+}
+
+bool m1_esp32_rpc_transaction_lock(void)
+{
+    return m1_esp32_rpc_transaction_lock_timed(portMAX_DELAY);
 }
 
 bool m1_esp32_rpc_transaction_try_lock(void)
 {
-    m1_esp32_rpc_transaction_lock_init();
-    return s_transaction_mutex != NULL &&
-           xSemaphoreTake(s_transaction_mutex, 0u) == pdTRUE;
+    return m1_esp32_rpc_transaction_lock_timed(0u);
 }
 
 void m1_esp32_rpc_transaction_unlock(void)

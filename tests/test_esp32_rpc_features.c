@@ -677,10 +677,13 @@ void test_rpc_status_supports_short_poll_timeout(void)
                               M1_ESP32_RPC_RPC_STATUS,
                               &client_mask, sizeof(client_mask));
     uint8_t out = 0u;
+    /* Use a value distinct from the legacy hardcoded 1 s constant so the
+     * assertion fails if the wrapper ever stops honouring its timeout_sec
+     * parameter again. */
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
-                      m1_esp32_rpc_rpc_status_timeout(&out, 1));
+                      m1_esp32_rpc_rpc_status_timeout(&out, 3));
     TEST_ASSERT_EQUAL_UINT8(client_mask, out);
-    TEST_ASSERT_EQUAL_INT(1, g_last_timeout_sec);
+    TEST_ASSERT_EQUAL_INT(3, g_last_timeout_sec);
 }
 
 void test_qmon_poll_copies_complete_frame(void)
@@ -1132,6 +1135,16 @@ void test_zb_sniff_get_zero_devices(void)
     TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
 }
 
+void test_transaction_lock_timed_fails_fast_when_held(void)
+{
+    /* The bounded variant must report failure instead of blocking forever
+     * when the transaction mutex is already held (host stub: second take on
+     * a held semaphore returns pdFALSE). */
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_lock());
+    TEST_ASSERT_FALSE(m1_esp32_rpc_transaction_lock_timed(100u));
+    m1_esp32_rpc_transaction_unlock();
+}
+
 /* ================================================================== */
 /* Runner                                                             */
 /* ================================================================== */
@@ -1214,6 +1227,8 @@ int main(void)
     RUN_TEST(test_sntp_sync_rejects_short_response);
     RUN_TEST(test_sntp_sync_propagates_nak);
     RUN_TEST(test_sntp_sync_uses_feature_timeout);
+
+    RUN_TEST(test_transaction_lock_timed_fails_fast_when_held);
 
     return UNITY_END();
 }

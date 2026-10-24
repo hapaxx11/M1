@@ -198,8 +198,13 @@ bool m1_esp32_rpc_wifi_scan_async_start(m1_esp32_rpc_wifi_scan_async_t *ctx,
     if (!ctx->done)
         return false;
 
+    /* 768 words (3 KiB): the worker's worst-case chain is m1_esp32_rpc_call
+     * (256 B tx staging) + spi_m1link_send_recv_bin (2 x 512 B frame buffers)
+     * + HAL_SPI_TransmitReceive, roughly 1.6-1.8 KiB — the previous 512-word
+     * (2 KiB) stack left almost no margin; an overflow would kill the worker
+     * without it ever signalling completion. */
     BaseType_t xret = xTaskCreate(wifi_scan_worker, "wifi_scan_rpc",
-                                  512u, ctx, 2u, &ctx->task);
+                                  768u, ctx, 2u, &ctx->task);
     if (xret != pdPASS) {
         vSemaphoreDelete(ctx->done);
         ctx->done = NULL;
@@ -788,7 +793,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status_timeout(uint8_t *status,
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_RPC_STATUS, NULL, 0u, resp,
                           sizeof(resp), &rlen,
-                          M1_ESP32_RPC_STATUS_TIMEOUT_S);
+                          timeout_sec);
     if (st == M1_ESP32_RPC_OK) {
         if (rlen < 1u)
             return M1_ESP32_RPC_ERR_BAD_FRAME;
