@@ -12,9 +12,9 @@
 - **Commit**: `Add Queens game pure-logic module with host tests`
 
 ### Phase 2 — Game UI + integration + firmware build
-- **Description**: `m1_csrc/game_queens.c` (start screen with options+scores, play screen with pattern board/timer/cursor, pause screen, initials entry, end screens), registration in `m1_games.h` / `m1_games_scene.c`, sources in `cmake/m1_01/CMakeLists.txt`, SD persistence of options+scores. Build firmware with ARM toolchain and check RAM budget.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: `m1_csrc/game_queens.c` (start screen with options+scores, play screen with pattern board/timer/cursor, pause screen, initials entry, end screens with solution/high scores), registered in `m1_games.h` / `m1_games_scene.c`, sources in `cmake/m1_01/CMakeLists.txt`, SD persistence of options+scores (`0:/apps/queens.dat`). Firmware builds clean; RAM 86.82% (context is heap-allocated, no new static buffers). README games list updated.
+- **Status**: ✅ Complete
+- **Commit**: `Add Queens game UI, menu entry, and SD high-score persistence`
 
 ### Phase 3 — Changelog + cleanup
 - **Description**: Add `.changelog/queens-game.added.md` fragment, re-run host tests + firmware build, remove this checklist.

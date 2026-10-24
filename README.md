@@ -145,7 +145,7 @@ project discussion, and related project resources:
 - Browse and launch `.m1app` files from the Apps menu
 
 ### Games & Entertainment
-- Snake, Tetris, T-Rex Runner, Pong, 2048, Dice — built-in games accessible from the menu
+- Snake, Tetris, T-Rex Runner, Pong, 2048, Dice, Queens — built-in games accessible from the menu
 - **Music Player** — plays Flipper Music Format (`.fmf`) files from `SD:/Music/`
 
 ### WiFi
