@@ -298,12 +298,22 @@ uint8_t subghz_decode_vag(uint16_t p, uint16_t pulsecount)
              * pulse's level and try the frame before giving up. */
             if (cell_count >= VAG_WIRE_CELLS - 2u)
             {
-                while (cell_count < VAG_WIRE_CELLS)
-                    cells[cell_count++] = level;
-                if (vag_try_window(cells, cell_count, p, false) ||
-                    vag_try_window(cells, cell_count, p, true))
+                for (uint8_t pad = 0; pad < 2u; pad++)
                 {
-                    return 0;
+                    if (cell_count < VAG_WIRE_CELLS)
+                    {
+                        cells[cell_count++] = level;
+                    }
+                    else
+                    {
+                        memmove(cells, &cells[1], VAG_WIRE_CELLS - 1u);
+                        cells[VAG_WIRE_CELLS - 1u] = level;
+                    }
+                    if (vag_try_window(cells, cell_count, p, false) ||
+                        vag_try_window(cells, cell_count, p, true))
+                    {
+                        return 0;
+                    }
                 }
             }
             cell_count = 0;
