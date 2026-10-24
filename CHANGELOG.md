@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.21] - 2026-10-24
+
+### Added
+
+- **Games: Queens puzzle** — LinkedIn-Queens-style logic game with unlimited
+  procedurally generated puzzles (unique-solution verified) in 4 difficulties
+  (Easy 6x6 to Expert 9x9), pattern-shaded regions for the monochrome screen,
+  per-game timer, per-difficulty top-3 high scores with 3 initials, date and a
+  no-mistakes checkmark persisted to SD, auto-exclude assist option, and
+  pause/resume/give-up flow with solution reveal.
+
 ## [0.9.4.20] - 2026-10-24
 
 ### Fixed
