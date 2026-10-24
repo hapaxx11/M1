@@ -193,6 +193,35 @@ void test_decode_rejects_noise(void)
     TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_vag(VAG, 64));
 }
 
+void test_decode_tolerates_merged_trailing_gap(void)
+{
+    /* Every valid dispatch byte is even, so the final wire bit is 1 and the
+     * frame always ends on a low cell.  On a real capture there is no edge
+     * between that cell and the closing inter-packet gap, so the two merge
+     * into one unclassifiable duration and the window arrives a Manchester
+     * cell short. */
+    uint16_t n = build_vag_pulses(VAG_PREFIX_T1, TEST_KEY1RAW, TEST_KEY2RAW);
+    subghz_decenc_ctl.pulse_times[n - 1u] += 10000u;
+
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_vag(VAG, n));
+    TEST_ASSERT_EQUAL_HEX8(VAG_BTN_LOCK, subghz_decenc_ctl.n8_buttonid);
+    TEST_ASSERT_EQUAL_HEX64(TEST_KEY1, subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_HEX32(0xAABBCCDDu, subghz_decenc_ctl.n32_serialnumber);
+}
+
+void test_decode_tolerates_merged_trailing_gap_type2(void)
+{
+    const uint16_t k2raw = (uint16_t)~0x001Cu;  /* dispatch 0x1C = Unlock */
+    uint16_t n = build_vag_pulses(VAG_PREFIX_T2, TEST_KEY1RAW, k2raw);
+    subghz_decenc_ctl.pulse_times[n - 1u] += 10000u;
+
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_vag(VAG, n));
+    TEST_ASSERT_EQUAL_HEX8(VAG_BTN_UNLOCK, subghz_decenc_ctl.n8_buttonid);
+    /* Key2 (logical) + frame type are surfaced for the TX save path. */
+    TEST_ASSERT_EQUAL_HEX32((uint32_t)0x001Cu | (2u << 16),
+                            subghz_decenc_ctl.n32_key2);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -205,5 +234,7 @@ int main(void)
     RUN_TEST(test_type1_aut64_decrypts_serial_counter_and_button);
     RUN_TEST(test_decode_waveform);
     RUN_TEST(test_decode_rejects_noise);
+    RUN_TEST(test_decode_tolerates_merged_trailing_gap);
+    RUN_TEST(test_decode_tolerates_merged_trailing_gap_type2);
     return UNITY_END();
 }

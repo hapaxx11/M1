@@ -289,6 +289,23 @@ uint8_t subghz_decode_vag(uint16_t p, uint16_t pulsecount)
             push = 2;
         else
         {
+            /* Unclassifiable duration.  Every valid dispatch byte is even,
+             * so the final wire bit is 1 and the waveform ends on a low
+             * cell; on a real capture there is no edge between that cell
+             * and the closing inter-packet gap, so the two merge into one
+             * unclassifiable duration and the window arrives short by the
+             * trailing cell(s).  Pad the missing cell(s) with the merged
+             * pulse's level and try the frame before giving up. */
+            if (cell_count >= VAG_WIRE_CELLS - 2u)
+            {
+                while (cell_count < VAG_WIRE_CELLS)
+                    cells[cell_count++] = level;
+                if (vag_try_window(cells, cell_count, p, false) ||
+                    vag_try_window(cells, cell_count, p, true))
+                {
+                    return 0;
+                }
+            }
             cell_count = 0;
             continue;
         }
