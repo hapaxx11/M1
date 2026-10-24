@@ -23,7 +23,7 @@
  * Pure game logic lives in queens_logic.c (host-tested); this file is the
  * UI, input, timing and persistence layer.
  *
- * M1 Project
+ * M1 Project -- Hapax fork
  */
 
 /*************************** I N C L U D E S **********************************/
