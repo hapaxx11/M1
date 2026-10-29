@@ -15,3 +15,8 @@
 - **Description**: Make update-branches dispatchable and run it after the version bump push.
 - **Status**: ✅ Complete
 - **Commit**: `fix: dispatch agent branch updates`
+
+### Phase 3 — Preserve pending prefix bumps
+- **Description**: Ensure automatic release and changelog selection honor pending major, minor, and build bumps as well as pending revisions.
+- **Status**: ✅ Complete
+- **Commit**: `fix: preserve pending version bumps`

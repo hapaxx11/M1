@@ -71,8 +71,8 @@ jobs:
       # ------------------------------------------------------------------ #
       # 2. Auto-increment version — patch source files before building
       # ------------------------------------------------------------------ #
-      # Uses the shared version-selection rule: select the greater of the header's
-      # pending RC and one above the latest published RC for this prefix.
+      # Uses the shared version-selection rule: keep a pending header version,
+      # otherwise select one above the latest published RC for this prefix.
       # If a manual tag is supplied, its RC is used instead.
       # Only m1_fw_update_bl.h (FW_VERSION_RC, M1_HAPAX_REVISION) is patched.
       # CMakeLists.txt is NOT patched — it derives CMAKE_PROJECT_NAME automatically

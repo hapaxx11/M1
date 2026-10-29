@@ -64,17 +64,23 @@ def next_release_version(
     current: tuple[int, int, int, int],
     tags: list[str] | list[dict[str, str]],
 ) -> tuple[tuple[int, int, int, int] | None, tuple[int, int, int, int]]:
-    released = [
-        version for version in release_versions(tags) if version[:3] == current[:3]
-    ]
-    latest = max(released, default=None)
-    next_published_rc = latest[3] + 1 if latest is not None else 1
-    next_rc = max(current[3], next_published_rc)
-    if next_rc > MAX_COMPONENT:
+    versions = release_versions(tags)
+    latest = max(versions, default=None)
+    matching = [version for version in versions if version[:3] == current[:3]]
+
+    if latest is not None and current[:3] != latest[:3] and current > latest:
+        next_version = current
+    else:
+        latest_prefix = max(matching, default=None)
+        next_published_rc = latest_prefix[3] + 1 if latest_prefix is not None else 1
+        next_rc = max(current[3], next_published_rc)
+        next_version = (*current[:3], next_rc)
+
+    if next_version[3] > MAX_COMPONENT:
         raise ValueError(
             "The revision component has reached 255; bump the build, minor, or major component."
         )
-    return latest, (*current[:3], next_rc)
+    return latest, next_version
 
 
 def validate_bump(

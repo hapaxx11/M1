@@ -10,10 +10,10 @@ name: Prepare Changelog
 #      "## [Unreleased]" + "## [<next version>] - <YYYY-MM-DD>".
 #   3. Changes (if any) are committed back to the PR branch.
 #
-# Version source: the *same* shared rule Build and Release uses — select the
-# greater of the header's pending RC and one above the latest published RC for its
-# MAJOR/MINOR/BUILD prefix.  Because the
-# prediction is made before merge, it can go stale if another release is
+# Version source: the *same* shared rule Build and Release uses — keep a pending
+# header version, otherwise select one above the latest published RC for its
+# MAJOR/MINOR/BUILD prefix. The prediction is made before merge, so it can go
+# stale if another release is
 # published first; any stamped section that is not yet published — newer than
 # the latest release, or carrying entries absent from that release's
 # CHANGELOG.md — is folded back in and re-stamped on every run, so pushing to

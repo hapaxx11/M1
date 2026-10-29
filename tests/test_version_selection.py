@@ -35,6 +35,18 @@ class TestReleaseSelection(unittest.TestCase):
         self.assertEqual(released, (0, 9, 4, 21))
         self.assertEqual(next_version, (0, 9, 4, 22))
 
+    def test_pending_prefix_bump_is_selected(self):
+        released, next_version = vs.next_release_version(
+            (0, 9, 5, 0), ["v0.9.4.21"]
+        )
+        self.assertEqual(released, (0, 9, 4, 21))
+        self.assertEqual(next_version, (0, 9, 5, 0))
+
+    def test_first_automatic_release_starts_at_revision_one(self):
+        released, next_version = vs.next_release_version((0, 9, 4, 0), [])
+        self.assertIsNone(released)
+        self.assertEqual(next_version, (0, 9, 4, 1))
+
     def test_published_revision_255_cannot_be_incremented(self):
         with self.assertRaisesRegex(ValueError, "reached 255"):
             vs.next_release_version((0, 9, 4, 0), ["v0.9.4.255"])
