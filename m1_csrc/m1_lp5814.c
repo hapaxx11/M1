@@ -22,6 +22,7 @@
 #include "m1_types_def.h"
 #include "m1_lp5814.h"
 #include "m1_i2c.h"
+#include "m1_diag.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -160,6 +161,7 @@ bool lp5814_writeRegister(uint8_t reg, uint8_t value)
 	i2c_inf.reg_address = reg;
 	i2c_inf.reg_data = value;
 	stat = m1_i2c_hal_trans_req(&i2c_inf);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_LP_WRITE_DONE);
 
 	return (stat==HAL_OK);
 }
@@ -342,12 +344,16 @@ void lp5814_shutdown(void)
 void lp5814_led_on(uint8_t port, uint8_t value)
 {
 	lp5814_writeRegister(LP5814_OUT_PWM(port), value);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_BL_PWM);
 
 	uint8_t stat = lp5814_readRegister(LP5814_REG_DEV_CONFIG1);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_BL_READ);
 
 	stat |= LP5814_OUT_ENABLE(port);
 	lp5814_writeRegister(LP5814_REG_DEV_CONFIG1, stat);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_BL_CONFIG);
 	lp5814_writeRegister(LP5814_UPDATE_CMD, LP5814_UPDATE);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_BL_UPDATE);
 }
 
 
@@ -418,6 +424,7 @@ void lp5814_all_off_RGB(void)
 /*============================================================================*/
 void lp5814_backlight_on(uint8_t brightness)
 {
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_BL_START);
 	if (brightness == 0)
 		lp5814_led_off(LED_W);
 	lp5814_led_on(LED_W, brightness);

@@ -38,6 +38,7 @@
 
 #include "unity.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,13 +132,13 @@ void test_m1link_spi_lock_creates_mutex_lazily(void)
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
     char *lock_body = slice_between(content,
-        "bool esp32_m1link_spi_lock(void)",
+        "bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)",
         "void esp32_m1link_spi_unlock(void)");
 
     /* The lock must initialise the mutex before taking it; without this the
      * mutex stays NULL and every brain-CD3 M1_RPC transfer fails. */
     const char *init_call = strstr(lock_body, "esp32_m1link_spi_mutex_init()");
-    const char *take_call = strstr(lock_body, "esp32_m1link_lifecycle_lock()");
+    const char *take_call = strstr(lock_body, "esp32_m1link_lifecycle_lock_timed(timeout_ms)");
     TEST_ASSERT_NOT_NULL_MESSAGE(init_call,
         "esp32_m1link_spi_lock() must call esp32_m1link_spi_mutex_init()");
     TEST_ASSERT_NOT_NULL(take_call);
@@ -291,7 +292,7 @@ void test_relay_poll_suspends_supervision_around_probe(void)
      * probe and resumed on every path out of the probe section — mirroring
      * the deferred ESP32 flash-op pattern. */
     char *body = slice_between(content,
-        "static bool rpc_brain_relay_poll(void)",
+        "static bool rpc_brain_relay_poll(TickType_t *supervised_start)",
         "void m1_rpc_task(void *param)");
 
     const char *suspend = strstr(body,
@@ -319,21 +320,94 @@ void test_rpc_task_resets_heartbeat_baseline_after_probe(void)
     /* After a probe iteration the task must reset rpc_wdt_last, otherwise
      * the probe seconds are reported as loop run-time and trip the
      * maximum-report-percent check on the next heartbeat. */
-    const char *call = strstr(content, "if (rpc_brain_relay_poll())");
+    const char *call = strstr(content,
+        "if (rpc_brain_relay_poll(&rpc_wdt_probe_resume_tick))");
     TEST_ASSERT_NOT_NULL_MESSAGE(call,
         "m1_rpc_task must act on rpc_brain_relay_poll()'s probe flag");
-    const char *reset = strstr(call, "rpc_wdt_last = xTaskGetTickCount();");
+    const char *reset = strstr(call,
+        "rpc_wdt_last = rpc_wdt_probe_resume_tick;");
     TEST_ASSERT_NOT_NULL_MESSAGE(reset,
-        "heartbeat baseline must be reset after a probe iteration");
+        "heartbeat baseline must use the exact probe-resume tick");
     TEST_ASSERT_TRUE_MESSAGE(reset - call < 400,
         "baseline reset must sit inside the probe-flag block");
 
+    const char *resume = strstr(content,
+        "m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);");
+    const char *resume_tick = resume
+        ? strstr(resume, "*supervised_start = xTaskGetTickCount();")
+        : NULL;
+    TEST_ASSERT_NOT_NULL_MESSAGE(resume_tick,
+        "supervised timing must restart immediately after probe resume");
+
     free(content);
+}
+
+void test_m1link_lock_chain_honors_response_timeout(void)
+{
+    char *content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+
+    const char *lifecycle = strstr(content,
+        "esp32_m1link_lifecycle_lock_timed(uint32_t timeout_ms)");
+    const char *lifecycle_take = lifecycle
+        ? strstr(lifecycle,
+            "pdMS_TO_TICKS(timeout_ms)) == pdPASS")
+        : NULL;
+    const char *lock = strstr(content,
+        "esp32_m1link_spi_lock_timed(uint32_t timeout_ms)");
+    const char *at_take = lock
+        ? strstr(lock,
+            "xSemaphoreTake(pxMutex, pdMS_TO_TICKS(remaining_timeout_ms))")
+        : NULL;
+    const char *cleanup = at_take
+        ? strstr(at_take, "esp32_m1link_lifecycle_unlock();")
+        : NULL;
+    const char *caller = strstr(content, "esp32_m1link_spi_lock_timed(timeout_ms)");
+
+    bool complete = lifecycle_take != NULL && at_take != NULL &&
+                    cleanup != NULL && caller != NULL;
+
+    free(content);
+
+    TEST_ASSERT_TRUE(complete);
+}
+
+void test_m1link_lock_wait_does_not_reduce_response_budget_before_abort(void)
+{
+    char *content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+
+    const char *fn_start = strstr(content,
+        "uint8_t spi_m1link_send_recv_bin_timed(");
+    const char *lock_call = fn_start
+        ? strstr(fn_start, "esp32_m1link_spi_lock_timed(timeout_ms)")
+        : NULL;
+    const char *abort_call = fn_start
+        ? strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);")
+        : NULL;
+    const char *remaining = fn_start
+        ? strstr(fn_start,
+            "timeout_ms = m1_esp32_rpc_remaining_timeout_ms(")
+        : NULL;
+    const char *exchange = fn_start
+        ? strstr(fn_start, "rc = m1_esp32_m1link_send_recv_timed(")
+        : NULL;
+
+    bool complete = lock_call != NULL && abort_call != NULL &&
+                    remaining != NULL && exchange != NULL &&
+                    lock_call < abort_call && abort_call < remaining &&
+                    remaining < exchange;
+    free(content);
+
+    TEST_ASSERT_TRUE_MESSAGE(complete,
+        "a nonzero lock wait must not reduce the budget before the abort and final remaining-time calculation");
 }
 
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_m1link_lock_wait_does_not_reduce_response_budget_before_abort);
+    RUN_TEST(test_m1link_lock_chain_honors_response_timeout);
     RUN_TEST(test_m1link_spi_lock_creates_mutex_lazily);
     RUN_TEST(test_init_master_hd_retry_loop_yields);
     RUN_TEST(test_reset_slave_delay_yields);

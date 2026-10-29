@@ -289,7 +289,7 @@ void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
     const char *deinit = strstr(hal_content, "void m1_esp32_deinit(void)\n{");
     const char *rpc_lock = rpc_call
                                ? strstr(rpc_call,
-                                        "if (!m1_esp32_rpc_transaction_lock())")
+                                        "if (!m1_esp32_rpc_transaction_lock_timed(")
                                : NULL;
     const char *rpc_exchange = rpc_call
                                    ? strstr(rpc_call,

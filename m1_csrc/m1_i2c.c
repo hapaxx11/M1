@@ -25,6 +25,7 @@ LED Driver (LP5562TMX/NOPB)			1100000							0x60, 0x61
 #include "app_freertos.h"
 #include "semphr.h"
 #include "m1_i2c.h"
+#include "m1_diag.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -119,7 +120,9 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 
 	assert(trans_inf!=NULL);
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_I2C_WAIT);
 	xSemaphoreTake(mutex_i2c_trans, portMAX_DELAY);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_I2C_XFER);
 
 	assert(trans_inf->dev_id < I2C_NUM_OF_DEVICES_MAX);
 	switch (trans_inf->trans_type)
@@ -156,7 +159,9 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 			break;
 	} // switch (trans_inf.trans_type)
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_I2C_DONE);
 	xSemaphoreGive(mutex_i2c_trans);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_I2C_RELEASED);
 
 	return stat;
 } // HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf trans_inf)

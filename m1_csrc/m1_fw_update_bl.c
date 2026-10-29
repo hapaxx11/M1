@@ -23,6 +23,7 @@
 #include "m1_sub_ghz.h"
 #include "m1_display.h"      /* m1_draw_text, TEXT_ALIGN_CENTER, M1_LCD_DISPLAY_HEIGHT */
 #include "m1_fw_progress.h"  /* fw_update_progress_percent() pure logic */
+#include "m1_diag.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -404,6 +405,7 @@ static uint8_t bl_set_protection_status(uint32_t protection)
     if(status == HAL_OK)
     {
         /* Loading Flash Option Bytes - this generates a system reset. */
+        m1_diag_set_reset_origin(M1_DIAG_RESET_FLASH_OB);
         status |= HAL_FLASH_OB_Launch();
     }
 
@@ -627,6 +629,7 @@ bool bl_swap_banks(void)
 	FLASH_OBProgramInitTypeDef OBInit;
 	HAL_StatusTypeDef status;
 
+	m1_diag_set_reset_origin(M1_DIAG_RESET_BANK);
 	m1_wdt_reset();
 
 	/* Unlock the User Flash area */
@@ -684,7 +687,7 @@ bool bl_swap_banks(void)
 
 	/* If we reach here, the OBL reset did not occur. */
 	M1_LOG_E(M1_LOGDB_TAG, "Bank swap: OB launch returned (%d) — forcing reset\r\n", status);
-	HAL_NVIC_SystemReset();
+	m1_diag_system_reset(M1_DIAG_RESET_BANK);
 
 	/* Never reached */
 	return true;
@@ -1052,6 +1055,7 @@ void fw_gui_progress_update(size_t remainder)
 /*============================================================================*/
 void bl_jump_to_dfu(void)
 {
+    m1_diag_set_reset_origin(M1_DIAG_RESET_DFU);
     /* Disable all interrupts */
     __disable_irq();
 
@@ -1152,7 +1156,7 @@ void boot_recovery_check(void)
          * recovery. Fall through to the NVIC_SystemReset() below on timeout. */
         for (volatile uint32_t bsy_to = 0;
              (FLASH->NSSR & FLASH_SR_BSY) && bsy_to < 0x02000000U; bsy_to++) {}
-        NVIC_SystemReset();
+        m1_diag_system_reset(M1_DIAG_RESET_BANK);
         /* Never returns */
     }
 
@@ -1259,5 +1263,5 @@ void boot_recovery_check(void)
          (FLASH->NSSR & FLASH_SR_BSY) && bsy_to < 0x02000000U; bsy_to++) {}
 
     /* If we get here, trigger manual reset */
-    NVIC_SystemReset();
+    m1_diag_system_reset(M1_DIAG_RESET_BANK);
 }

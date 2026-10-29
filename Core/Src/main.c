@@ -28,6 +28,7 @@
 #include "m1_rfid.h"
 #include "lfrfid.h"	//+2025_1031_01_Thomas
 #include "m1_usb_cdc_msc.h"
+#include "m1_diag.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -105,13 +106,27 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  m1_diag_capture_previous();
+  if (g_m1_diag.magic != M1_DIAG_MAGIC)
+  {
+    g_m1_diag.write_phase = M1_DIAG_PHASE_NONE;
+    g_m1_diag.reset_cause = 0;
+    g_m1_diag.cfsr = 0;
+    g_m1_diag.hfsr = 0;
+    g_m1_diag.bfar = 0;
+    g_m1_diag.boot_stage = M1_DIAG_BOOT_EARLY;
+    g_m1_diag.fault_kind = M1_DIAG_FAULT_NONE;
+    g_m1_diag.reset_origin = M1_DIAG_RESET_NONE;
+    g_m1_diag.pc = 0;
+  }
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_MAIN);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_HAL);
 
   /* USER CODE BEGIN Init */
 
@@ -119,6 +134,7 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_CLOCK);
 
   /* USER CODE BEGIN SysInit */
 
@@ -127,18 +143,27 @@ int main(void)
      practical (Read only area), MPU has to be used to disable local cacheability.
   */
   MPU_Config();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_MPU);
 
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_GPIO);
   MX_IWDG_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_IWDG);
   MX_SPI1_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_SPI1);
   MX_ICACHE_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_ICACHE);
   MX_SPI2_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_SPI2);
   MX_I2C1_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_I2C);
   MX_RTC_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_RTC);
   MX_CRC_Init();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_CRC);
   /* USER CODE BEGIN 2 */
 #ifdef M1_APP_CAN_ENABLE
   MX_FDCAN1_Init();
@@ -149,6 +174,7 @@ int main(void)
 
   /* Init scheduler */
   osKernelInitialize();
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_KERNEL);
 
   /* Call init function for freertos objects (in cmsis_os2.c) */
   MX_FREERTOS_Init();
@@ -888,6 +914,7 @@ void Error_Handler(void)
 	//__BKPT(); // Causes the processor to enter Debug state.
   /* User can add his own implementation to report the HAL error return state */
 	//HAL_NVIC_SystemReset()
+	m1_diag_fault_capture(M1_DIAG_FAULT_ERROR);
   __disable_irq();
   while (1)
   {

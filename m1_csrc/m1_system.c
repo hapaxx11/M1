@@ -31,6 +31,8 @@
 #include "m1_bt.h"
 #include "m1_clock_util.h"
 #include "lcd_saver.h"
+#include "home_screen_layout.h"
+#include "m1_diag.h"
 #if M1_HAS_RGB_BACKLIGHT
 #include "m1_rgb_backlight.h"
 #endif
@@ -973,6 +975,8 @@ static void home_screen_draw_content(const char *scr_text)
 	char time_str[8];  /* "HH:MM" */
 	uint8_t len, x0;
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_START);
+
 	/* Format firmware version string */
 	snprintf(fw_ver, sizeof(fw_ver), "v%d.%d.%d.%d",
 	         m1_device_stat.config.fw_version_major,
@@ -991,11 +995,13 @@ static void home_screen_draw_content(const char *scr_text)
 		clock_apply_offset(&ct, m1_clock_tz_offset, &lt);
 		snprintf(time_str, sizeof(time_str), "%02u:%02u", lt.hour, lt.minute);
 	}
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_RTC);
 
 	u8g2_SetPowerSave(&m1_u8g2, false);
 
 	/* Graphic work starts here */
 	m1_u8g2_firstpage();
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_PAGE);
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	/* Screen layout (128×64 display):
@@ -1016,6 +1022,7 @@ static void home_screen_draw_content(const char *scr_text)
 		             (u8g2_uint_t)((M1_LCD_DISPLAY_WIDTH - tw) / 2U),
 		             9, time_str);
 	}
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_TIME);
 
 	/* --- Logo + text block: centered horizontally ---
 	 * Centering: measure the widest text string (two different fonts) to compute
@@ -1047,23 +1054,26 @@ static void home_screen_draw_content(const char *scr_text)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, text_x, M1_POWERUP_LOGO_TOP_POS_Y + 20, fw_ver);
 	u8g2_DrawStr(&m1_u8g2, text_x, M1_POWERUP_LOGO_TOP_POS_Y + 30, "Hapax");
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_LOGO);
 
 	/* Battery indicator in top-right corner */
 	splash_draw_battery_indicator();
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_BATT);
 
 	/* Status icons (SD, BT, WiFi) in top-left corner */
 	splash_draw_status_icons();
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_ICONS);
 
 	/* Bottom status message (empty "" for the normal idle/welcome screen) */
 	len = strlen(scr_text);
-	x0 = (M1_LCD_DISPLAY_WIDTH - len*M1_GUI_FONT_WIDTH)/2;
-	if ( x0 >= M1_GUI_FONT_WIDTH )
-		x0 -= M1_GUI_FONT_WIDTH;
+	x0 = home_screen_status_x(M1_LCD_DISPLAY_WIDTH, M1_GUI_FONT_WIDTH, len);
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_B);
-	u8g2_DrawStr(&m1_u8g2, x0, 62, scr_text);
+	u8g2_DrawStr(&m1_u8g2, x0, HOME_SCREEN_STATUS_BASELINE_Y, scr_text);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_TEXT);
 
 	m1_u8g2_nextpage(); // Update display RAM
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_SEND);
 } // static void home_screen_draw_content(const char *scr_text)
 
 
@@ -1090,6 +1100,7 @@ void startup_info_screen_display(const char *scr_text)
 	home_screen_draw_content(s_home_scr_text);
 
 	lp5814_backlight_on(M1_BACKLIGHT_BRIGHTNESS); // Turn on backlight
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_HOME_BACKLIGHT);
 
 	m1_device_stat.op_mode = M1_OPERATION_MODE_DISPLAY_ON; // update new state
 	m1_device_stat.active_timestamp = HAL_GetTick(); // reset timeout

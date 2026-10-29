@@ -40,8 +40,8 @@ endif()
 # ------------------------------------------------------------------
 # Unity test framework (vendored — single-file drop-in)
 # ------------------------------------------------------------------
-add_library(unity STATIC unity/unity.c)
-target_include_directories(unity PUBLIC unity)
+add_library(unity STATIC unity/unity.c stubs/freertos_stubs.c)
+target_include_directories(unity PUBLIC unity ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
 
 # ------------------------------------------------------------------
 # Source root
@@ -477,6 +477,9 @@ add_executable(test_watchdog_decision
 target_include_directories(test_watchdog_decision PRIVATE
     ${M1_ROOT}/m1_csrc
 )
+target_compile_definitions(test_watchdog_decision PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
 target_link_libraries(test_watchdog_decision PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_watchdog_decision PRIVATE sanitizers)
@@ -570,6 +573,33 @@ if(TARGET sanitizers)
     target_link_libraries(test_rpc_transport PRIVATE sanitizers)
 endif()
 add_test(NAME rpc_transport COMMAND test_rpc_transport)
+
+add_executable(test_rpc_stream_state
+    test_rpc_stream_state.c
+)
+target_include_directories(test_rpc_stream_state PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_compile_definitions(test_rpc_stream_state PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_rpc_stream_state PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_stream_state PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_stream_state COMMAND test_rpc_stream_state)
+
+add_executable(test_sys_init_stack
+    test_sys_init_stack.c
+)
+target_compile_definitions(test_sys_init_stack PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_sys_init_stack PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_sys_init_stack PRIVATE sanitizers)
+endif()
+add_test(NAME sys_init_stack COMMAND test_sys_init_stack)
 
 # ------------------------------------------------------------------
 # Module under test: persistent ESP32 background-owner decisions.
@@ -4385,3 +4415,78 @@ if(TARGET sanitizers)
     target_link_libraries(test_queens_logic PRIVATE sanitizers)
 endif()
 add_test(NAME queens_logic COMMAND test_queens_logic)
+
+# ------------------------------------------------------------------
+# Module under test: home-screen status text layout
+# ------------------------------------------------------------------
+add_executable(test_home_screen_layout
+    test_home_screen_layout.c
+)
+target_include_directories(test_home_screen_layout PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_home_screen_layout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_home_screen_layout PRIVATE sanitizers)
+endif()
+add_test(NAME home_screen_layout COMMAND test_home_screen_layout)
+
+# ------------------------------------------------------------------
+# Module under test: persistent startup diagnostic status formatting
+# ------------------------------------------------------------------
+add_executable(test_m1_diag_status
+    test_m1_diag_status.c
+)
+target_include_directories(test_m1_diag_status PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_m1_diag_status PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_m1_diag_status PRIVATE sanitizers)
+endif()
+add_test(NAME m1_diag_status COMMAND test_m1_diag_status)
+
+# ------------------------------------------------------------------
+# Module under test: SD-card detect IRQ lifecycle guard
+# ------------------------------------------------------------------
+add_executable(test_sdcard_detect
+    test_sdcard_detect.c
+)
+target_include_directories(test_sdcard_detect PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_sdcard_detect PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_sdcard_detect PRIVATE sanitizers)
+endif()
+add_test(NAME sdcard_detect COMMAND test_sdcard_detect)
+
+# ------------------------------------------------------------------
+# Module under test: logger DMA clock/init ordering
+# ------------------------------------------------------------------
+add_executable(test_logdb_init_order
+    test_logdb_init_order.c
+)
+target_compile_definitions(test_logdb_init_order PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_logdb_init_order PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_logdb_init_order PRIVATE sanitizers)
+endif()
+add_test(NAME logdb_init_order COMMAND test_logdb_init_order)
+
+# ------------------------------------------------------------------
+# Module under test: boot diagnostics must not depend on logger startup
+# ------------------------------------------------------------------
+add_executable(test_diag_boot_no_logging
+    test_diag_boot_no_logging.c
+)
+target_compile_definitions(test_diag_boot_no_logging PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_diag_boot_no_logging PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_diag_boot_no_logging PRIVATE sanitizers)
+endif()
+add_test(NAME diag_boot_no_logging COMMAND test_diag_boot_no_logging)

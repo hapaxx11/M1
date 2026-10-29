@@ -65,7 +65,7 @@ void m1_system_init(void)
 
 	m1_system_GPIO_init();
 
-	ret = xTaskCreate(m1_system_init_task, "m1_system_init_task_n", M1_TASK_STACK_SIZE_DEFAULT, NULL, TASK_PRIORITY_SYS_INIT, &sys_init_task_hdl);
+	ret = xTaskCreate(m1_system_init_task, "m1_system_init_task_n", M1_TASK_STACK_SIZE_1024, NULL, TASK_PRIORITY_SYS_INIT, &sys_init_task_hdl);
 	assert(ret==pdPASS);
 	assert(sys_init_task_hdl!=NULL);
 	free_heap = xPortGetFreeHeapSize();
@@ -168,20 +168,26 @@ void m1_system_init_task(void *param)
 			and is called before osKernelStart() will disable interrupts.  This includes the usual MX_FREERTOS_Init() function.
 			So any code you have between MX_FREERTOS_Init() and osKernelStart() will run with interrupts disabled.
 			*/
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_SYSINIT);
 			startup_device_init();
 			//  MX_X_CUBE_NFC6_Init();
 			m1_i2c_hal_init(&hi2c1);
 			m1_spi_hal_init(&hspi2);
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_IOHAL);
 
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_BATTERY);
 			battery_service_init();
 			lp5814_init();
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_LCD);
 			m1_lcd_init(&hspi1);
 			m1_wdt_reset(); /* LCD init sequence can take >500ms on some hardware */
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_SDCARD);
 			m1_sdcard_init(&hsd1);
 			m1_wdt_reset(); /* SD card mount can take 1-2s on slower cards; refresh
 			                   before the WDT task takes over so the deferred IWDG
 			                   window (16s with prescaler 128/reload 4000) stays fresh */
 
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_LOGDB);
 			/* USART1 default config */
 			huart_logdb.Init.BaudRate = LOG_DEBUG_UART_BAUD;
 			huart_logdb.Init.WordLength = UART_WORDLENGTH_8B;
@@ -192,7 +198,9 @@ void m1_system_init_task(void *param)
 			m1_diag_boot_report(); /* snapshot reset cause before clearing RCC->RSR */
 
 			m1_wdt_init();
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_TASKS);
 			m1_tasks_init();
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_CONFIG);
 			startup_config_handler();
 			/* Refresh IWDG immediately after startup_config_handler() and
 			 * before any further logging.  The last reset in this task is

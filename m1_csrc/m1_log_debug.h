@@ -51,6 +51,7 @@ extern uint8_t logdb_rx_buffer[];
 extern uint8_t logdb_tx_buffer[];
 
 void m1_logdb_init();
+void m1_logdb_irq_start(void);
 extern void m1_logdb_update_tx_buffer(void);
 extern void log_db_handler_task(void *param);
 extern uint8_t m1_logdb_check_empty_state(void);

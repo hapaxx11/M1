@@ -11,25 +11,28 @@
 #include <string.h>
 #include <stdbool.h>
 #include "m1_diag.h"
+#include "m1_diag_status.h"
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_lcd.h"
 #include "m1_display.h"
 #include "m1_tasks.h"
-#include "m1_log_debug.h"
+#include "m1_system.h"
 
 /*===========================================================================*/
 /* .noinit diagnostic block (never zeroed by startup)                        */
 /*===========================================================================*/
 
 __attribute__((section(".noinit")))
-M1DiagBlock g_m1_diag;
+volatile M1DiagBlock g_m1_diag;
 
-/*===========================================================================*/
-/* Logging                                                                   */
-/*===========================================================================*/
+static M1DiagBlock previous_diag;
 
-#define M1_LOGDB_TAG "Diag"
+void m1_diag_capture_previous(void)
+{
+    m1_diag_copy_saved(&previous_diag, &g_m1_diag);
+    g_m1_diag.boot_completed = 0u;
+}
 
 /*===========================================================================*/
 /* m1_diag_boot_report()                                                     */
@@ -37,48 +40,122 @@ M1DiagBlock g_m1_diag;
 
 void m1_diag_boot_report(void)
 {
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG);
     uint32_t rsr = RCC->RSR;
-
-    /* Capture fault registers for this boot (they come from the CPU) */
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_RCC);
     uint32_t cfsr = SCB->CFSR;
     uint32_t hfsr = SCB->HFSR;
     uint32_t bfar = SCB->BFAR;
-
-    /* Decode the previous boot's write phase if the magic is valid */
-    bool prev_valid = (g_m1_diag.magic == M1_DIAG_MAGIC);
-    M1DiagWritePhase prev_phase  = prev_valid ? g_m1_diag.write_phase  : M1_DIAG_PHASE_NONE;
-    uint32_t         prev_cause  = prev_valid ? g_m1_diag.reset_cause  : 0;
-    uint32_t         prev_cfsr   = prev_valid ? g_m1_diag.cfsr          : 0;
-    (void)prev_cause; (void)prev_cfsr;
-
-    /* Log reset cause */
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_SCB);
+    bool prev_valid = (previous_diag.magic == M1_DIAG_MAGIC);
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_MAGIC);
+    M1DiagBootStage prev_stage = prev_valid ? previous_diag.boot_stage : M1_DIAG_BOOT_EARLY;
+    bool prev_boot_completed = prev_valid && previous_diag.boot_completed != 0u;
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_STAGE);
+    M1DiagFaultKind prev_fault = prev_valid ? previous_diag.fault_kind : M1_DIAG_FAULT_NONE;
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_FAULT);
+    M1DiagResetOrigin prev_origin = prev_valid ? previous_diag.reset_origin : M1_DIAG_RESET_NONE;
+    uint32_t prev_pc = prev_valid ? previous_diag.pc : 0;
+    uint32_t prev_wdt_run_time = prev_valid ? previous_diag.wdt_run_time : 0;
+    uint32_t prev_wdt_task_state = prev_valid ? previous_diag.wdt_task_state : UINT32_MAX;
+    int32_t prev_wdt_wake_delta = prev_valid ? previous_diag.wdt_wake_delta : 0;
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_ORIGIN);
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_SNAPSHOT);
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_REGS);
+    char stage_status[32];
+    char status[32];
     const char *cause_str = "POR";
+
     if      (rsr & RCC_RSR_IWDGRSTF) cause_str = "IWDG";
     else if (rsr & RCC_RSR_WWDGRSTF) cause_str = "WWDG";
     else if (rsr & RCC_RSR_SFTRSTF)  cause_str = "SFT";
     else if (rsr & RCC_RSR_BORRSTF)  cause_str = "BOR";
     else if (rsr & RCC_RSR_PINRSTF)  cause_str = "PIN";
 
-    if (prev_valid && prev_phase != M1_DIAG_PHASE_NONE
-                   && prev_phase != M1_DIAG_PHASE_DONE) {
-        M1_LOG_W(M1_LOGDB_TAG,
-                 "Reset(%s) during RFID write phase %d! RSR=0x%08lX\r\n",
-                 cause_str, (int)prev_phase, (unsigned long)prev_cause);
-    } else {
-        M1_LOG_I(M1_LOGDB_TAG, "Boot reset cause: %s (RSR=0x%08lX)\r\n",
-                 cause_str, (unsigned long)rsr);
-    }
-
-    /* Save current boot state */
     g_m1_diag.magic       = M1_DIAG_MAGIC;
     g_m1_diag.reset_cause = rsr;
     g_m1_diag.write_phase = M1_DIAG_PHASE_NONE;
-    g_m1_diag.cfsr        = cfsr;
-    g_m1_diag.hfsr        = hfsr;
-    g_m1_diag.bfar        = bfar;
+    g_m1_diag.cfsr        = prev_valid ? previous_diag.cfsr : cfsr;
+    g_m1_diag.hfsr        = prev_valid ? previous_diag.hfsr : hfsr;
+    g_m1_diag.bfar        = prev_valid ? previous_diag.bfar : bfar;
+    g_m1_diag.fault_kind  = M1_DIAG_FAULT_NONE;
+    g_m1_diag.reset_origin = M1_DIAG_RESET_NONE;
+    g_m1_diag.pc          = prev_pc;
+    g_m1_diag.wdt_run_time = 0;
+    g_m1_diag.wdt_task_state = UINT32_MAX;
+    g_m1_diag.wdt_stack_high_water = 0;
+    g_m1_diag.wdt_wake_delta = 0;
 
-    /* Clear reset flags so next boot gets a clean slate */
     __HAL_RCC_CLEAR_RESET_FLAGS();
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_CLEAR);
+
+    if (prev_fault == M1_DIAG_FAULT_WDT_TASK)
+        m1_diag_wdt_status_text(prev_pc, prev_wdt_run_time,
+                                prev_wdt_task_state, prev_wdt_wake_delta,
+                                stage_status, sizeof(stage_status));
+    else if (m1_diag_reset_origin_status_visible(prev_fault, prev_origin) &&
+             prev_origin >= M1_DIAG_DETAIL_RPC_NOTIFY)
+        snprintf(stage_status, sizeof(stage_status), "RPC: %s",
+                 m1_diag_reset_origin_text(prev_origin));
+    else if (m1_diag_reset_origin_status_visible(prev_fault, prev_origin))
+        snprintf(stage_status, sizeof(stage_status), "RST: %s",
+                 m1_diag_reset_origin_text(prev_origin));
+    else if (prev_fault == M1_DIAG_FAULT_ASSERT && prev_pc != 0)
+        snprintf(stage_status, sizeof(stage_status), "ASSERT: %lu",
+                 (unsigned long)prev_pc);
+    else if (prev_fault != M1_DIAG_FAULT_NONE && prev_pc != 0)
+        snprintf(stage_status, sizeof(stage_status), "PC: %08lX",
+                 (unsigned long)prev_pc);
+    else
+        m1_diag_boot_status_text(prev_stage, prev_fault, stage_status, sizeof(stage_status));
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_TEXT);
+    snprintf(status, sizeof(status), "%s: %.24s", cause_str, stage_status);
+    if (m1_diag_boot_report_visible(
+            prev_valid, prev_boot_completed, prev_fault,
+            (rsr & (RCC_RSR_IWDGRSTF | RCC_RSR_WWDGRSTF)) != 0))
+    {
+        m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_LCD);
+        startup_info_screen_display(status);
+    }
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_DONE);
+}
+
+void m1_diag_system_reset(M1DiagResetOrigin origin)
+{
+    m1_diag_set_reset_origin(origin);
+    NVIC_SystemReset();
+}
+
+void m1_diag_fault_capture(M1DiagFaultKind kind)
+{
+    m1_diag_fault_capture_with_pc(kind, 0);
+}
+
+void m1_diag_fault_capture_with_pc(M1DiagFaultKind kind, uint32_t pc)
+{
+    g_m1_diag.magic      = M1_DIAG_MAGIC;
+    g_m1_diag.fault_kind = kind;
+    g_m1_diag.cfsr       = SCB->CFSR;
+    g_m1_diag.hfsr       = SCB->HFSR;
+    g_m1_diag.bfar       = SCB->BFAR;
+    g_m1_diag.pc         = pc;
+}
+
+void m1_diag_wdt_capture(uint32_t task_id, uint32_t run_time,
+                         uint32_t task_state, uint32_t stack_high_water,
+                         int32_t wake_delta)
+{
+    m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_WDT_TASK, task_id);
+    g_m1_diag.wdt_run_time = run_time;
+    g_m1_diag.wdt_task_state = task_state;
+    g_m1_diag.wdt_stack_high_water = stack_high_water;
+    g_m1_diag.wdt_wake_delta = wake_delta;
+}
+
+void m1_diag_assert_capture(const char *file, uint32_t line)
+{
+    (void)file;
+    m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_ASSERT, line);
 }
 
 /*===========================================================================*/

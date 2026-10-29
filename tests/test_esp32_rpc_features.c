@@ -46,6 +46,16 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     return 1;
 }
 
+uint8_t spi_m1link_send_recv_bin_timed(const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       int *out_len, uint32_t timeout_ms)
+{
+    (void)tx_buf; (void)tx_len; (void)rx_buf; (void)rx_buf_size;
+    (void)timeout_ms;
+    if (out_len) *out_len = 0;
+    return 1;
+}
+
 /* Not exercised by these wrapper-level tests (see test_esp32_rpc.c for the
  * Phase 6 "wall-clock diagnostic" coverage); stub so the module links. */
 uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return 0u; }
@@ -59,13 +69,13 @@ static int     g_canned_len;
 static uint8_t g_ret;
 static uint8_t g_last_tx[M1_ESP32_RPC_FRAME_MAX];
 static int     g_last_tx_len;
-static int     g_last_timeout_sec;
+static uint32_t g_last_timeout_ms;
 
 static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
-                              int *out_len, int timeout_sec)
+                              int *out_len, uint32_t timeout_ms)
 {
-    g_last_timeout_sec = timeout_sec;
+    g_last_timeout_ms = timeout_ms;
     g_last_tx_len = (tx_len < (int)sizeof(g_last_tx)) ? tx_len
                                                       : (int)sizeof(g_last_tx);
     memcpy(g_last_tx, tx_buf, (size_t)g_last_tx_len);
@@ -131,6 +141,7 @@ void setUp(void)
     g_canned_len = 0;
     g_ret = 0;
     g_last_tx_len = 0;
+    g_last_timeout_ms = 0u;
     memset(g_canned, 0, sizeof(g_canned));
     memset(g_last_tx, 0, sizeof(g_last_tx));
     m1_esp32_rpc_set_transport(fake_transport);
@@ -683,7 +694,7 @@ void test_rpc_status_supports_short_poll_timeout(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_rpc_status_timeout(&out, 3));
     TEST_ASSERT_EQUAL_UINT8(client_mask, out);
-    TEST_ASSERT_EQUAL_INT(3, g_last_timeout_sec);
+    TEST_ASSERT_EQUAL_UINT32(3000u, g_last_timeout_ms);
 }
 
 void test_qmon_poll_copies_complete_frame(void)
@@ -818,9 +829,10 @@ void test_wifi_scan_uses_extended_timeout(void)
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_wifi_scan(out, 4, &count));
-    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S, g_last_timeout_sec);
+    TEST_ASSERT_EQUAL_UINT32(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S * 1000u,
+                             g_last_timeout_ms);
     TEST_ASSERT_GREATER_THAN_INT(M1_ESP32_RPC_FEATURE_TIMEOUT_S,
-                                 g_last_timeout_sec);
+                                 (int)(g_last_timeout_ms / 1000u));
 }
 
 void test_wifi_scan_propagates_nak(void)
@@ -1049,9 +1061,10 @@ void test_sntp_sync_uses_feature_timeout(void)
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
     m1_esp32_rpc_sntp_sync(NULL);
-    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_FEATURE_TIMEOUT_S, g_last_timeout_sec);
+    TEST_ASSERT_EQUAL_UINT32(M1_ESP32_RPC_FEATURE_TIMEOUT_S * 1000u,
+                             g_last_timeout_ms);
     TEST_ASSERT_LESS_THAN_INT(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S,
-                               g_last_timeout_sec);
+                               (int)(g_last_timeout_ms / 1000u));
 }
 
 /* ================================================================== */

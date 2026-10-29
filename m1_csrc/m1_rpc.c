@@ -56,6 +56,8 @@
 #include "m1_i2c.h"
 #include "m1_rpc_scan.h"
 #include "m1_settings.h"
+#include "m1_diag.h"
+#include "m1_rpc_stream_state.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -281,7 +283,7 @@ static void rpc_send_screen_frame(uint8_t seq,
 static void rpc_flip_buffer_180(uint8_t *buf, uint16_t size);
 static bool rpc_brain_transmit(void *context, const uint8_t *data,
                                uint16_t len);
-static bool rpc_brain_relay_poll(void);
+static bool rpc_brain_relay_poll(TickType_t *supervised_start);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -1009,8 +1011,9 @@ static void rpc_handle_reboot(const S_RPC_Frame *f)
     m1_rpc_send_ack(f->seq);
     osDelay(100);  /* Allow ACK to be transmitted */
     startup_config_write(BK_REGS_SELECT_DEV_OP_STAT, DEV_OP_STATUS_REBOOT);
+    m1_diag_set_reset_origin(M1_DIAG_RESET_RPC);
     m1_pre_power_down();
-    NVIC_SystemReset();
+    m1_diag_system_reset(M1_DIAG_RESET_RPC);
 }
 
 
@@ -1027,6 +1030,7 @@ static void rpc_handle_power_off(const S_RPC_Frame *f)
 {
     m1_rpc_send_ack(f->seq);
     osDelay(100);  /* Allow ACK to be transmitted */
+    m1_diag_set_reset_origin(M1_DIAG_RESET_RPC);
     m1_power_down();
 }
 
@@ -1038,6 +1042,8 @@ static void rpc_handle_power_off(const S_RPC_Frame *f)
 static bool rpc_screen_stream_active_get(void)
 {
     bool active = false;
+    if (!m1_rpc_screen_stream_lock_ready(s_route_mutex))
+        return false;
     if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
     {
         active = rpc_screen_stream.active;
@@ -2806,11 +2812,9 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f)
  * one complete qMonstatek frame; a single heap copy is retained only if the
  * USB parser currently owns an incomplete frame, and is bounded by 2038 bytes.
  *
- * Returns true when this call ran the ESP32 bring-up / capability probe, so
- * the caller can reset its watchdog heartbeat baseline (the probe is wrapped
- * in a supervision suspend/resume below, and the probe seconds must not be
- * counted against the next report window). */
-static bool rpc_brain_relay_poll(void)
+ * Returns true when this call ran the ESP32 bring-up / capability probe and
+ * stores the exact resume tick so only suspended probe time is excluded. */
+static bool rpc_brain_relay_poll(TickType_t *supervised_start)
 {
     /* The bring-up probe (m1_esp32_init + capability classification) can
      * legitimately block for many seconds when the ESP32 is absent or still
@@ -2820,27 +2824,39 @@ static bool rpc_brain_relay_poll(void)
      * heartbeat — suspend supervision around the probe, mirroring the
      * deferred ESP32 flash-op pattern.  The steady-state relay calls below
      * stay supervised: each is bounded by its own RPC timeout (<=2 s). */
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_RELAY);
     bool probing = !m1_esp32_get_init_status() || !m1_esp32_caps_is_queried();
     if (probing)
         m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
 
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_OWNER);
     m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_BLE_DIRECT,
                                   settings_bluetooth_direct_enabled());
     if (!m1_esp32_get_init_status() &&
         m1_esp32_background_owner_active())
+    {
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_ESP_INIT);
         m1_esp32_init();
+    }
     if (!m1_esp32_get_init_status())
     {
         if (probing)
+        {
             m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+            *supervised_start = xTaskGetTickCount();
+        }
         m1_rpc_set_mobile_session_active(false);
         return probing;
     }
 
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_TRANSPORT);
     if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
     {
         if (probing)
+        {
             m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+            *supervised_start = xTaskGetTickCount();
+        }
         m1_rpc_set_mobile_session_active(false);
         s_brain_rpc_status_unsupported = false;
         s_brain_qmon_poll_unsupported = false;
@@ -2853,7 +2869,10 @@ static bool rpc_brain_relay_poll(void)
     }
 
     if (probing)
+    {
         m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+        *supervised_start = xTaskGetTickCount();
+    }
 
     TickType_t now = xTaskGetTickCount();
     bool status_due = !s_brain_rpc_status_unsupported &&
@@ -2861,6 +2880,7 @@ static bool rpc_brain_relay_poll(void)
                       m1_rpc_poll_deadline_due(
                           now, s_brain_rpc_poll_deadline));
     m1_esp32_rpc_status_t status = M1_ESP32_RPC_OK;
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_STATUS);
     if (status_due)
     {
         uint8_t client_status = 0u;
@@ -2898,6 +2918,7 @@ static bool rpc_brain_relay_poll(void)
 
     bool client_active = m1_rpc_mobile_session_active();
 
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_BLE_ADV);
     if (s_ble_direct_sync_pending &&
         (s_ble_direct_last_sync_tick == 0u ||
          (now - s_ble_direct_last_sync_tick) >= pdMS_TO_TICKS(5000u)))
@@ -2921,6 +2942,7 @@ static bool rpc_brain_relay_poll(void)
         return probing;
     }
 
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_FEED);
     if (s_brain_relay_pending_frame != NULL)
     {
         if (m1_rpc_feed_from_transport(M1_RPC_TRANSPORT_ESP32,
@@ -2936,6 +2958,7 @@ static bool rpc_brain_relay_poll(void)
 
     uint8_t frame[M1_ESP32_RPC_RESP_PAYLOAD_MAX];
     uint16_t frame_len = 0u;
+    m1_diag_set_detail(M1_DIAG_DETAIL_RPC_QMON);
     status = m1_esp32_rpc_qmon_poll(frame, sizeof(frame), &frame_len);
     if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
     {
@@ -2989,18 +3012,21 @@ void m1_rpc_task(void *param)
 
     for (;;)
     {
-        /* Heartbeat: report the actual elapsed time of the previous
-         * iteration (before any long op below). A true hang stops the
-         * reports and lets the watchdog reset. */
-        m1_wdt_send_report_ex(M1_REPORT_ID_RPC_TASK, rpc_wdt_last);
-        rpc_wdt_last = xTaskGetTickCount();
+        TickType_t rpc_now = xTaskGetTickCount();
+        if (m1_wdt_heartbeat_due(rpc_now, rpc_wdt_last))
+        {
+            m1_wdt_send_report_ex(M1_REPORT_ID_RPC_TASK, rpc_wdt_last);
+            rpc_wdt_last = rpc_now;
+        }
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_NOTIFY);
 
         /* Wait for notification with timeout.
          * Notifications come from:
          *  - m1_rpc_notify_screen_update() for screen frame ready
          *  - rpc_dispatch_frame() for deferred slow commands
          *  - m1_rpc_usb_session_reset_from_isr() for a host re-enumeration */
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_EPOCH);
 
         /* Drop stale state left by a host re-enumeration (qM reconnect
          * without an MCU reboot). Discard ONLY a deferred command that was
@@ -3050,6 +3076,7 @@ void m1_rpc_task(void *param)
         /* Process deferred command (file delete, mkdir, etc.)
          * These run here instead of the CDC task to avoid blocking
          * the USB endpoint during slow SD card operations. */
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_DEFERRED);
         if (s_deferred_pending)
         {
             S_RPC_Frame frame;
@@ -3098,14 +3125,14 @@ void m1_rpc_task(void *param)
             }
         }
 
-        if (rpc_brain_relay_poll())
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_RELAY);
+        TickType_t rpc_wdt_probe_resume_tick = rpc_wdt_last;
+        if (rpc_brain_relay_poll(&rpc_wdt_probe_resume_tick))
         {
-            /* A probe ran under suspended supervision: reset the heartbeat
-             * baseline so the probe seconds aren't counted against the next
-             * report window (same pattern as the ESP32 flash op above). */
-            rpc_wdt_last = xTaskGetTickCount();
+            rpc_wdt_last = rpc_wdt_probe_resume_tick;
         }
 
+        m1_diag_set_detail(M1_DIAG_DETAIL_RPC_STREAM);
         /* Snapshot stream state under the routing lock; the command
          * dispatcher owns writes to these fields. */
         bool stream_active = false;
@@ -3219,6 +3246,30 @@ void m1_rpc_init(void)
     );
     assert(ret == pdPASS);
     assert(s_rpc_task_hdl != NULL);
+}
+
+uint32_t m1_rpc_task_debug_state(void)
+{
+    return s_rpc_task_hdl != NULL
+               ? (uint32_t)eTaskGetState(s_rpc_task_hdl)
+               : UINT32_MAX;
+}
+
+uint32_t m1_rpc_task_debug_stack_high_water(void)
+{
+    return s_rpc_task_hdl != NULL
+               ? (uint32_t)uxTaskGetStackHighWaterMark(s_rpc_task_hdl)
+               : 0u;
+}
+
+int32_t m1_rpc_task_debug_wake_delta(void)
+{
+    if (s_rpc_task_hdl == NULL)
+        return 0;
+
+    /* StaticTask_t mirrors the TCB layout; xDummy3[0] is its state-list item. */
+    const StaticTask_t *tcb = (const StaticTask_t *)s_rpc_task_hdl;
+    return (int32_t)(tcb->xDummy3[0].xDummy2 - xTaskGetTickCount());
 }
 
 #endif /* M1_APP_RPC_ENABLE */

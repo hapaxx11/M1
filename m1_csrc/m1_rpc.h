@@ -271,6 +271,9 @@ bool m1_rpc_is_sync(const uint8_t *data, uint16_t len);
  * @param  param  Not used
  */
 void m1_rpc_task(void *param);
+uint32_t m1_rpc_task_debug_state(void);
+uint32_t m1_rpc_task_debug_stack_high_water(void);
+int32_t m1_rpc_task_debug_wake_delta(void);
 
 /**
  * @brief  Notify the RPC task that a new screen frame is ready.
