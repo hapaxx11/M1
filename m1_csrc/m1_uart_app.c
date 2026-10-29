@@ -49,6 +49,11 @@ void m1_uart_app_bridge_paused_notify(void) {
 }
 
 void m1_uart_app_init(uint32_t baud) {
+    if(m1_uart_app_owned) {
+        m1_usb_cdc_app_comconfig(baud);
+        return;
+    }
+
     if(ser2usb_task_hdl) {
         s_uart_app_waiter = xTaskGetCurrentTaskHandle();
         m1_uart_app_pause_requested = true;

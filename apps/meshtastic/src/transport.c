@@ -35,7 +35,6 @@ void transport_set_baud(ZeroMeshApp *app, uint32_t baud) {
     if(!app) return;
     app->baud = baud;
     if(app->uart_up) {
-        m1_uart_app_deinit();
         m1_uart_app_init(baud);
     }
 }

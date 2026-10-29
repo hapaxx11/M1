@@ -86,6 +86,29 @@ void test_cdc_defers_host_reconfiguration_during_uart_ownership(void) {
     free(content);
 }
 
+void test_baud_change_keeps_uart_owned_without_bridge_handoff(void) {
+    char* transport = read_repo_file("apps/meshtastic/src/transport.c");
+    char* uart_app = read_repo_file("m1_csrc/m1_uart_app.c");
+    TEST_ASSERT_NOT_NULL(transport);
+    TEST_ASSERT_NOT_NULL(uart_app);
+    const char* set_baud = strstr(transport, "void transport_set_baud(");
+    const char* set_baud_end = set_baud ? strstr(set_baud, "\n}") : NULL;
+    TEST_ASSERT_NOT_NULL(set_baud);
+    TEST_ASSERT_NOT_NULL(set_baud_end);
+    TEST_ASSERT_NULL(strstr(set_baud, "m1_uart_app_deinit();"));
+    TEST_ASSERT_NOT_NULL(strstr(set_baud, "m1_uart_app_init(baud);"));
+    const char* init = strstr(uart_app, "void m1_uart_app_init(uint32_t baud)");
+    const char* already_owned = init ? strstr(init, "if(m1_uart_app_owned)") : NULL;
+    const char* app_config = already_owned ? strstr(already_owned, "m1_usb_cdc_app_comconfig(baud);") : NULL;
+    const char* fresh_pause = init ? strstr(init, "m1_uart_app_pause_requested = true;") : NULL;
+    TEST_ASSERT_NOT_NULL(already_owned);
+    TEST_ASSERT_NOT_NULL(app_config);
+    TEST_ASSERT_NOT_NULL(fresh_pause);
+    TEST_ASSERT_TRUE(already_owned < fresh_pause);
+    free(transport);
+    free(uart_app);
+}
+
 void test_keyboard_uses_text_input_and_services_protocol(void) {
     char* app = read_repo_file("apps/meshtastic/src/main.c");
     char* keyboard = read_repo_file("m1_csrc/m1_virtual_kb.c");
@@ -146,6 +169,7 @@ int main(void) {
     RUN_TEST(test_app_manager_releases_uart_before_unloading_elf);
     RUN_TEST(test_uart_bridge_acknowledges_pause_before_app_claims_stream);
     RUN_TEST(test_cdc_defers_host_reconfiguration_during_uart_ownership);
+    RUN_TEST(test_baud_change_keeps_uart_owned_without_bridge_handoff);
     RUN_TEST(test_keyboard_uses_text_input_and_services_protocol);
     RUN_TEST(test_settings_ensure_parent_before_child_directory);
     RUN_TEST(test_snr_is_preserved_as_float_db);

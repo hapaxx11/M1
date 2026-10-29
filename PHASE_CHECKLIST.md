@@ -23,5 +23,5 @@
 
 ### Phase 4 — Regression checks and cleanup
 - **Description**: Add/execute targeted regression coverage, build checks, review the final diff, and remove this checklist.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Preserve UART ownership during baud changes`
