@@ -596,6 +596,7 @@ extern uint32_t m1_crypto_decrypt(uint8_t *buf, uint32_t total_len);
 /* Show filename entry dialog. Returns 1 on OK, 0 on cancel. */
 extern uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
 extern uint8_t  m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size);
+extern void     m1app_set_keyboard_service_callback(void (*callback)(void));
 
 /* Show text entry dialog. Returns 1 on OK, 0 on cancel. */
 extern uint8_t m1_vkbs_get_data(char *description, char *new_data);

@@ -18,10 +18,10 @@
 
 ### Phase 3 — Non-blocking app servicing
 - **Description**: Keep UART RX and heartbeat service active during the keyboard and notifications without blocking alerts.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Service Meshtastic app without blocking`
 
 ### Phase 4 — Regression checks and cleanup
 - **Description**: Add/execute targeted regression coverage, build checks, review the final diff, and remove this checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

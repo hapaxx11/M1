@@ -13,7 +13,7 @@
  *   - InputEvent / keys  -> synthesised from game_poll_button + long-press
  *   - furi_get_tick/delay -> m1app_get_tick / m1app_delay (both milliseconds)
  *   - furi mutex          -> no-ops (the M1 app is a single cooperative task)
- *   - furi_hal_random_*   -> rand() / m1_crypto_generate_iv
+ *   - random IDs          -> rand(); secure key bytes -> hardware TRNG
  *   - FURI_LOG_*          -> dropped
  *
  * The app is single-threaded: RX draining, dispatch and rendering all run in
@@ -65,15 +65,8 @@ static inline uint32_t furi_hal_random_get(void) {
     /* rand() may be only 15-bit; fold three draws into 32 bits. */
     return ((uint32_t)rand() << 20) ^ ((uint32_t)rand() << 8) ^ (uint32_t)rand();
 }
-static inline void furi_hal_random_fill_buf(uint8_t *buf, size_t len) {
-    /* Use the hardware-backed IV generator where we can (channel PSK), and
-     * top up any tail with rand(). */
-    size_t i = 0;
-    while(i + M1APP_AES_IV_SIZE <= len) {
-        m1_crypto_generate_iv(buf + i);
-        i += M1APP_AES_IV_SIZE;
-    }
-    for(; i < len; i++) buf[i] = (uint8_t)rand();
+static inline bool furi_hal_random_fill_buf(uint8_t *buf, size_t len) {
+    return m1_crypto_random_bytes(buf, len);
 }
 
 /* ---- small libc helpers not in the export table ---- */

@@ -140,7 +140,7 @@ static void handle_routing(ZeroMeshApp* app, const meshtastic_Data* d, uint32_t 
 /* The radio answers get_channel_request over ADMIN_APP. Reading the channel
    back is what lets the public/private toggle keep the existing name and
    key instead of overwriting whatever was already configured. */
-static void handle_admin(ZeroMeshApp* app, const uint8_t* buf, size_t buflen) {
+void protocol_handle_admin(ZeroMeshApp* app, const uint8_t* buf, size_t buflen) {
     meshtastic_AdminMessage am = meshtastic_AdminMessage_init_default;
 
     pb_istream_t st = pb_istream_from_buffer(buf, buflen);
@@ -360,7 +360,7 @@ static void decode_fromradio(ZeroMeshApp* app, const uint8_t* frame, size_t len)
                         handle_text(app, p, sender_id, cap.buf, cap.len);
                         break;
                     case meshtastic_PortNum_ADMIN_APP:
-                        handle_admin(app, cap.buf, cap.len);
+                        protocol_handle_admin(app, cap.buf, cap.len);
                         break;
                     case meshtastic_PortNum_ROUTING_APP:
                         handle_routing(app, d, sender_id, cap.buf, cap.len);
@@ -631,7 +631,7 @@ void set_channel_config(ZeroMeshApp* app, bool make_private, bool share_position
             psk_len = app->cfg_ch_psk_len;
             memcpy(psk, app->cfg_ch_psk, psk_len);
         } else {
-            if(!m1_crypto_random_bytes(psk, sizeof(psk))) {
+            if(!furi_hal_random_fill_buf(psk, sizeof(psk))) {
                 log_line(app, "Secure random unavailable");
                 set_status(app, "Channel key failed");
                 return;

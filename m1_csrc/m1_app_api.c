@@ -265,6 +265,7 @@ void m1_app_api_init(void)
         /* ===== Virtual keyboard ===== */
         { "m1_vkb_get_filename", (void *)m1_vkb_get_filename },
         { "m1_vkb_get_text",     (void *)m1_vkb_get_text },
+        { "m1app_set_keyboard_service_callback", (void *)m1app_set_keyboard_service_callback },
         { "m1_vkbs_get_data",    (void *)m1_vkbs_get_data },
 
         /* ===== Audio / Buzzer ===== */

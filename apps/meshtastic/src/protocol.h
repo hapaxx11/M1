@@ -3,6 +3,7 @@
 
 void protocol_init(ZeroMeshApp* app);
 void protocol_poll(ZeroMeshApp* app);
+void protocol_handle_admin(ZeroMeshApp* app, const uint8_t* buf, size_t buflen);
 
 void send_text_message(ZeroMeshApp* app, const char* text, uint32_t to_node);
 void request_info(ZeroMeshApp* app);

@@ -27,6 +27,9 @@ M1_APP_MANIFEST("Meshtastic", 4096); /* 16 KB task stack: headroom for nanopb de
 
 /* The app state is large; keep it in .bss rather than on the task stack. */
 static ZeroMeshApp g_app;
+static uint32_t s_last_heartbeat;
+
+#define HEARTBEAT_INTERVAL_MS 30000u
 
 /* ---- button translation: M1 poll -> Flipper-style InputEvent ---- */
 static InputKey btn_to_key(m1app_button_t b, bool* ok) {
@@ -110,6 +113,30 @@ static void service_pending(ZeroMeshApp* app) {
     }
 }
 
+static void service_heartbeat(ZeroMeshApp* app) {
+    uint32_t now = m1app_get_tick();
+    if(now - s_last_heartbeat >= HEARTBEAT_INTERVAL_MS) {
+        send_heartbeat(app);
+        s_last_heartbeat = now;
+    }
+}
+
+static void service_notifications(ZeroMeshApp* app) {
+    if(app->pending_notify) {
+        app->pending_notify = false;
+        notify_rx_message(app);
+    }
+    notify_poll();
+}
+
+static void keyboard_service(void) {
+    ZeroMeshApp* app = &g_app;
+    protocol_poll(app);
+    service_notifications(app);
+    service_pending(app);
+    service_heartbeat(app);
+}
+
 int32_t app_main(void* context) {
     (void)context;
 
@@ -141,8 +168,7 @@ int32_t app_main(void* context) {
     uint32_t last_config_req = 0, last_chan_req = 0, last_pos_req = 0;
     const uint32_t CONFIG_RETRY_MS = 5000;
     uint32_t last_render = m1app_get_tick();
-    uint32_t last_heartbeat = m1app_get_tick();
-    const uint32_t HEARTBEAT_INTERVAL_MS = 30000;
+    s_last_heartbeat = m1app_get_tick();
     const uint32_t frame_delays[] = {1000, 500, 333, 250, 200, 166, 142, 125, 111, 100};
 
     u8g2_t* u8g2 = m1app_get_u8g2();
@@ -152,10 +178,7 @@ int32_t app_main(void* context) {
         protocol_poll(app);
 
         /* 2. Deferred work queued by the UI or the decoder. */
-        if(app->pending_notify) {
-            app->pending_notify = false;
-            notify_rx_message(app);
-        }
+        service_notifications(app);
         service_pending(app);
 
         /* 3. Ask the radio for its identity / channel / position config until
@@ -183,10 +206,7 @@ int32_t app_main(void* context) {
             app->cfg_pos_known = false;
         }
 
-        if(m1app_get_tick() - last_heartbeat >= HEARTBEAT_INTERVAL_MS) {
-            send_heartbeat(app);
-            last_heartbeat = m1app_get_tick();
-        }
+        service_heartbeat(app);
 
         /* 4. Input. A short poll timeout keeps the UART drained and paces the
               loop; the firmware primitive reports click vs long-click. */
@@ -206,7 +226,9 @@ int32_t app_main(void* context) {
         /* 5. Modal keyboard (message compose). */
         if(app->show_keyboard) {
             app->show_keyboard = false;
+            m1app_set_keyboard_service_callback(keyboard_service);
             run_keyboard(app);
+            m1app_set_keyboard_service_callback(NULL);
             last_render = m1app_get_tick();
         }
 
