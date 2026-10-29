@@ -10,6 +10,7 @@ name: Update agent branches
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read        # checkout/push use the GitHub App token, not GITHUB_TOKEN
