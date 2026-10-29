@@ -9,8 +9,7 @@ on:
         type: string
 
 permissions:
-  actions: write
-  contents: write
+  contents: read
 
 concurrency:
   group: version-bump
@@ -21,10 +20,20 @@ jobs:
     name: Update version
     runs-on: ubuntu-24.04
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.COPILOT_AGENT_APP_ID }}
+          private-key: ${{ secrets.COPILOT_AGENT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Checkout main
         uses: actions/checkout@v7
         with:
           ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Validate and update version
         id: version
@@ -68,11 +77,18 @@ jobs:
       - name: Commit and push version
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add m1_csrc/m1_fw_update_bl.h
           git commit -m "chore: bump version to v${VERSION} [skip ci]"
-          git push origin HEAD:main
-          gh workflow run update-branches.yml --repo "$GITHUB_REPOSITORY" --ref main
+          BRANCH="version-bump/v${VERSION}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git push origin "HEAD:${BRANCH}"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bump version to v${VERSION}" \
+            --body "Updates the firmware version macros to v${VERSION}."
