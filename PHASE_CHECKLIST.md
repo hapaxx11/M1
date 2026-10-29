@@ -13,5 +13,5 @@
 
 ### Phase 2 — Dispatch branch updates
 - **Description**: Make update-branches dispatchable and run it after the version bump push.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `fix: dispatch agent branch updates`

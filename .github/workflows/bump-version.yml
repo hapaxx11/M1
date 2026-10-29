@@ -9,6 +9,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
@@ -67,9 +68,11 @@ jobs:
       - name: Commit and push version
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add m1_csrc/m1_fw_update_bl.h
           git commit -m "chore: bump version to v${VERSION} [skip ci]"
           git push origin HEAD:main
+          gh workflow run update-branches.yml --repo "$GITHUB_REPOSITORY" --ref main
