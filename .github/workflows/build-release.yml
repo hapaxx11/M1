@@ -71,9 +71,9 @@ jobs:
       # ------------------------------------------------------------------ #
       # 2. Auto-increment version — patch source files before building
       # ------------------------------------------------------------------ #
-      # Queries the latest published release whose tag matches v{MAJOR}.{MINOR}.{BUILD}.*
-      # and sets RC = (latest RC) + 1, so every CI run produces the next sequential
-      # release automatically.  If a manual tag is supplied, its RC is used instead.
+      # Uses the shared version-selection rule: select the greater of the header's
+      # pending RC and one above the latest published RC for this prefix.
+      # If a manual tag is supplied, its RC is used instead.
       # Only m1_fw_update_bl.h (FW_VERSION_RC, M1_HAPAX_REVISION) is patched.
       # CMakeLists.txt is NOT patched — it derives CMAKE_PROJECT_NAME automatically
       # from those same #define values at configure time.
@@ -82,39 +82,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-
+          set -euo pipefail
           if [ -n "${{ inputs.tag }}" ]; then
             # Use RC from the manually-supplied tag (e.g. v0.9.0.5 → 5)
             NEW_RC=$(echo "${{ inputs.tag }}" | grep -Eo '[0-9]+$')
             echo "Using manual tag RC: ${NEW_RC}"
           else
-            # Auto-increment: find the highest RC already released for this prefix
-            PREFIX="v${MAJOR}.${MINOR}.${BUILD}."
-            LATEST_RC=$(gh release list \
+            TAGS_JSON=$(gh release list \
                 --repo "$GITHUB_REPOSITORY" \
-                --limit 50 \
+                --limit 1000 \
                 --json tagName \
-              | python3 -c "
-          import json, sys
-          prefix = '${PREFIX}'
-          tags = [t['tagName'] for t in json.load(sys.stdin)]
-          nums = []
-          for t in tags:
-              if t.startswith(prefix):
-                  tail = t[len(prefix):]
-                  if tail.isdigit():
-                      nums.append(int(tail))
-          print(max(nums) if nums else 0)
-          " 2>/dev/null || echo "0")
-            NEW_RC=$((LATEST_RC + 1))
-            echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
-
+                --jq '[.[].tagName]')
+            VERSION_OUTPUT=$(printf '%s' "$TAGS_JSON" \
+              | python3 scripts/version_selection.py next-release)
+            NEW_RC=$(printf '%s\n' "$VERSION_OUTPUT" | sed -n 's/^version=//p' | cut -d. -f4)
           fi
 
           echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"

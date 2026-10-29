@@ -29,46 +29,29 @@ jobs:
         id: version
         env:
           NEXT_VERSION: ${{ inputs.next_version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 <<'PY'
-          import os
+          set -euo pipefail
+          TAGS_JSON=$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 1000 \
+              --json tagName \
+              --jq '[.[].tagName]')
+          printf '%s' "$TAGS_JSON" \
+            | python3 scripts/version_selection.py validate-bump --requested "$NEXT_VERSION" \
+            >> "$GITHUB_OUTPUT"
+
+          VERSION=$(sed -n 's/^version=//p' "$GITHUB_OUTPUT" | tail -n1)
+          python3 - "$VERSION" <<'PY'
           import re
+          import sys
           from pathlib import Path
 
           header = Path("m1_csrc/m1_fw_update_bl.h")
           contents = header.read_text()
+          version = tuple(map(int, sys.argv[1].split(".")))
           macros = ("FW_VERSION_MAJOR", "FW_VERSION_MINOR", "FW_VERSION_BUILD", "FW_VERSION_RC")
-
-          def current_value(macro):
-              match = re.search(rf"^#define\s+{macro}\s+(\d+)\s*$", contents, re.MULTILINE)
-              if not match:
-                  raise SystemExit(f"Could not read {macro} from {header}")
-              return int(match.group(1))
-
-          current = tuple(current_value(macro) for macro in macros)
-          requested = os.environ["NEXT_VERSION"].strip()
-          match = re.fullmatch(r"v?\.?(\d+)\.(\d+)\.(\d+)\.(\d+)", requested)
-          if not match:
-              raise SystemExit(
-                  f"Invalid version '{requested}'. Use four numeric components, such as v0.9.5.0."
-              )
-
-          new = tuple(int(component) for component in match.groups())
-          major, minor, build, revision = current
-          valid_versions = {
-              (major + 1, 0, 0, 0),
-              (major, minor + 1, 0, 0),
-              (major, minor, build + 1, 0),
-              (major, minor, build, revision + 1),
-          }
-          if new not in valid_versions:
-              allowed = ", ".join(".".join(map(str, version)) for version in sorted(valid_versions))
-              raise SystemExit(
-                  "The next version must increment exactly one component and reset all lower "
-                  f"components to zero. Current: {'.'.join(map(str, current))}. Allowed: {allowed}."
-              )
-
-          for macro, value in zip((*macros, "M1_HAPAX_REVISION"), (*new, new[3])):
+          for macro, value in zip((*macros, "M1_HAPAX_REVISION"), (*version, version[3])):
               contents, replacements = re.subn(
                   rf"(?m)^(#define\s+{macro}\s+)\d+\s*$",
                   rf"\g<1>{value}",
@@ -77,13 +60,9 @@ jobs:
               )
               if replacements != 1:
                   raise SystemExit(f"Could not update {macro} in {header}")
-
           header.write_text(contents)
-          new_version = ".".join(map(str, new))
-          print(f"Version updated: {'.'.join(map(str, current))} -> {new_version}")
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"version={new_version}\n")
           PY
+          echo "Version updated to ${VERSION}"
 
       - name: Commit and push version
         env:

@@ -10,9 +10,9 @@ name: Prepare Changelog
 #      "## [Unreleased]" + "## [<next version>] - <YYYY-MM-DD>".
 #   3. Changes (if any) are committed back to the PR branch.
 #
-# Version source: the *same* rule Build and Release uses at release time —
-# latest published release v{MAJOR}.{MINOR}.{BUILD}.N → N + 1 (MAJOR/MINOR/BUILD
-# from m1_fw_update_bl.h).  No separate RC scheme is introduced.  Because the
+# Version source: the *same* shared rule Build and Release uses — select the
+# greater of the header's pending RC and one above the latest published RC for its
+# MAJOR/MINOR/BUILD prefix.  Because the
 # prediction is made before merge, it can go stale if another release is
 # published first; any stamped section that is not yet published — newer than
 # the latest release, or carrying entries absent from that release's
@@ -124,37 +124,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-
-          PREFIX="v${MAJOR}.${MINOR}.${BUILD}."
           TAGS_JSON=$(gh release list \
               --repo "$GITHUB_REPOSITORY" \
-              --limit 50 \
-              --json tagName)
-          LATEST_RC=$(printf '%s' "${TAGS_JSON}" | python3 -c "
-          import json, sys
-          prefix = '${PREFIX}'
-          tags = [t['tagName'] for t in json.load(sys.stdin)]
-          nums = []
-          for t in tags:
-              if t.startswith(prefix):
-                  tail = t[len(prefix):]
-                  if tail.isdigit():
-                      nums.append(int(tail))
-          print(max(nums) if nums else 0)
-          ")
-          NEW_RC=$((LATEST_RC + 1))
-          RELEASED="${MAJOR}.${MINOR}.${BUILD}.${LATEST_RC}"
-          VERSION="${MAJOR}.${MINOR}.${BUILD}.${NEW_RC}"
-          echo "Latest released: ${RELEASED} → stamping as: ${VERSION}"
+              --limit 1000 \
+              --json tagName \
+              --jq '[.[].tagName]')
+          VERSION_OUTPUT=$(printf '%s' "$TAGS_JSON" \
+            | python3 scripts/version_selection.py next-release)
+          RELEASED=$(printf '%s\n' "$VERSION_OUTPUT" | sed -n 's/^released=//p')
+          VERSION=$(printf '%s\n' "$VERSION_OUTPUT" | sed -n 's/^version=//p')
+          echo "Latest released: ${RELEASED:-none} → stamping as: ${VERSION}"
           echo "released=${RELEASED}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
-          if [ "${LATEST_RC}" -gt 0 ]; then
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [ -n "$RELEASED" ]; then
             echo "released_tag=v${RELEASED}" >> "$GITHUB_OUTPUT"
           else
             echo "released_tag=" >> "$GITHUB_OUTPUT"
