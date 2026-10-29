@@ -848,8 +848,7 @@ uint8_t spi_m1link_send_recv_bin_timed(const uint8_t *tx_buf, int tx_len,
 		esp32_m1link_spi_unlock();
 		return CTRL_ERR_TRANSPORT_SEND;
 	}
-	timeout_ms = m1_esp32_rpc_remaining_timeout_ms(t0, HAL_GetTick(), timeout_ms);
-	if (timeout_ms == 0u)
+	if (m1_esp32_rpc_remaining_timeout_ms(t0, HAL_GetTick(), timeout_ms) == 0u)
 	{
 		esp32_m1link_spi_unlock();
 		s_m1link_last_elapsed_ms = HAL_GetTick() - t0;

@@ -103,7 +103,7 @@ void m1_diag_boot_report(void)
     else if (prev_fault == M1_DIAG_FAULT_ASSERT && prev_pc != 0)
         snprintf(stage_status, sizeof(stage_status), "ASSERT: %lu",
                  (unsigned long)prev_pc);
-    else if (prev_pc != 0)
+    else if (prev_fault != M1_DIAG_FAULT_NONE && prev_pc != 0)
         snprintf(stage_status, sizeof(stage_status), "PC: %08lX",
                  (unsigned long)prev_pc);
     else

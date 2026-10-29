@@ -52,8 +52,8 @@ static inline void m1_diag_wdt_status_text(uint32_t task_id,
 static inline uint32_t m1_diag_stacked_pc(const uint32_t *frame,
                                           uint32_t exc_return)
 {
-    uint32_t core_frame_offset = (exc_return & (1u << 4u)) ? 0u : 18u;
-    return frame != NULL ? frame[core_frame_offset + 6u] : 0u;
+    (void)exc_return;
+    return frame != NULL ? frame[6u] : 0u;
 }
 
 static inline bool m1_diag_boot_report_visible(bool valid,
