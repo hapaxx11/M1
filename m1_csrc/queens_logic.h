@@ -82,7 +82,8 @@ uint8_t  queens_rng_range(uint32_t *state, uint8_t min, uint8_t max);
  * that would make those difficulties too easy.
  *
  * @retval true  Puzzle generated (pz->unique reports uniqueness).
- * @retval false n out of range; pz contents undefined.
+ * @retval false Invalid arguments or no shape-valid layout found; pz contents
+ *               undefined.
  */
 bool queens_generate(queens_puzzle_t *pz, uint8_t n, uint32_t *rng);
 

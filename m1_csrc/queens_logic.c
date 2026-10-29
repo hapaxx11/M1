@@ -567,6 +567,25 @@ static bool repair_uniqueness(queens_puzzle_t *pz, uint32_t *rng)
     return false;
 }
 
+static void randomize_region_ids(queens_puzzle_t *pz, uint32_t *rng)
+{
+    uint8_t relabel[QUEENS_MAX_N];
+    for (uint8_t i = 0; i < pz->n; i++)
+        relabel[i] = i;
+
+    for (uint8_t i = pz->n; i > 1; i--)
+    {
+        uint8_t j = queens_rng_range(rng, 0, (uint8_t)(i - 2u));
+        uint8_t t = relabel[i - 1u];
+        relabel[i - 1u] = relabel[j];
+        relabel[j] = t;
+    }
+
+    for (uint8_t r = 0; r < pz->n; r++)
+        for (uint8_t c = 0; c < pz->n; c++)
+            pz->region[r][c] = relabel[pz->region[r][c]];
+}
+
 /*============================================================================*/
 /* Generation                                                                 */
 /*============================================================================*/
@@ -580,32 +599,40 @@ bool queens_generate(queens_puzzle_t *pz, uint8_t n, uint32_t *rng)
     pz->n = n;
     pz->unique = false;
 
-    bool have_layout = false;
+    bool have_fallback = false;
+    bool have_unique = false;
+    queens_puzzle_t fallback;
 
     for (uint8_t attempt = 0; attempt < QUEENS_GEN_ATTEMPTS; attempt++)
     {
-        have_layout = false;
         if (!place_queens(n, rng, pz->solution_col))
             continue;
         grow_regions(n, rng, pz->solution_col, pz->region);
         if (!region_shape_valid(n, (const uint8_t (*)[QUEENS_MAX_N])pz->region))
             continue;
-        have_layout = true;
+        fallback = *pz;
+        have_fallback = true;
 
         if (repair_uniqueness(pz, rng))
         {
             pz->unique = true;
+            have_unique = true;
             break;
         }
-        /* Repair failed: reroll a fresh layout.  The last attempt is kept
-         * as a fallback (still solvable by construction, just not proven
-         * unique). */
     }
 
-    if (have_layout)
-        queens_assign_patterns(pz, NULL);
+    if (!have_unique)
+    {
+        if (!have_fallback)
+            return false;
+        *pz = fallback;
+        pz->unique = false;
+    }
 
-    return have_layout;
+    randomize_region_ids(pz, rng);
+    queens_assign_patterns(pz, NULL);
+
+    return true;
 }
 
 /*============================================================================*/

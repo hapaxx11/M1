@@ -965,7 +965,8 @@ static queens_screen_t play_game(queens_ctx_t *ctx)
     ctx->new_rank = -1;
     ctx->elapsed_ms = 0;
 
-    queens_generate(&ctx->puzzle, queens_diff_size[ctx->difficulty], &ctx->rng);
+    if (!queens_generate(&ctx->puzzle, queens_diff_size[ctx->difficulty], &ctx->rng))
+        return QS_START;
 
     ctx->resume_tick = HAL_GetTick();
     uint32_t shown_s = 0xFFFFFFFFu;

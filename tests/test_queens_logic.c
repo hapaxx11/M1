@@ -279,6 +279,30 @@ void test_generate_all_difficulties_valid_and_unique(void)
     }
 }
 
+void test_generate_keeps_shape_valid_fallback_after_retries_exhaust(void)
+{
+    queens_puzzle_t pz;
+    uint32_t rng;
+    queens_rng_seed(&rng, 47);
+
+    TEST_ASSERT_TRUE(queens_generate(&pz, 9, &rng));
+    TEST_ASSERT_FALSE(pz.unique);
+    assert_solution_valid(&pz);
+    assert_regions_valid(&pz);
+    assert_patterns_valid(&pz);
+}
+
+void test_generate_randomizes_region_labels_away_from_solution_rows(void)
+{
+    queens_puzzle_t pz;
+    uint32_t rng;
+    queens_rng_seed(&rng, 1);
+
+    TEST_ASSERT_TRUE(queens_generate(&pz, 6, &rng));
+    for (uint8_t r = 0; r < pz.n; r++)
+        TEST_ASSERT_NOT_EQUAL(r, pz.region[r][pz.solution_col[r]]);
+}
+
 void test_generate_rejects_bad_size(void)
 {
     queens_puzzle_t pz;
@@ -755,6 +779,8 @@ int main(void)
     RUN_TEST(test_rng_range_bounds);
 
     RUN_TEST(test_generate_all_difficulties_valid_and_unique);
+    RUN_TEST(test_generate_keeps_shape_valid_fallback_after_retries_exhaust);
+    RUN_TEST(test_generate_randomizes_region_labels_away_from_solution_rows);
     RUN_TEST(test_generate_rejects_bad_size);
     RUN_TEST(test_generate_varies_with_seed);
 
