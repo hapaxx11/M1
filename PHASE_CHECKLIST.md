@@ -13,12 +13,12 @@
 
 ### Phase 2 — UART ownership lifecycle
 - **Description**: Make bridge handoff, forced app cleanup, and CDC line-coding restoration reliable.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Harden Meshtastic UART ownership lifecycle`
 
 ### Phase 3 — Non-blocking app servicing
 - **Description**: Keep UART RX and heartbeat service active during the keyboard and notifications without blocking alerts.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Regression checks and cleanup

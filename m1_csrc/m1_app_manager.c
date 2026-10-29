@@ -35,6 +35,7 @@
 #include "m1_log_debug.h"
 #include "ff.h"
 #include "m1_scene.h"
+#include "m1_uart_app.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -574,6 +575,7 @@ static elf_load_status_t apps_run(const char *path)
 
     /* Cleanup */
     s_run_ctx.task_handle = NULL;
+    m1_uart_app_deinit();
     elf_unload_app(&s_run_ctx.elf);
 
     /* Drain any stale button events */

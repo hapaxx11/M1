@@ -18,9 +18,12 @@
 /* True while an app owns the header UART; read by the USB-bridge tasks in
  * m1_usb_cdc_msc.c so they stop draining/feeding USART1. */
 extern volatile bool m1_uart_app_owned;
+extern volatile bool m1_uart_app_pause_requested;
+extern volatile bool m1_uart_app_bridge_paused;
+void m1_uart_app_bridge_paused_notify(void);
 
-/* Claim the header UART at `baud`, flush any stale RX, and hold off the USB
- * bridge. Requires the CDC to be in VCP mode (the default), which is what feeds
+/* Pause and acknowledge the USB bridge, claim the header UART at `baud`, and
+ * flush any stale RX. Requires CDC VCP mode (the default), which feeds
  * h_uart_rx_streambuf from the USART1 IDLE ISR. */
 void m1_uart_app_init(uint32_t baud);
 

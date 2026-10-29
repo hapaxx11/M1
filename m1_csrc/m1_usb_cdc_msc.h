@@ -84,6 +84,7 @@ void USB_DRD_FS_IRQHandler(void);
 void CDC_Signal_Next_Tx(void);
 void m1_usb_cdc_comdefault(void);
 void m1_usb_cdc_comconfig(void);
+void m1_usb_cdc_app_comconfig(uint32_t baud);
 
 /*********************************************/
 // USB MSC
@@ -104,4 +105,3 @@ static inline int8_t m1_usb_get_current_mode(void) { return m1_USB_CDC_ready; }
 #endif
 
 #endif /* M1_USB_CDC_MSC_H_ */
-

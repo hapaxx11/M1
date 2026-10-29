@@ -265,16 +265,23 @@ void vSer2UsbTask(void *pvParameters)
 
   for(;;)
   {
-    if (m1_uart_app_owned)
+    if (m1_uart_app_pause_requested)
     {
-      vTaskDelay(pdMS_TO_TICKS(10));
+      m1_uart_app_bridge_paused = true;
+      m1_uart_app_bridge_paused_notify();
+      while (m1_uart_app_pause_requested)
+      {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      }
+      m1_uart_app_bridge_paused = false;
       continue;
     }
-    /* Read data from the USART RX Stream Buffer (blocking) */
+    /* A finite wait lets the app pause and acknowledge the bridge before it
+     * claims the stream buffer. */
     received_bytes = xStreamBufferReceive(h_uart_rx_streambuf,
                                           (void *)usb_tx_temp_buffer,
                                           sizeof(usb_tx_temp_buffer),
-                                          portMAX_DELAY);
+                                          pdMS_TO_TICKS(20));
     if (received_bytes > 0)
     {
       /* Wait for previous USB transfer to complete (return semaphore in TxCpltCallback) */
@@ -454,7 +461,7 @@ void vUsb2SerTask(void *pvParameters)
       }
 #endif /* M1_APP_RPC_ENABLE */
 
-      if (m1_uart_app_owned) continue;
+      if (m1_uart_app_owned || m1_uart_app_pause_requested) continue;
 
       bytes_remaining = received_bytes;
       current_buffer_ptr = logdb_tx_buffer;
@@ -665,14 +672,14 @@ void m1_usb_cdc_comdefault(void)
   * @note   When a configuration is not supported, a default value is used.
   */
 /*============================================================================*/
-void m1_usb_cdc_comconfig(void)
+static void m1_usb_cdc_apply_linecoding(const USBD_CDC_LineCodingTypeDef *coding)
 {
 	/* Deinitialize USART1 */
 	m1_logdb_deinit();
 
 	/* Initialize USART1 */
 	/* Stop bit */
-	switch (linecoding.format)
+	switch (coding->format)
 	{
 		case 0:
 			huart_logdb.Init.StopBits = UART_STOPBITS_1;
@@ -688,7 +695,7 @@ void m1_usb_cdc_comconfig(void)
 	}
 
 	/* parity bit*/
-	switch (linecoding.paritytype)
+	switch (coding->paritytype)
 	{
 		case 0:
 			huart_logdb.Init.Parity = UART_PARITY_NONE;
@@ -708,7 +715,7 @@ void m1_usb_cdc_comconfig(void)
 	}
 
 	/* data type : 8bits and 9bits is supported */
-	switch (linecoding.datatype)
+	switch (coding->datatype)
 	{
 		case 0x07:
 			/* configuration a parity (Even or Odd) */
@@ -731,9 +738,20 @@ void m1_usb_cdc_comconfig(void)
 			break;
 	}
 
-	huart_logdb.Init.BaudRate = linecoding.bitrate;
+	huart_logdb.Init.BaudRate = coding->bitrate;
 
 	m1_logdb_init();
+}
+
+void m1_usb_cdc_comconfig(void)
+{
+	m1_usb_cdc_apply_linecoding(&linecoding);
+}
+
+void m1_usb_cdc_app_comconfig(uint32_t baud)
+{
+	const USBD_CDC_LineCodingTypeDef app_linecoding = {baud, 0, 0, 8};
+	m1_usb_cdc_apply_linecoding(&app_linecoding);
 }
 
 /*============================================================================*/

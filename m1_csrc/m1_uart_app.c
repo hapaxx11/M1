@@ -5,15 +5,14 @@
  * Design notes
  * ------------
  * RX: the firmware already receives USART1 (header) into h_uart_rx_streambuf
- *     via the DMA + IDLE-ISR path (usart_rxdata_process_from_isr). Normally
- *     vSer2UsbTask drains that stream to the USB CDC. While m1_uart_app_owned
- *     is true, vSer2UsbTask is gated off (see the hook in m1_usb_cdc_msc.c) so
- *     the bytes stay in the stream for the app to read here.
+ *     via the DMA + IDLE-ISR path (usart_rxdata_process_from_isr). The app
+ *     pauses vSer2UsbTask and waits for its acknowledgement before claiming the
+ *     stream, so the bridge cannot consume radio responses while the app reads.
  *
  * TX: transmit straight to USART1 through huart_logdb (the USART1 handle) with
  *     a blocking, bounded HAL_UART_Transmit. While the app owns the UART,
- *     vUsb2SerTask's USART forwarding is gated off, so there is no DMA-TX in
- *     flight to contend with.
+ *     vUsb2SerTask's USART forwarding is gated off before USART1 is reconfigured,
+ *     so there is no DMA-TX in flight to contend with.
  *
  * This reuses existing, tested infrastructure and adds no new peripheral
  * bring-up. It assumes the CDC is in VCP mode (the default) — that is the mode
@@ -39,11 +38,28 @@
 #include "m1_uart_app.h"
 
 volatile bool m1_uart_app_owned = false;
+volatile bool m1_uart_app_pause_requested = false;
+volatile bool m1_uart_app_bridge_paused = false;
+static TaskHandle_t s_uart_app_waiter;
+
+void m1_uart_app_bridge_paused_notify(void) {
+    if(s_uart_app_waiter != NULL) {
+        xTaskNotifyGive(s_uart_app_waiter);
+    }
+}
 
 void m1_uart_app_init(uint32_t baud) {
+    if(ser2usb_task_hdl) {
+        s_uart_app_waiter = xTaskGetCurrentTaskHandle();
+        m1_uart_app_pause_requested = true;
+        xTaskNotifyGive(ser2usb_task_hdl);
+        while(!m1_uart_app_bridge_paused) {
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
+        }
+    }
+
     m1_uart_app_owned = true;
-    linecoding.bitrate = baud;
-    m1_usb_cdc_comconfig();
+    m1_usb_cdc_app_comconfig(baud);
 
     /* Drop anything already buffered (RPC/log noise) so the app starts clean. */
     if(h_uart_rx_streambuf) {
@@ -52,10 +68,19 @@ void m1_uart_app_init(uint32_t baud) {
 }
 
 void m1_uart_app_deinit(void) {
-    m1_uart_app_owned = false;
-    if(h_uart_rx_streambuf) {
+    bool was_owned = m1_uart_app_owned;
+    if(was_owned) {
+        m1_usb_cdc_comconfig();
+    }
+    if(was_owned && h_uart_rx_streambuf) {
         xStreamBufferReset(h_uart_rx_streambuf);
     }
+    m1_uart_app_owned = false;
+    m1_uart_app_pause_requested = false;
+    if(ser2usb_task_hdl) {
+        xTaskNotifyGive(ser2usb_task_hdl);
+    }
+    s_uart_app_waiter = NULL;
 }
 
 int m1_uart_app_read(uint8_t *buf, int max_len) {

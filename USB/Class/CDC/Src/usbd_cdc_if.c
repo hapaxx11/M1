@@ -22,6 +22,7 @@
 #include "m1_cli.h"
 #include "m1_log_debug.h"
 #include "m1_usb_cdc_msc.h"
+#include "m1_uart_app.h"
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
   * @{
@@ -171,7 +172,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
       linecoding.datatype   = pbuf[6];
 
       /* Add your code here */
-      if (m1_usbcdc_mode == CDC_MODE_VCP)
+      if (m1_usbcdc_mode == CDC_MODE_VCP && !m1_uart_app_owned &&
+          !m1_uart_app_pause_requested)
       {
         m1_usb_cdc_comconfig();
       }
@@ -480,4 +482,3 @@ uint8_t CDC_RearmRx(void)
 /**
   * @}
   */
-
