@@ -37,6 +37,7 @@
 #include "m1_esp32_hal.h"
 #include "esp_app_main.h"
 #include "m1_compile_cfg.h"
+#include "m1_diag.h"
 
 #ifdef M1_APP_FILE_IMPORT_ENABLE
 #include "m1_flipper_integration.h"
@@ -284,6 +285,7 @@ void menu_main_handler_task(void *param)
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_SETTINGS);
 	settings_load_from_sd();  /* Load southpaw and other user settings (needs stack > sys_init) */
 
 	vTaskDelay(POWER_UP_SYS_CONFIG_WAIT_TIME); // Give some time to startup_config_handler() during power-up
@@ -292,6 +294,7 @@ void menu_main_handler_task(void *param)
 	 * use the ESP32, so the existing synchronous join path stays serialized. */
 	wifi_auto_connect_primary();
 #endif
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_MENU);
 	while(1)
 	{
 		menu_update_stat = MENU_UPDATE_NONE;

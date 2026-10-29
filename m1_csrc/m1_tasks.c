@@ -21,6 +21,7 @@
 //#include "m1_nfc.h"
 #include "nfc_driver.h"
 #include "m1_compile_cfg.h"
+#include "m1_log_debug.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -78,6 +79,7 @@ void m1_tasks_init(void)
 
 	sdcard_det_q_hdl = xQueueCreate(SDCARD_DET_QUEUE_ITEMS_MAX_N, sizeof(S_M1_SdCard_Q_t));
 	assert(sdcard_det_q_hdl != NULL);
+	HAL_NVIC_EnableIRQ(EXTI15_IRQn);
 
 	dummyTimerHandle = osTimerNew(m1_dummytimer_task, osTimerOnce, NULL, &dumyTimer_attributes);
 
@@ -108,6 +110,7 @@ void m1_tasks_init(void)
 	ret = xTaskCreate(log_db_handler_task, "log_db_handler_task_n", M1_TASK_STACK_SIZE_1024, NULL, TASK_PRIORITY_LOG_DB_HANDLER, &log_db_task_hdl);
 	assert(ret==pdPASS);
 	assert(log_db_task_hdl!=NULL);
+	m1_logdb_irq_start();
 	free_heap = xPortGetFreeHeapSize();
 	assert(free_heap >= M1_LOW_FREE_HEAP_WARNING_SIZE);
 

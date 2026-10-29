@@ -382,7 +382,7 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
   }
   else
   {
-    if ( !m1_logdb_check_empty_state() ) // There's still data to send?
+    if ( log_q_hdl != NULL && !m1_logdb_check_empty_state() ) // There's still data to send?
     {
       xQueueSendFromISR(log_q_hdl, &q_item, &xHigherPriorityTaskWoken);
       portYIELD_FROM_ISR(xHigherPriorityTaskWoken);

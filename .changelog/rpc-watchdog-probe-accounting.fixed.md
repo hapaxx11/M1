@@ -1,0 +1,1 @@
+**RPC: stop healthy polling from triggering the task watchdog** — preserve heartbeat runtime across short ESP32 probe transitions, charge early notification wakeups against the configured wait budget, and allow one full reporting window after a long suspended probe before enforcing the minimum runtime.

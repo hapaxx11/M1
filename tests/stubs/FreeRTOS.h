@@ -63,9 +63,10 @@ static inline BaseType_t xSemaphoreGive(SemaphoreHandle_t s)
     if (s) { *(bool *)s = true; return pdTRUE; }
     return pdFALSE;
 }
+extern TickType_t g_stub_last_timeout;
 static inline BaseType_t xSemaphoreTake(SemaphoreHandle_t s, TickType_t t)
 {
-    (void)t;
+    g_stub_last_timeout = t;
     if (s && *(bool *)s) { *(bool *)s = false; return pdTRUE; }
     return pdFALSE;
 }

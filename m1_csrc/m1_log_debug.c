@@ -30,6 +30,7 @@
 #include "m1_usb_cdc_msc.h"
 #include "m1_compile_cfg.h"
 #include "m1_logdb_growth.h"
+#include "m1_diag.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -77,6 +78,8 @@ static const S_M1_LogDebugDsc M1_LOGDB_DESCRIPTIONS[] = {
 UART_HandleTypeDef huart_logdb;
 DMA_HandleTypeDef hdma_logdb;
 QueueHandle_t log_q_hdl = NULL;
+static StaticQueue_t log_q_control;
+static uint8_t log_q_storage[1];
 
 DMA_HandleTypeDef hdma_rxlogdb;
 static DMA_NodeTypeDef node_rxlogdb;
@@ -136,6 +139,8 @@ void m1_logdb_init(void)
 
 	m1_logdb.log_level = M1_LOGDB_LEVEL_DEFAULT;
 
+	__HAL_RCC_GPDMA1_CLK_ENABLE();
+
 	// Initializes the peripherals clock
 	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1;
 	PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
@@ -187,6 +192,7 @@ void m1_logdb_init(void)
 	huart_logdb.Init.ClockPrescaler = UART_PRESCALER_DIV1;
 	huart_logdb.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_UART);
 	if (HAL_UART_Init(&huart_logdb) != HAL_OK)
 	{
 		Error_Handler();
@@ -207,6 +213,7 @@ void m1_logdb_init(void)
 		Error_Handler();
 	}
 
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_DMA_RX);
   /*
   * USB CDC : Common settings for CDC_MODE_LOG_CLI and CDC_MODE_VCP
   */
@@ -267,16 +274,14 @@ void m1_logdb_init(void)
   }
 
   /* GPDMA1 interrupt Init */
-  HAL_NVIC_SetPriority(GPDMA1_Channel2_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0); //configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY + 1, 5);
-  HAL_NVIC_EnableIRQ(GPDMA1_Channel2_IRQn);
+  HAL_NVIC_SetPriority(GPDMA1_Channel2_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
 
  	/*
  	* GPDMA_CxTR2.REQSEL[7:0]		Selected GPDMA request
  	*			21						usart1_rx_dma
  	*			22						usart1_tx_dma
  	*/
-    __HAL_RCC_GPDMA1_CLK_ENABLE();
-
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_DMA_TX);
     hdma_logdb.Instance = GPDMA1_Channel1;
     hdma_logdb.Init.Request = GPDMA1_REQUEST_USART1_TX;
     hdma_logdb.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
@@ -314,54 +319,58 @@ void m1_logdb_init(void)
     	huart_logdb.Instance->CR3 |= USART_CR3_DMAT_Msk;
     }
 
-    /* GPDMA1 interrupt init */
-    HAL_NVIC_SetPriority(GPDMA1_Channel1_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0); //, 5);
-    HAL_NVIC_EnableIRQ(GPDMA1_Channel1_IRQn);
-
-  	// Clear tx buffer
+    m1_diag_set_boot_stage(M1_DIAG_BOOT_LOG_RTOS);
   	memset((void*)logdb_tx_buffer, 0x00, M1_LOGDB_TX_BUFFER_SIZE);
-
     m1_ringbuffer_init(&logdb_tx_rb, logdb_tx_buffer, M1_LOGDB_TX_BUFFER_SIZE, sizeof(uint8_t));
-
     logdb_dma_tx_len = 0;
-    plogdb_tx_rb = &logdb_tx_rb; // Use this pointer for macro to avoid compile error
+    plogdb_tx_rb = &logdb_tx_rb;
 
-#if defined(M1_DEBUG_CLI_ENABLE) && !defined(M1_EXT_IR_FREE_UART1)
-	/* Enable the UART global Interrupt */
-	HAL_NVIC_SetPriority(LOG_DEBUG_UART_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
-	HAL_NVIC_EnableIRQ(LOG_DEBUG_UART_IRQn);
-
-	if (m1_usbcdc_mode == CDC_MODE_VCP)
-	{
-		// Enable UART IDLE line interrupt
-		__HAL_UART_ENABLE_IT(&huart_logdb, UART_IT_IDLE);
-		// Start receiving in DMA circular mode
-		HAL_UART_Receive_DMA(&huart_logdb, (uint8_t *)logdb_rx_buffer, M1_LOGDB_RX_BUFFER_SIZE);
-	}
-	else
-	{ /* CDC_MODE_LOG_CLI */
-		// get USART ready to receive
-		HAL_UART_Receive_IT(&huart_logdb, logdb_rx_buffer, 1);
-	}
-	/* M1_EXT_IR_FREE_UART1: RX is disabled (TX-only) and its pin is reused by
-	   external IR, so the RX IRQ/DMA are intentionally NOT armed here — this
-	   prevents a floating-RX interrupt storm from starving the IR decode. */
-#endif
-
-	/* mutex_log_write_trans is created once and never deleted: m1_logdb_deinit()
-	   is called from m1_usb_cdc_comconfig(), which CDC_Control_FS() (USB
-	   SET_LINE_CODING) invokes from ISR context. vSemaphoreDelete() is not an
-	   ISR-safe FreeRTOS API, so deleting/recreating the mutex on every
-	   deinit/init cycle risked corrupting FreeRTOS state. */
+	/* Create every RTOS resource before any logger interrupt can reference it. */
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_LOG_MUTEX);
 	if ( mutex_log_write_trans == NULL )
 	{
 		mutex_log_write_trans = xSemaphoreCreateMutex();
 		assert(mutex_log_write_trans);
 	}
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_LOG_QUEUE);
+	if ( log_q_hdl == NULL )
+	{
+		log_q_hdl = xQueueCreateStatic(1, 1, log_q_storage, &log_q_control);
+		assert(log_q_hdl!=NULL);
+	}
 
-	log_q_hdl = xQueueCreate(1, 1);
-	assert(log_q_hdl!=NULL);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_LOG_DONE);
+	m1_logdb_irq_start();
 } // void m1_logdb_init(UART_HandleTypeDef *phuart)
+
+void m1_logdb_irq_start(void)
+{
+	if (log_db_task_hdl == NULL || log_q_hdl == NULL)
+		return;
+
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_LOG_IRQ);
+    HAL_NVIC_SetPriority(GPDMA1_Channel1_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel1_IRQn);
+
+#if defined(M1_DEBUG_CLI_ENABLE) && !defined(M1_EXT_IR_FREE_UART1)
+	if (m1_usbcdc_mode == CDC_MODE_VCP)
+	{
+		__HAL_UART_ENABLE_IT(&huart_logdb, UART_IT_IDLE);
+		HAL_UART_Receive_DMA(&huart_logdb, (uint8_t *)logdb_rx_buffer, M1_LOGDB_RX_BUFFER_SIZE);
+	}
+	else
+	{
+		HAL_UART_Receive_IT(&huart_logdb, logdb_rx_buffer, 1);
+	}
+	HAL_NVIC_EnableIRQ(GPDMA1_Channel2_IRQn);
+	HAL_NVIC_SetPriority(LOG_DEBUG_UART_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
+	HAL_NVIC_EnableIRQ(LOG_DEBUG_UART_IRQn);
+
+	/* M1_EXT_IR_FREE_UART1: RX is disabled (TX-only) and its pin is reused by
+	   external IR, so the RX IRQ/DMA are intentionally NOT armed here — this
+	   prevents a floating-RX interrupt storm from starving the IR decode. */
+#endif
+}
 
 
 
@@ -656,6 +665,8 @@ void m1_logdb_printf(S_M1_LogDebugLevel_t level, const char* tag, const char* fo
 	va_list pargs;
 
 	if (level > m1_logdb.log_level)
+		return;
+	if (log_db_task_hdl == NULL)
 		return;
 
     switch(level)

@@ -103,10 +103,16 @@ bool esp32_m1link_spi_mutex_init(void)
     return s_m1link_spi_mutex != NULL;
 }
 
-bool esp32_m1link_lifecycle_lock(void)
+bool esp32_m1link_lifecycle_lock_timed(uint32_t timeout_ms)
 {
     return s_m1link_spi_mutex != NULL &&
-           xSemaphoreTake(s_m1link_spi_mutex, portMAX_DELAY) == pdPASS;
+           xSemaphoreTake(s_m1link_spi_mutex,
+                          pdMS_TO_TICKS(timeout_ms)) == pdPASS;
+}
+
+bool esp32_m1link_lifecycle_lock(void)
+{
+    return esp32_m1link_lifecycle_lock_timed(portMAX_DELAY);
 }
 
 void esp32_m1link_lifecycle_unlock(void)
@@ -115,7 +121,7 @@ void esp32_m1link_lifecycle_unlock(void)
         xSemaphoreGive(s_m1link_spi_mutex);
 }
 
-bool esp32_m1link_spi_lock(void)
+bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)
 {
     /* Create the mutex lazily on first use: no init-time call site ever ran
      * esp32_m1link_spi_mutex_init(), so s_m1link_spi_mutex stayed NULL and
@@ -124,11 +130,20 @@ bool esp32_m1link_spi_lock(void)
      * WiFi AP scan). */
     if (!esp32_m1link_spi_mutex_init())
         return false;
-    if (!esp32_m1link_lifecycle_lock())
+    if (!esp32_m1link_lifecycle_lock_timed(timeout_ms))
         return false;
-    if (pxMutex != NULL)
-        spi_mutex_lock();
+    if (pxMutex != NULL &&
+        xSemaphoreTake(pxMutex, pdMS_TO_TICKS(timeout_ms)) != pdPASS)
+    {
+        esp32_m1link_lifecycle_unlock();
+        return false;
+    }
     return true;
+}
+
+bool esp32_m1link_spi_lock(void)
+{
+    return esp32_m1link_spi_lock_timed(portMAX_DELAY);
 }
 
 void esp32_m1link_spi_unlock(void)
@@ -829,7 +844,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 
 	/* Hold the independent transaction mutex across the complete request/reply
 	 * sequence, even when the legacy AT task (and pxMutex) was never started. */
-	if (!esp32_m1link_spi_lock())
+	if (!esp32_m1link_spi_lock_timed(timeout_ms))
 		return CTRL_ERR_TRANSPORT_SEND;
 	if (!m1_esp32_get_init_status())
 	{

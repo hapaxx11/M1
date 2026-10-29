@@ -26,6 +26,7 @@
 //#include "U8g2lib.h"
 #include "m1_compile_cfg.h"
 #include "m1_system.h"
+#include "m1_diag.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -109,7 +110,9 @@ uint8_t u8x8_byte_stm32_4wire_hw_spi(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int,
 	{
 		// Send one or more bytes, located at arg_ptr, arg_int contains the number of bytes.
 		case U8X8_MSG_BYTE_SEND:
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_LCD_SPI_ENTER);
 			status = HAL_SPI_Transmit(plcd_hspi, (uint8_t *) arg_ptr, arg_int, SPI_WRITE_TIMEOUT);
+			m1_diag_set_boot_stage(M1_DIAG_BOOT_LCD_SPI_EXIT);
 			// Check status
 			if (status != HAL_OK)
 			{
@@ -332,8 +335,11 @@ uint8_t m1_u8g2_nextpage(void)
 	 * RPC screen streaming independently applies XOR to its own copy when
 	 * m1_dark_mode is set (see rpc_send_screen_frame()). */
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_NEXT_SEND);
 	u8g2_SendBuffer(&m1_u8g2);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_NEXT_REFRESH);
 	u8x8_RefreshDisplay( u8g2_GetU8x8(&m1_u8g2) );
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_NEXT_RPC);
 
 #ifdef M1_APP_RPC_ENABLE
 	/* Notify the RPC task that a new frame is ready for streaming. */
@@ -343,6 +349,7 @@ uint8_t m1_u8g2_nextpage(void)
 	}
 #endif
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_NEXT_DONE);
 	return 0;
 } // uint8_t m1_u8g2_nextpage(void)
 

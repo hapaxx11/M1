@@ -1,0 +1,1 @@
+**Logging: harden startup resource and interrupt lifecycle** — enable GPDMA1 first, use a statically allocated log queue, initialize resources before IRQs, and defer DMA/UART interrupts and formatted log output until the logger task exists.

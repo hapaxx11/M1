@@ -18,6 +18,7 @@
 #include "m1_infrared.h"
 #include "irsnd.h"
 #include "m1_sdcard.h"
+#include "m1_sdcard_detect.h"
 #include "m1_esp32_hal.h"
 #include "m1_cli.h"
 #include "m1_sub_ghz.h"
@@ -113,7 +114,7 @@ void EXTI15_IRQHandler(void)
 	S_M1_SdCard_Q_t q_item;
 	portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 
-	if ( sdcard_status_changed==0 )
+	if ( m1_sdcard_detect_should_post(sdcard_det_q_hdl != NULL, sdcard_status_changed) )
 	{
 		sdcard_status_changed = 1;
 		q_item.q_evt_type = Q_EVENT_SDCARD_CHANGE;
@@ -374,7 +375,7 @@ void GPDMA1_Channel1_IRQHandler(void)
     	if ( __HAL_DMA_GET_IT_SOURCE(&hdma_logdb, DMA_IT_TC) != 0U )
     	{
     		m1_logdb_update_tx_buffer(); // Update ring buffer counter
-    		if ( !m1_logdb_check_empty_state() ) // There's still data to send?
+			if ( log_q_hdl != NULL && !m1_logdb_check_empty_state() ) // There's still data to send?
     		{
     			xQueueSendFromISR(log_q_hdl, &q_item, &xHigherPriorityTaskWoken);
     			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);

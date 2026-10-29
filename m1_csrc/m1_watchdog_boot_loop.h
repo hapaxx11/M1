@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define M1_WDT_RECOVERY_TEXT "WDT OFF - BOOT LOOP"
+
 typedef struct
 {
     uint32_t runtime_ctr;

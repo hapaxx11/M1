@@ -1,0 +1,1 @@
+**ESP32 RPC: bound the complete transaction lock chain to the caller’s response-timeout budget** — return busy instead of blocking the RPC watchdog on the RPC transaction, M1 Link lifecycle, or legacy AT mutex.

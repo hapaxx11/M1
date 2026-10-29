@@ -185,6 +185,18 @@ void test_call_serializes_the_entire_exchange(void)
     m1_esp32_rpc_transaction_unlock();
 }
 
+void test_call_bounds_transaction_wait_to_response_timeout(void)
+{
+    g_stub_last_timeout = 0u;
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_lock());
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BUSY,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 1));
+    TEST_ASSERT_EQUAL_UINT32(1000u, g_stub_last_timeout);
+    TEST_ASSERT_EQUAL_INT(0, g_last_tx_len);
+    m1_esp32_rpc_transaction_unlock();
+}
+
 void test_call_does_not_transmit_after_hal_deinit(void)
 {
     g_hal_ready = false;
@@ -628,6 +640,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_call_resp_ok_copies_payload);
     RUN_TEST(test_call_serializes_the_entire_exchange);
+    RUN_TEST(test_call_bounds_transaction_wait_to_response_timeout);
     RUN_TEST(test_call_does_not_transmit_after_hal_deinit);
     RUN_TEST(test_call_builds_valid_request_frame);
     RUN_TEST(test_call_nak_returns_status_code);

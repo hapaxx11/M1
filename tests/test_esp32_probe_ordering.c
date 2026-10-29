@@ -153,7 +153,7 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
 
     /* The full-sequence lock must wrap the abort AND the timed exchange, so
      * spi_trans_control_task cannot interpose between request and reply polls. */
-    const char *lock_call  = strstr(fn_start, "esp32_m1link_spi_lock())");
+    const char *lock_call  = strstr(fn_start, "esp32_m1link_spi_lock_timed(timeout_ms))");
     const char *abort_call = strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);");
     const char *timed_call = strstr(fn_start, "m1_esp32_m1link_send_recv_timed(");
     const char *unlock_call= timed_call != NULL

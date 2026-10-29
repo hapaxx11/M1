@@ -12,6 +12,7 @@
 | CMake | 3.22+ | |
 | Ninja | 1.10+ | |
 | Python 3 | 3.8+ | For CRC injection script |
+| STM32CubeCLT | 1.22.0 | Recommended Windows command-line toolchain bundle |
 | STM32CubeIDE | 1.17+ (optional) | Includes toolchain; tested with 1.17.0 and 2.1.0 |
 
 On Debian/Ubuntu: `sudo apt install gcc-arm-none-eabi cmake ninja-build python3`

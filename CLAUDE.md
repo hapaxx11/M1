@@ -155,11 +155,11 @@ Terminology used when communicating with the agent about the M1 UI.
 
 ## Build Environment
 
-- **Toolchain**: ARM GCC 14.3 inside STM32CubeIDE 2.1.0
-  - Path: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.win32_1.0.100.202602081740/tools/bin/`
-- **CMake**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cmake.win32_1.1.100.202601091506/tools/bin/cmake.exe`
-- **Ninja**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.ninja.win32_1.1.100.202601091506/tools/bin/ninja.exe`
-- **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
+- **Toolchain**: ARM GCC 14.3 inside STM32CubeCLT 1.22.0
+  - Path: `C:/ST/STM32CubeCLT_1.22.0/GNU-tools-for-STM32/bin/`
+- **CMake**: `C:/ST/STM32CubeCLT_1.22.0/CMake/bin/cmake.exe`
+- **Ninja**: `C:/ST/STM32CubeCLT_1.22.0/Ninja/bin/ninja.exe`
+- **Build command**: Set PATH to include all three tool directories, then `cmake --build build`. When migrating an existing build cache, explicitly set `TOOLCHAIN_PREFIX=C:/ST/STM32CubeCLT_1.22.0/GNU-tools-for-STM32/bin/arm-none-eabi-` during configure so cached compiler paths from an older installation are not reused.
 - **Post-build CRC + Hapax metadata**: The CMake `POST_BUILD` step automatically runs `tools/append_crc32.py` via Python to inject the CRC32 checksum and Hapax metadata (revision number + build date) into the binary, producing `${CMAKE_PROJECT_NAME}_wCRC.bin`. No manual step is needed when building with CMake. For non-CMake builds (STM32CubeIDE, bare Makefile), run the script manually:
   ```
   python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin --output build/M1_Hapax_v<VERSION>_wCRC.bin --hapax-revision 1 --verbose

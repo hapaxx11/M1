@@ -38,6 +38,7 @@
 
 #include "unity.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,13 +132,13 @@ void test_m1link_spi_lock_creates_mutex_lazily(void)
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
     char *lock_body = slice_between(content,
-        "bool esp32_m1link_spi_lock(void)",
+        "bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)",
         "void esp32_m1link_spi_unlock(void)");
 
     /* The lock must initialise the mutex before taking it; without this the
      * mutex stays NULL and every brain-CD3 M1_RPC transfer fails. */
     const char *init_call = strstr(lock_body, "esp32_m1link_spi_mutex_init()");
-    const char *take_call = strstr(lock_body, "esp32_m1link_lifecycle_lock()");
+    const char *take_call = strstr(lock_body, "esp32_m1link_lifecycle_lock_timed(timeout_ms)");
     TEST_ASSERT_NOT_NULL_MESSAGE(init_call,
         "esp32_m1link_spi_lock() must call esp32_m1link_spi_mutex_init()");
     TEST_ASSERT_NOT_NULL(take_call);
@@ -331,9 +332,39 @@ void test_rpc_task_resets_heartbeat_baseline_after_probe(void)
     free(content);
 }
 
+void test_m1link_lock_chain_honors_response_timeout(void)
+{
+    char *content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+
+    const char *lifecycle = strstr(content,
+        "esp32_m1link_lifecycle_lock_timed(uint32_t timeout_ms)");
+    const char *lifecycle_take = lifecycle
+        ? strstr(lifecycle,
+            "pdMS_TO_TICKS(timeout_ms)) == pdPASS")
+        : NULL;
+    const char *lock = strstr(content,
+        "esp32_m1link_spi_lock_timed(uint32_t timeout_ms)");
+    const char *at_take = lock
+        ? strstr(lock, "xSemaphoreTake(pxMutex, pdMS_TO_TICKS(timeout_ms))")
+        : NULL;
+    const char *cleanup = at_take
+        ? strstr(at_take, "esp32_m1link_lifecycle_unlock();")
+        : NULL;
+    const char *caller = strstr(content, "esp32_m1link_spi_lock_timed(timeout_ms)");
+
+    bool complete = lifecycle_take != NULL && at_take != NULL &&
+                    cleanup != NULL && caller != NULL;
+
+    free(content);
+
+    TEST_ASSERT_TRUE(complete);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_m1link_lock_chain_honors_response_timeout);
     RUN_TEST(test_m1link_spi_lock_creates_mutex_lazily);
     RUN_TEST(test_init_master_hd_retry_loop_yields);
     RUN_TEST(test_reset_slave_delay_yields);

@@ -239,7 +239,10 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                         uint8_t *resp, uint16_t resp_cap,
                                         uint16_t *resp_len, int timeout_sec)
 {
-    if (!m1_esp32_rpc_transaction_lock())
+    uint32_t lock_timeout_ms = (timeout_sec > 0)
+                                   ? (uint32_t)timeout_sec * 1000u
+                                   : 2000u;
+    if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(lock_timeout_ms)))
         return M1_ESP32_RPC_ERR_BUSY;
 
     if (!m1_esp32_get_init_status())

@@ -19,6 +19,9 @@
 #include "main.h"
 #include "m1_fw_update_bl.h"
 #include "m1_diag.h"
+#ifdef M1_APP_RPC_ENABLE
+#include "m1_rpc.h"
+#endif
 #include "m1_watchdog.h"
 #include "m1_watchdog_boot_loop.h"
 #include "m1_watchdog_decision.h"
@@ -94,6 +97,8 @@ void m1_wdt_init(void)
 	bool was_wdt_reset;
 	m1_wdt_boot_loop_eval_t loop_eval;
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_WDT_ENTRY);
+
 	/*
 	 * Freeze the IWDG counter when the CPU is halted by the debugger.
 	 * Without this, the IWDG fires a reset during breakpoints/stepping,
@@ -147,9 +152,11 @@ void m1_wdt_init(void)
 	 * DR2 is the first backup register after S_M1_BK_REGS_t, which uses
 	 * DR0..DR1 (sizeof = 8 bytes = 2 x 32-bit words).
 	 */
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_WDT_BKUP);
 	HAL_PWR_EnableBkUpAccess(); /* safe to call again; no-op if already enabled */
 	loop_ctr = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_CTR_REG);
 	loop_sig = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_SIG_REG);
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_WDT_WRITE);
 	expected_sig = m1_wdt_boot_loop_build_sig_components(
 		FW_VERSION_MAJOR,
 		FW_VERSION_MINOR,
@@ -178,7 +185,7 @@ void m1_wdt_init(void)
 		         "IWDG disabled for this boot.\r\n",
 		         (unsigned long)loop_ctr);
 		/* Display a recovery banner on the home screen. */
-		startup_info_screen_display("WDT DISABLED - BOOT LOOP");
+		startup_info_screen_display(M1_WDT_RECOVERY_TEXT);
 		/* Return without arming IWDG or creating the WDT task.
 		 * The device boots normally to the main menu without watchdog
 		 * protection for this session, giving the user a chance to
@@ -199,12 +206,14 @@ void m1_wdt_init(void)
 	 * The WDT handler task reloads every M1_WDT_TASK_PERIOD_MS = 2000 ms,
 	 * giving 8x steady-state margin inside the 16 s window.
 	 */
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_WDT_ARM);
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
 	{
 		Error_Handler();
 	}
 
 	m1_wdt_report_init();
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_WDT_TASK);
 
 	ret = xTaskCreate(m1_wdt_handler_task, "m1_wdt_handler_task_n", M1_TASK_STACK_SIZE_DEFAULT, NULL, TASK_PRIORITY_WDT_HANDLER, &m1_wdt_task_hdl);
 	assert(ret==pdPASS);
@@ -408,7 +417,9 @@ static void m1_wdt_system_check(void)
 		uint32_t wdt_rt = 0;
 		taskENTER_CRITICAL();
 		wdt_id = wdt_report[i].report_id;
-		wdt_action = m1_wdt_decide_action(wdt_report[i].run_time, min, max, wdt_report[i].inactive);
+		wdt_action = m1_wdt_decide_action_with_grace(
+			wdt_report[i].run_time, min, max,
+			wdt_report[i].inactive, wdt_report[i].resume_grace);
 		if (wdt_action == M1_WDT_ACTION_FAILURE)
 		{
 			wdt_rt = wdt_report[i].run_time;
@@ -416,6 +427,7 @@ static void m1_wdt_system_check(void)
 		else
 		{
 			wdt_report[i].run_time = 0;
+			wdt_report[i].resume_grace = false;
 		}
 		taskEXIT_CRITICAL();
 
@@ -425,6 +437,11 @@ static void m1_wdt_system_check(void)
 		}
 		else if (wdt_action == M1_WDT_ACTION_FAILURE)
 		{
+			m1_diag_wdt_capture(
+				wdt_id, wdt_rt,
+				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_state() : UINT32_MAX,
+				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_stack_high_water() : 0u,
+				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_wake_delta() : 0);
 			M1_LOG_W(M1_LOGDB_TAG, "WDT failure. Task ID %d, run time: %ld\r\n", wdt_id, wdt_rt);
 			m1_wdt_failure_handler();
 		}
@@ -547,8 +564,7 @@ void m1_wdt_suspend_task(S_M1_WDT_Report_ID rpt_id)
 	if (rpt_id < M1_REPORT_ID_END_OF_LIST)
 	{
 		taskENTER_CRITICAL();
-		wdt_report[rpt_id].inactive = true;
-		wdt_report[rpt_id].run_time = 0;
+		m1_wdt_set_task_inactive(&wdt_report[rpt_id], true);
 		taskEXIT_CRITICAL();
 	}
 }
@@ -558,8 +574,7 @@ void m1_wdt_resume_task(S_M1_WDT_Report_ID rpt_id)
 	if (rpt_id < M1_REPORT_ID_END_OF_LIST)
 	{
 		taskENTER_CRITICAL();
-		wdt_report[rpt_id].inactive = false;
-		wdt_report[rpt_id].run_time = 0;
+		m1_wdt_set_task_inactive(&wdt_report[rpt_id], false);
 		taskEXIT_CRITICAL();
 	}
 }

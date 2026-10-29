@@ -23,6 +23,8 @@
 #include "cmsis_os.h"
 #include "m1_sdcard.h"
 #include "m1_sdcard_selfheal.h"
+#include "m1_diag.h"
+#include "m1_tasks.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -166,12 +168,15 @@ S_M1_SDCard_Init_Status m1_sdcard_init(SD_HandleTypeDef *phsdcard)
 	gpio_init_structure.Mode = GPIO_MODE_IT_RISING_FALLING;
 	HAL_GPIO_Init(SD_DETECT_GPIO_Port, &gpio_init_structure);
 
-	/* Enable and set SD detect EXTI Interrupt to the low priority */
+	/* Set SD detect EXTI priority; initial boot enables it after queue creation. */
 	HAL_NVIC_SetPriority((IRQn_Type)(SD_DETECT_EXTI_IRQn), configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY + 1, 0);
-	HAL_NVIC_EnableIRQ((IRQn_Type)(SD_DETECT_EXTI_IRQn));
+	if (sdcard_det_q_hdl != NULL)
+		HAL_NVIC_EnableIRQ((IRQn_Type)(SD_DETECT_EXTI_IRQn));
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_SDMMC);
 	m1_sd_hardware_init();
 
+	m1_diag_set_boot_stage(M1_DIAG_BOOT_SD_CARD);
 	sd_state = m1_sdcard_init_ex();
 
 	return sd_state;

@@ -22,6 +22,7 @@
 #include "stm32h5xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "m1_diag_status.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -111,6 +112,7 @@ void NMI_Handler(void)
     }
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
+  m1_diag_fault_capture(M1_DIAG_FAULT_NMI);
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
    while (1)
   {
@@ -124,6 +126,15 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+	uint32_t *stack_frame;
+	__asm volatile(
+		"TST LR, #4\n"
+		"ITE EQ\n"
+		"MRSEQ %0, MSP\n"
+		"MRSNE %0, PSP\n"
+		: "=r"(stack_frame));
+	m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_HARD,
+	                              m1_diag_stacked_pc(stack_frame));
 	static volatile int _go_db;
 
 	_go_db = 0;
@@ -145,7 +156,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+  m1_diag_fault_capture(M1_DIAG_FAULT_MEMMANAGE);
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -160,7 +171,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+  m1_diag_fault_capture(M1_DIAG_FAULT_BUS);
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -175,7 +186,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+  m1_diag_fault_capture(M1_DIAG_FAULT_USAGE);
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
@@ -252,7 +263,7 @@ void TIM6_IRQHandler(void)
 void SDMMC1_IRQHandler(void)
 {
   /* USER CODE BEGIN SDMMC1_IRQn 0 */
-
+  m1_diag_set_boot_stage(M1_DIAG_BOOT_SDMMC_IRQ);
   /* USER CODE END SDMMC1_IRQn 0 */
   HAL_SD_IRQHandler(&hsd1);
   /* USER CODE BEGIN SDMMC1_IRQn 1 */
