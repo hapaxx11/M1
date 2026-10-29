@@ -1,1 +1,0 @@
-**SD card: prevent startup crashes from early card-detect interrupts** — enable the interrupt only after its queue exists and ignore unexpected early events instead of calling FreeRTOS with a NULL queue.

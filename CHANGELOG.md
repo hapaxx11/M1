@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.22] - 2026-10-29
+
+### Added
+
+- **Diagnostics: preserve reset, boot-stage, fault, and fault-PC details across resets** — show an on-screen report only after abnormal startup, watchdog reset, or captured fault while keeping normal successful boots free of diagnostic banners.
+
+### Changed
+
+- **Documentation:** update local Windows build-tool references for STM32CubeCLT 1.22.0.
+- **Home screen: move bottom status text down 2 pixels** — prevent diagnostic and watchdog messages from overlapping the status icon.
+
+### Fixed
+
+- **ESP32 RPC: bound the complete transaction lock chain to the caller’s response-timeout budget** — return busy instead of blocking the RPC watchdog on the RPC transaction, M1 Link lifecycle, or legacy AT mutex.
+- **Logging: harden startup resource and interrupt lifecycle** — enable GPDMA1 first, use a statically allocated log queue, initialize resources before IRQs, and defer DMA/UART interrupts and formatted log output until the logger task exists.
+- **RPC: prevent a startup freeze during home-screen rendering** — treat screen streaming as inactive until the routing mutex exists instead of waiting forever on an uninitialized mutex.
+- **RPC: stop healthy polling from triggering the task watchdog** — preserve heartbeat runtime across short ESP32 probe transitions, charge early notification wakeups against the configured wait budget, and allow one full reporting window after a long suspended probe before enforcing the minimum runtime.
+- **SD card: prevent startup crashes from early card-detect interrupts** — enable the interrupt only after its queue exists and ignore unexpected early events instead of calling FreeRTOS with a NULL queue.
+- **Startup: increase the system-init task stack to 4 KB** — prevent stack corruption in the deep diagnostics, display, and peripheral-initialization call chain while leaving other task stacks unchanged.
+- **Watchdog: make boot-loop recovery visible** — shorten the recovery banner and prevent oversized home-screen status text from underflowing its X coordinate and rendering off-screen.
+
 ## [0.9.4.21] - 2026-10-24
 
 ### Added

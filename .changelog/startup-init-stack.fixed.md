@@ -1,1 +1,0 @@
-**Startup: increase the system-init task stack to 4 KB** — prevent stack corruption in the deep diagnostics, display, and peripheral-initialization call chain while leaving other task stacks unchanged.

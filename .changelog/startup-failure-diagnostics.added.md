@@ -1,1 +1,0 @@
-**Diagnostics: preserve reset, boot-stage, fault, and fault-PC details across resets** — show an on-screen report only after abnormal startup, watchdog reset, or captured fault while keeping normal successful boots free of diagnostic banners.
