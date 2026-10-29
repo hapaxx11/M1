@@ -21,6 +21,7 @@
 #include "m1_cli.h"
 #include "m1_compile_cfg.h"
 #include "m1_sdcard.h"
+#include "m1_uart_app.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -264,6 +265,11 @@ void vSer2UsbTask(void *pvParameters)
 
   for(;;)
   {
+    if (m1_uart_app_owned)
+    {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
     /* Read data from the USART RX Stream Buffer (blocking) */
     received_bytes = xStreamBufferReceive(h_uart_rx_streambuf,
                                           (void *)usb_tx_temp_buffer,
@@ -447,6 +453,8 @@ void vUsb2SerTask(void *pvParameters)
         continue;  /* Skip UART forwarding */
       }
 #endif /* M1_APP_RPC_ENABLE */
+
+      if (m1_uart_app_owned) continue;
 
       bytes_remaining = received_bytes;
       current_buffer_ptr = logdb_tx_buffer;

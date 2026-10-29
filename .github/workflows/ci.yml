@@ -103,8 +103,9 @@ jobs:
           ELF="build/${PROJECT}.elf"
           BIN="build/${PROJECT}.bin"
           HEX="build/${PROJECT}.hex"
+          MESHTASTIC_APP="build/apps/meshtastic/m1-meshtastic.m1app"
 
-          for f in "$ELF" "$BIN" "$HEX"; do
+          for f in "$ELF" "$BIN" "$HEX" "$MESHTASTIC_APP"; do
             if [ ! -f "$f" ]; then
               echo "ERROR: expected artifact missing: $f"
               exit 1

@@ -43,7 +43,8 @@ typedef enum
 #define USB_RX_BUF_SIZE         1024  //128 //512 //1024  //(USB_FS_CHUNK_SIZE * 8)
 #define USB_TX_BUF_SIZE         1024  //(USB_FS_CHUNK_SIZE * 8)
 
-#define RXSTREAMBUF_UART_SIZE   256
+/* 2 KB FreeRTOS-heap allocation absorbs multi-KB Meshtastic config bursts. */
+#define RXSTREAMBUF_UART_SIZE   2048
 #define RXSTREAMBUF_USB_SIZE    2048 //8192 //4096 //2048 //USB_RX_BUF_SIZE*2
 
 /*********************************************/

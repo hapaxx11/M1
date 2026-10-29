@@ -143,6 +143,7 @@ project discussion, and related project resources:
 ### External Apps
 - **ELF app loader** — load and run third-party apps from SD card
 - Browse and launch `.m1app` files from the Apps menu
+- **Meshtastic** — bundled UART client with broadcast/direct messages, node roster, signal and telemetry views, notifications, and node configuration; see [`apps/meshtastic/README.md`](apps/meshtastic/README.md) for installation and wiring
 
 ### Games & Entertainment
 - Snake, Tetris, T-Rex Runner, Pong, 2048, Dice, Queens — built-in games accessible from the menu
@@ -427,6 +428,7 @@ If you need to flash the firmware directly via USB using STM32CubeProgrammer (wi
 │   ├── fw_sources.txt  Firmware download sources (auto-generated, user-editable)
 │   └── restaurant_pager.cfg  Restaurant pager max ID and TX repeat settings
 ├── apps/            External .m1app applications
+├── apps_data/       External app settings (including Meshtastic)
 ├── settings.ini     M1 settings (auto-generated)
 └── wifi_cred.ini    Saved WiFi credentials (AES-256 encrypted, auto-generated)
 ```

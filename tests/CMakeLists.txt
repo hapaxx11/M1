@@ -4490,3 +4490,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_diag_boot_no_logging PRIVATE sanitizers)
 endif()
 add_test(NAME diag_boot_no_logging COMMAND test_diag_boot_no_logging)
+
+# ------------------------------------------------------------------
+# Module under test: Meshtastic serial stream framing
+# ------------------------------------------------------------------
+add_executable(test_meshtastic_framing
+    test_meshtastic_framing.c
+    ${M1_ROOT}/apps/meshtastic/src/meshtastic_framing.c
+)
+target_include_directories(test_meshtastic_framing PRIVATE
+    ${M1_ROOT}/apps/meshtastic/src
+)
+target_link_libraries(test_meshtastic_framing PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_meshtastic_framing PRIVATE sanitizers)
+endif()
+add_test(NAME meshtastic_framing COMMAND test_meshtastic_framing)
