@@ -161,7 +161,7 @@ void test_exception_frame_yields_fault_pc(void)
 {
     uint32_t frame[8] = {1, 2, 3, 4, 5, 6, 0x08012345, 7};
     uint32_t extended_frame[26] = {0};
-    extended_frame[24] = 0x08045678;
+    extended_frame[6] = 0x08045678;
     TEST_ASSERT_EQUAL_HEX32(0x08012345,
         m1_diag_stacked_pc(frame, 0xFFFFFFFDu));
     TEST_ASSERT_EQUAL_HEX32(0x08045678,

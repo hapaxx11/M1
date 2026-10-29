@@ -372,9 +372,41 @@ void test_m1link_lock_chain_honors_response_timeout(void)
     TEST_ASSERT_TRUE(complete);
 }
 
+void test_m1link_lock_wait_does_not_reduce_response_budget_before_abort(void)
+{
+    char *content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+
+    const char *fn_start = strstr(content,
+        "uint8_t spi_m1link_send_recv_bin_timed(");
+    const char *lock_call = fn_start
+        ? strstr(fn_start, "esp32_m1link_spi_lock_timed(timeout_ms)")
+        : NULL;
+    const char *abort_call = fn_start
+        ? strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);")
+        : NULL;
+    const char *remaining = fn_start
+        ? strstr(fn_start,
+            "timeout_ms = m1_esp32_rpc_remaining_timeout_ms(")
+        : NULL;
+    const char *exchange = fn_start
+        ? strstr(fn_start, "rc = m1_esp32_m1link_send_recv_timed(")
+        : NULL;
+
+    bool complete = lock_call != NULL && abort_call != NULL &&
+                    remaining != NULL && exchange != NULL &&
+                    lock_call < abort_call && abort_call < remaining &&
+                    remaining < exchange;
+    free(content);
+
+    TEST_ASSERT_TRUE_MESSAGE(complete,
+        "a nonzero lock wait must not reduce the budget before the abort and final remaining-time calculation");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_m1link_lock_wait_does_not_reduce_response_budget_before_abort);
     RUN_TEST(test_m1link_lock_chain_honors_response_timeout);
     RUN_TEST(test_m1link_spi_lock_creates_mutex_lazily);
     RUN_TEST(test_init_master_hd_retry_loop_yields);
