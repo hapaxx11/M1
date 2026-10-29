@@ -115,6 +115,22 @@ void test_persistent_diag_block_prevents_marker_coalescing(void)
                               default: 0));
 }
 
+void test_boot_completion_stays_set_after_runtime_breadcrumbs(void)
+{
+    uint32_t completed =
+        m1_diag_boot_completion_sticky(0u, M1_DIAG_BOOT_MENU);
+    M1DiagBlock saved = { .boot_completed = completed };
+    M1DiagBlock copy = {0};
+
+    TEST_ASSERT_EQUAL_UINT32(1u, completed);
+    TEST_ASSERT_EQUAL_UINT32(1u,
+        m1_diag_boot_completion_sticky(completed, M1_DIAG_BOOT_NEXT_RPC));
+    TEST_ASSERT_EQUAL_UINT32(0u,
+        m1_diag_boot_completion_sticky(0u, M1_DIAG_BOOT_NEXT_RPC));
+    m1_diag_copy_saved(&copy, &saved);
+    TEST_ASSERT_EQUAL_UINT32(1u, copy.boot_completed);
+}
+
 void test_boot_report_is_visible_only_for_abnormal_boots(void)
 {
     TEST_ASSERT_FALSE(m1_diag_boot_report_visible(
@@ -129,11 +145,28 @@ void test_boot_report_is_visible_only_for_abnormal_boots(void)
         true, true, M1_DIAG_FAULT_HARD, false));
 }
 
+void test_captured_fault_overrides_rpc_reset_origin(void)
+{
+    TEST_ASSERT_FALSE(m1_diag_reset_origin_status_visible(
+        M1_DIAG_FAULT_HARD, M1_DIAG_DETAIL_RPC_NOTIFY));
+    TEST_ASSERT_FALSE(m1_diag_reset_origin_status_visible(
+        M1_DIAG_FAULT_ASSERT, M1_DIAG_DETAIL_RPC_NOTIFY));
+    TEST_ASSERT_FALSE(m1_diag_reset_origin_status_visible(
+        M1_DIAG_FAULT_WDT_TASK, M1_DIAG_RESET_RPC));
+    TEST_ASSERT_TRUE(m1_diag_reset_origin_status_visible(
+        M1_DIAG_FAULT_NONE, M1_DIAG_DETAIL_RPC_NOTIFY));
+}
+
 void test_exception_frame_yields_fault_pc(void)
 {
     uint32_t frame[8] = {1, 2, 3, 4, 5, 6, 0x08012345, 7};
-    TEST_ASSERT_EQUAL_HEX32(0x08012345, m1_diag_stacked_pc(frame));
-    TEST_ASSERT_EQUAL_HEX32(0, m1_diag_stacked_pc(NULL));
+    uint32_t extended_frame[26] = {0};
+    extended_frame[24] = 0x08045678;
+    TEST_ASSERT_EQUAL_HEX32(0x08012345,
+        m1_diag_stacked_pc(frame, 0xFFFFFFFDu));
+    TEST_ASSERT_EQUAL_HEX32(0x08045678,
+        m1_diag_stacked_pc(extended_frame, 0xFFFFFFE9u));
+    TEST_ASSERT_EQUAL_HEX32(0, m1_diag_stacked_pc(NULL, 0xFFFFFFFDu));
 }
 
 void test_reset_origin_names_are_specific(void)
@@ -164,7 +197,9 @@ int main(void)
     RUN_TEST(test_fault_status_takes_precedence_over_stage);
     RUN_TEST(test_invalid_values_are_visible_and_bounded);
     RUN_TEST(test_persistent_diag_block_prevents_marker_coalescing);
+    RUN_TEST(test_boot_completion_stays_set_after_runtime_breadcrumbs);
     RUN_TEST(test_boot_report_is_visible_only_for_abnormal_boots);
+    RUN_TEST(test_captured_fault_overrides_rpc_reset_origin);
     RUN_TEST(test_exception_frame_yields_fault_pc);
     RUN_TEST(test_reset_origin_names_are_specific);
     RUN_TEST(test_wdt_status_includes_task_state_and_wake_delta);

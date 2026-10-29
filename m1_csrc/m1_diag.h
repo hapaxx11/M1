@@ -25,7 +25,6 @@
 #define M1_DIAG_H_
 
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -182,7 +181,7 @@ typedef struct {
     uint32_t        wdt_task_state;  /* eTaskState at WDT failure */
     uint32_t        wdt_stack_high_water; /* Free task stack, in words */
     int32_t         wdt_wake_delta;  /* Task wake tick minus current tick */
-    bool            boot_completed;  /* Sticky once MENU is reached */
+    uint32_t        boot_completed; /* Menu reached during this boot */
 } M1DiagBlock;
 
 /* The diagnostic block lives in .noinit so it is never zeroed at startup. */
@@ -192,6 +191,12 @@ extern volatile M1DiagBlock g_m1_diag;
  * Inline setters — called from t5577.c write steps and startup milestones.
  * Always safe to call: writes to globals are atomic enough for diagnostics.
  * ------------------------------------------------------------------------- */
+static inline uint32_t m1_diag_boot_completion_sticky(
+    uint32_t completed, M1DiagBootStage stage)
+{
+    return completed || stage == M1_DIAG_BOOT_MENU ? 1u : 0u;
+}
+
 static inline void m1_diag_set_phase(M1DiagWritePhase phase)
 {
     g_m1_diag.magic       = M1_DIAG_MAGIC;
@@ -202,10 +207,8 @@ static inline void m1_diag_set_boot_stage(M1DiagBootStage stage)
 {
     g_m1_diag.magic      = M1_DIAG_MAGIC;
     g_m1_diag.boot_stage = stage;
-    if (stage == M1_DIAG_BOOT_MENU)
-        g_m1_diag.boot_completed = true;
-    else if (stage == M1_DIAG_BOOT_MAIN)
-        g_m1_diag.boot_completed = false;
+    g_m1_diag.boot_completed =
+        m1_diag_boot_completion_sticky(g_m1_diag.boot_completed, stage);
 }
 
 static inline void m1_diag_set_reset_origin(M1DiagResetOrigin origin)

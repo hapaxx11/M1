@@ -49,9 +49,11 @@ static inline void m1_diag_wdt_status_text(uint32_t task_id,
              (long)wake_delta);
 }
 
-static inline uint32_t m1_diag_stacked_pc(const uint32_t *frame)
+static inline uint32_t m1_diag_stacked_pc(const uint32_t *frame,
+                                          uint32_t exc_return)
 {
-    return frame != NULL ? frame[6] : 0u;
+    uint32_t core_frame_offset = (exc_return & (1u << 4u)) ? 0u : 18u;
+    return frame != NULL ? frame[core_frame_offset + 6u] : 0u;
 }
 
 static inline bool m1_diag_boot_report_visible(bool valid,
@@ -62,6 +64,12 @@ static inline bool m1_diag_boot_report_visible(bool valid,
     if (watchdog_reset || fault != M1_DIAG_FAULT_NONE)
         return true;
     return valid && !boot_completed;
+}
+
+static inline bool m1_diag_reset_origin_status_visible(
+    M1DiagFaultKind fault, M1DiagResetOrigin origin)
+{
+    return fault == M1_DIAG_FAULT_NONE && origin != M1_DIAG_RESET_NONE;
 }
 
 static inline const char *m1_diag_reset_origin_text(M1DiagResetOrigin origin)

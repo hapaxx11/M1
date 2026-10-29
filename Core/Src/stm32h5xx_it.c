@@ -123,27 +123,33 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
+static void m1_diag_hardfault_capture(uint32_t *stack_frame,
+                                      uint32_t exc_return)
+    __attribute__((noreturn, noinline, used));
+
+static void m1_diag_hardfault_capture(uint32_t *stack_frame,
+                                      uint32_t exc_return)
+{
+  m1_diag_fault_capture_with_pc(
+      M1_DIAG_FAULT_HARD, m1_diag_stacked_pc(stack_frame, exc_return));
+	static volatile int _go_db;
+
+	_go_db = 0;
+
+	while( _go_db==0 )
+		;
+  for (;;) { }
+}
+
 __attribute__((naked)) void HardFault_Handler(void)
 {
   __asm volatile(
-    "TST LR, #4\n"
-    "ITE EQ\n"
-    "MRSEQ R0, MSP\n"
-    "MRSNE R0, PSP\n"
-    "MOV R1, LR\n"
-    "B HardFault_Handler_C\n");
-}
-
-void HardFault_Handler_C(uint32_t *stack_frame, uint32_t exc_return)
-{
-  (void)exc_return;
-  m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_HARD,
-                                m1_diag_stacked_pc(stack_frame));
-  static volatile int _go_db;
-
-  _go_db = 0;
-  while (_go_db == 0)
-    ;
+      "TST LR, #4       \n"
+      "ITE EQ           \n"
+      "MRSEQ R0, MSP    \n"
+      "MRSNE R0, PSP    \n"
+      "MOV R1, LR       \n"
+      "B m1_diag_hardfault_capture\n");
 }
 
 /**

@@ -31,6 +31,7 @@ static M1DiagBlock previous_diag;
 void m1_diag_capture_previous(void)
 {
     m1_diag_copy_saved(&previous_diag, &g_m1_diag);
+    g_m1_diag.boot_completed = 0u;
 }
 
 /*===========================================================================*/
@@ -49,6 +50,7 @@ void m1_diag_boot_report(void)
     bool prev_valid = (previous_diag.magic == M1_DIAG_MAGIC);
     m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_MAGIC);
     M1DiagBootStage prev_stage = prev_valid ? previous_diag.boot_stage : M1_DIAG_BOOT_EARLY;
+    bool prev_boot_completed = prev_valid && previous_diag.boot_completed != 0u;
     m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_STAGE);
     M1DiagFaultKind prev_fault = prev_valid ? previous_diag.fault_kind : M1_DIAG_FAULT_NONE;
     m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_FAULT);
@@ -83,7 +85,6 @@ void m1_diag_boot_report(void)
     g_m1_diag.wdt_task_state = UINT32_MAX;
     g_m1_diag.wdt_stack_high_water = 0;
     g_m1_diag.wdt_wake_delta = 0;
-    g_m1_diag.boot_completed = false;
 
     __HAL_RCC_CLEAR_RESET_FLAGS();
     m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_CLEAR);
@@ -92,26 +93,25 @@ void m1_diag_boot_report(void)
         m1_diag_wdt_status_text(prev_pc, prev_wdt_run_time,
                                 prev_wdt_task_state, prev_wdt_wake_delta,
                                 stage_status, sizeof(stage_status));
+    else if (m1_diag_reset_origin_status_visible(prev_fault, prev_origin) &&
+             prev_origin >= M1_DIAG_DETAIL_RPC_NOTIFY)
+        snprintf(stage_status, sizeof(stage_status), "RPC: %s",
+                 m1_diag_reset_origin_text(prev_origin));
+    else if (m1_diag_reset_origin_status_visible(prev_fault, prev_origin))
+        snprintf(stage_status, sizeof(stage_status), "RST: %s",
+                 m1_diag_reset_origin_text(prev_origin));
     else if (prev_fault == M1_DIAG_FAULT_ASSERT && prev_pc != 0)
         snprintf(stage_status, sizeof(stage_status), "ASSERT: %lu",
                  (unsigned long)prev_pc);
-    else if (prev_fault != M1_DIAG_FAULT_NONE && prev_pc != 0)
+    else if (prev_pc != 0)
         snprintf(stage_status, sizeof(stage_status), "PC: %08lX",
                  (unsigned long)prev_pc);
-    else if (prev_fault != M1_DIAG_FAULT_NONE)
-        m1_diag_boot_status_text(prev_stage, prev_fault, stage_status, sizeof(stage_status));
-    else if (prev_origin >= M1_DIAG_DETAIL_RPC_NOTIFY)
-        snprintf(stage_status, sizeof(stage_status), "RPC: %s",
-                 m1_diag_reset_origin_text(prev_origin));
-    else if (prev_origin != M1_DIAG_RESET_NONE)
-        snprintf(stage_status, sizeof(stage_status), "RST: %s",
-                 m1_diag_reset_origin_text(prev_origin));
     else
         m1_diag_boot_status_text(prev_stage, prev_fault, stage_status, sizeof(stage_status));
     m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_TEXT);
     snprintf(status, sizeof(status), "%s: %.24s", cause_str, stage_status);
     if (m1_diag_boot_report_visible(
-            prev_valid, previous_diag.boot_completed, prev_fault,
+            prev_valid, prev_boot_completed, prev_fault,
             (rsr & (RCC_RSR_IWDGRSTF | RCC_RSR_WWDGRSTF)) != 0))
     {
         m1_diag_set_boot_stage(M1_DIAG_BOOT_DIAG_LCD);

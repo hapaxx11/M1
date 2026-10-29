@@ -1,5 +1,7 @@
 #include "unity.h"
 #include "m1_watchdog_decision.h"
+#include <stdio.h>
+#include <string.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -90,6 +92,38 @@ void test_wall_time_accounting_handles_fast_and_slow_iterations(void)
         m1_wdt_decide_action(run_time, 2000u, 20000u, false));
 }
 
+void test_rpc_diagnostic_calls_are_inside_feature_guard(void)
+{
+    char path[512];
+    char source[32768];
+    snprintf(path, sizeof(path), "%s/m1_csrc/m1_watchdog.c", M1_ROOT);
+    FILE *fp = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
+    size_t len = fread(source, 1, sizeof(source) - 1u, fp);
+    fclose(fp);
+    TEST_ASSERT_LESS_THAN(sizeof(source) - 1u, len);
+    source[len] = '\0';
+
+    char *function = strstr(source, "static void m1_wdt_system_check(void)");
+    TEST_ASSERT_NOT_NULL(function);
+    char *task_state = strstr(function, "uint32_t task_state");
+    TEST_ASSERT_NOT_NULL(task_state);
+    char *guard = strstr(task_state, "#ifdef M1_APP_RPC_ENABLE");
+    TEST_ASSERT_NOT_NULL(guard);
+    char *end = strstr(guard, "#endif");
+    TEST_ASSERT_NOT_NULL(end);
+    char *state_call = strstr(guard, "m1_rpc_task_debug_state()");
+    char *stack_call = strstr(guard, "m1_rpc_task_debug_stack_high_water()");
+    char *wake_call = strstr(guard, "m1_rpc_task_debug_wake_delta()");
+    TEST_ASSERT_NOT_NULL(state_call);
+    TEST_ASSERT_NOT_NULL(stack_call);
+    TEST_ASSERT_NOT_NULL(wake_call);
+    TEST_ASSERT_TRUE(guard < state_call);
+    TEST_ASSERT_TRUE(state_call < end);
+    TEST_ASSERT_TRUE(stack_call < end);
+    TEST_ASSERT_TRUE(wake_call < end);
+}
+
 void test_resume_grace_allows_a_full_window_after_a_long_probe(void)
 {
     S_M1_WDT_Report report = {
@@ -125,6 +159,7 @@ int main(void)
     RUN_TEST(test_run_time_exactly_at_bounds_is_ok);
     RUN_TEST(test_short_suspend_resume_cycles_preserve_accumulated_runtime);
     RUN_TEST(test_wall_time_accounting_handles_fast_and_slow_iterations);
+    RUN_TEST(test_rpc_diagnostic_calls_are_inside_feature_guard);
     RUN_TEST(test_resume_grace_allows_a_full_window_after_a_long_probe);
     return UNITY_END();
 }

@@ -29,7 +29,6 @@
 #include "m1_at_response_parser.h"
 #include "esp32_spi_bin.h"
 #include "m1_esp32_rpc.h"      /* M1 Link full-duplex framing helper + MTU */
-#include "m1_deadline.h"
 
 #define STREAM_BUFFER_SIZE    	SPI_TRANS_MAX_LEN
 
@@ -124,6 +123,7 @@ void esp32_m1link_lifecycle_unlock(void)
 
 bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)
 {
+    uint32_t start_ms = HAL_GetTick();
     /* Create the mutex lazily on first use: no init-time call site ever ran
      * esp32_m1link_spi_mutex_init(), so s_m1link_spi_mutex stayed NULL and
      * every M1 Link transfer failed with CTRL_ERR_TRANSPORT_SEND before
@@ -131,15 +131,13 @@ bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)
      * WiFi AP scan). */
     if (!esp32_m1link_spi_mutex_init())
         return false;
-    uint32_t deadline = (timeout_ms == portMAX_DELAY)
-                            ? portMAX_DELAY
-                            : HAL_GetTick() + timeout_ms;
     if (!esp32_m1link_lifecycle_lock_timed(timeout_ms))
         return false;
+    uint32_t remaining_timeout_ms = m1_esp32_rpc_remaining_timeout_ms(
+        start_ms, HAL_GetTick(), timeout_ms);
     if (pxMutex != NULL &&
-        xSemaphoreTake(pxMutex,
-                       pdMS_TO_TICKS(m1_deadline_remaining_ms(
-                           deadline, HAL_GetTick()))) != pdPASS)
+        (remaining_timeout_ms == 0u ||
+         xSemaphoreTake(pxMutex, pdMS_TO_TICKS(remaining_timeout_ms)) != pdPASS))
     {
         esp32_m1link_lifecycle_unlock();
         return false;
@@ -811,9 +809,9 @@ static void m1link_pace_1ms(void *ctx)
 	vTaskDelay(pdMS_TO_TICKS(1));
 }
 
-uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                 uint8_t *rx_buf, int rx_buf_size,
-                                 int *out_len, int timeout_sec)
+uint8_t spi_m1link_send_recv_bin_timed(const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       int *out_len, uint32_t timeout_ms)
 {
 	/* 512-byte working buffers for fixed-size M1 Link transactions.
 	 * Keep these on the caller stack so we don't permanently reserve
@@ -821,7 +819,6 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
 	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
 	uint8_t  rc;
-	uint32_t timeout_ms;
 	uint32_t t0 = HAL_GetTick();
 
 	if (out_len)
@@ -830,7 +827,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
 		return CTRL_ERR_INCORRECT_ARG;
 
-	/* The poll budget is the response wait, paced on real wall-clock time
+	/* The poll budget is the remaining transaction budget, paced on real wall-clock
 	 * (issue #719 Phase 7) rather than a poll count: earlier revisions
 	 * derived a fixed transaction COUNT from timeout_sec assuming each poll
 	 * costs ~M1LINK_HS_TIMEOUT_MS, but a poll (HANDSHAKE wait + one SPI
@@ -838,26 +835,25 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * brain's HANDSHAKE line is already asserted, so that count-based budget
 	 * could exhaust in a fraction of a second regardless of timeout_sec --
 	 * see the "Poll-budget wall-clock FIX" comment in m1_esp32_rpc.h. Pacing
-	 * on HAL_GetTick() instead means we always wait the caller's requested
-	 * timeout_sec, however fast or slow individual transactions turn out to
+	 * on HAL_GetTick() instead means we wait only for the remaining request
+	 * budget, however fast or slow individual transactions turn out to
 	 * be. max_iterations remains only as a generous safety backstop against
 	 * a runaway loop if the clock source itself ever misbehaves. */
-	/* Floor for a poll budget when the caller passes no timeout (seconds). */
-	const int m1link_default_timeout_s = 2;
-	if (timeout_sec <= 0)
-		timeout_sec = m1link_default_timeout_s;
-	timeout_ms = (uint32_t)timeout_sec * 1000u;
-	uint32_t deadline = t0 + timeout_ms;
-
 	/* Hold the independent transaction mutex across the complete request/reply
 	 * sequence, even when the legacy AT task (and pxMutex) was never started. */
-	if (!esp32_m1link_spi_lock_timed(
-			m1_deadline_remaining_ms(deadline, HAL_GetTick())))
+	if (!esp32_m1link_spi_lock_timed(timeout_ms))
 		return CTRL_ERR_TRANSPORT_SEND;
 	if (!m1_esp32_get_init_status())
 	{
 		esp32_m1link_spi_unlock();
 		return CTRL_ERR_TRANSPORT_SEND;
+	}
+	timeout_ms = m1_esp32_rpc_remaining_timeout_ms(t0, HAL_GetTick(), timeout_ms);
+	if (timeout_ms == 0u)
+	{
+		esp32_m1link_spi_unlock();
+		s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
+		return CTRL_ERR_REQUEST_TIMEOUT;
 	}
 
 	/* Flush any residual FIFO / packing state before full-duplex M1 Link
@@ -870,11 +866,19 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * M1 Link transaction starts byte-aligned (harmless when already idle). */
 	HAL_SPI_Abort(&hspi_esp);
 
+	timeout_ms = m1_esp32_rpc_remaining_timeout_ms(t0, HAL_GetTick(), timeout_ms);
+	if (timeout_ms == 0u)
+	{
+		esp32_m1link_spi_unlock();
+		s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
+		return CTRL_ERR_REQUEST_TIMEOUT;
+	}
+
 	rc = m1_esp32_m1link_send_recv_timed(m1link_hal_xfer, NULL,
 	                                     s_m1link_tx, s_m1link_rx,
 	                                     M1_ESP32_M1LINK_MTU,
 	                                     HAL_GetTick,
-	                                     m1_deadline_remaining_ms(deadline, HAL_GetTick()), 20000,
+	                                     timeout_ms, 20000,
 	                                     m1link_pace_1ms, NULL,
 	                                     tx_buf, tx_len,
 	                                     rx_buf, rx_buf_size, out_len);
@@ -889,7 +893,18 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	case 2u:  return CTRL_ERR_TRANSPORT_SEND;
 	default:  return CTRL_ERR_REQUEST_TIMEOUT; /* 3 overflow / 4 no-match */
 	}
-} // uint8_t spi_m1link_send_recv_bin(...)
+} // uint8_t spi_m1link_send_recv_bin_timed(...)
+
+uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                 uint8_t *rx_buf, int rx_buf_size,
+                                 int *out_len, int timeout_sec)
+{
+	uint32_t timeout_ms = timeout_sec > 0
+	                          ? (uint32_t)timeout_sec * 1000u
+	                          : 2000u;
+	return spi_m1link_send_recv_bin_timed(tx_buf, tx_len, rx_buf, rx_buf_size,
+	                                      out_len, timeout_ms);
+}
 
 
 void esp32_queue_reset(void)

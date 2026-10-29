@@ -143,13 +143,13 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
     char *content = read_file(
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
-    /* Anchor all checks to the body of spi_m1link_send_recv_bin so that
+    /* Anchor all checks to the timed M1_RPC body so that
      * the HAL_SPI_Abort call inside m1link_hal_xfer (earlier in the file)
      * and any mention of m1_esp32_m1link_send_recv_timed in comments do not
      * pollute the ordered checks.  Anchor to the C function definition (which
      * has a return type) rather than the comment references to the name. */
-    const char *fn_start = strstr(content, "uint8_t spi_m1link_send_recv_bin(");
-    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start, "spi_m1link_send_recv_bin definition not found");
+    const char *fn_start = strstr(content, "uint8_t spi_m1link_send_recv_bin_timed(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start, "timed M1 Link definition not found");
 
     /* The full-sequence lock must wrap the abort AND the timed exchange, so
      * spi_trans_control_task cannot interpose between request and reply polls. */
@@ -173,13 +173,13 @@ void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
      * serialise individual SPI transactions but still allow the AT task to
      * interpose between the request unlock and the next IDLE poll.  Search
      * only within m1link_hal_xfer's text range (between its definition and
-     * the start of spi_m1link_send_recv_bin) to avoid false positives. */
+     * the start of spi_m1link_send_recv_bin_timed) to avoid false positives. */
     const char *xfer_fn = strstr(content, "static int m1link_hal_xfer(");
     TEST_ASSERT_NOT_NULL(xfer_fn);
     TEST_ASSERT_TRUE_MESSAGE(fn_start > xfer_fn,
-        "spi_m1link_send_recv_bin must come after m1link_hal_xfer");
+        "timed M1 Link function must come after m1link_hal_xfer");
     const char *xfer_lock = strstr(xfer_fn, "esp32_m1link_spi_lock())");
-    /* If the call is found at all, it must be in spi_m1link_send_recv_bin
+    /* If the call is found at all, it must be in spi_m1link_send_recv_bin_timed
      * (at or after fn_start), not inside m1link_hal_xfer (before fn_start). */
     TEST_ASSERT_TRUE_MESSAGE(xfer_lock == NULL || xfer_lock >= fn_start,
         "m1link_hal_xfer must not take per-transfer SPI mutex");
