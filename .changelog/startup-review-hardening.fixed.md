@@ -1,1 +1,0 @@
-**Startup and RPC review hardening** — use supervised wall time for RPC watchdog reports, share one deadline across each RPC lock and response path, keep successful-boot completion sticky, preserve fault details, guard RPC-disabled diagnostics, and capture hard faults from the original exception stack.
