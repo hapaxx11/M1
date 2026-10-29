@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "m1_esp32_rpc.h"
+#include "m1_deadline.h"
 
 /* Binary-safe half-duplex SPI-HD send/receive (Esp_spi_at master driver).
  * Declared extern exactly as in m1_esp32_caps.c / m1_espnow_hal.c.
@@ -242,7 +243,10 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     uint32_t lock_timeout_ms = (timeout_sec > 0)
                                    ? (uint32_t)timeout_sec * 1000u
                                    : 2000u;
-    if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(lock_timeout_ms)))
+    uint32_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(lock_timeout_ms);
+    uint32_t remaining = m1_deadline_remaining_ms(deadline,
+                                                  xTaskGetTickCount());
+    if (!m1_esp32_rpc_transaction_lock_timed(remaining))
         return M1_ESP32_RPC_ERR_BUSY;
 
     if (!m1_esp32_get_init_status())
@@ -252,8 +256,16 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
         return M1_ESP32_RPC_ERR_NOT_INIT;
     }
 
+    int response_timeout = m1_deadline_remaining_seconds(
+        deadline, xTaskGetTickCount());
+    if (response_timeout == 0)
+    {
+        m1_esp32_rpc_transaction_unlock();
+        return M1_ESP32_RPC_ERR_TIMEOUT;
+    }
+
     m1_esp32_rpc_status_t status = m1_esp32_rpc_call_unlocked(
-        msg_id, req, req_len, resp, resp_cap, resp_len, timeout_sec);
+        msg_id, req, req_len, resp, resp_cap, resp_len, response_timeout);
     m1_esp32_rpc_transaction_unlock();
     return status;
 }

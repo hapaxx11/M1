@@ -764,7 +764,7 @@ esp32_transport_t m1_esp32_active_transport(void);
  * @param resp         Buffer for the response payload (may be NULL)
  * @param resp_cap     Capacity of @p resp in bytes
  * @param resp_len     [out] response payload bytes copied (may be NULL)
- * @param timeout_sec  Response timeout in seconds (0 = transport default)
+ * @param timeout_sec  Total lock-and-response budget in seconds (0 = 2 s)
  * @return M1_ESP32_RPC_OK on success, an ESP32 NAK status, or a host-side
  *         M1_ESP32_RPC_ERR_TRANSPORT / _BAD_FRAME / _INVALID code.
  */

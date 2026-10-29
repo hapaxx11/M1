@@ -85,17 +85,23 @@ static int     g_canned_len;
 static uint8_t g_ret;             /* value the fake returns (0 == SUCCESS) */
 static uint8_t g_last_tx[M1_ESP32_RPC_FRAME_MAX]; /* last request frame sent */
 static int     g_last_tx_len;
+static int     g_last_response_timeout_sec;
 
 static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
                               int *out_len, int timeout_sec)
 {
+    TickType_t advance = g_stub_take_advance_ticks;
+    TickType_t lock_timeout = g_stub_last_timeout;
+    g_stub_take_advance_ticks = 0u;
     g_transaction_lock_available_during_transport =
         m1_esp32_rpc_transaction_try_lock();
     if (g_transaction_lock_available_during_transport)
         m1_esp32_rpc_transaction_unlock();
+    g_stub_take_advance_ticks = advance;
+    g_stub_last_timeout = lock_timeout;
 
-    (void)timeout_sec;
+    g_last_response_timeout_sec = timeout_sec;
     g_last_tx_len = (tx_len < (int)sizeof(g_last_tx)) ? tx_len
                                                       : (int)sizeof(g_last_tx);
     memcpy(g_last_tx, tx_buf, (size_t)g_last_tx_len);
@@ -141,7 +147,10 @@ void setUp(void)
     g_ret = 0;
     g_last_tx_len = 0;
     g_last_elapsed_ms = 0u;
+    g_last_response_timeout_sec = 0;
     g_transaction_lock_available_during_transport = false;
+    g_stub_now_ticks = 0u;
+    g_stub_take_advance_ticks = 0u;
     memset(g_canned, 0, sizeof(g_canned));
     m1_esp32_rpc_set_transport(fake_transport);
 }
@@ -195,6 +204,18 @@ void test_call_bounds_transaction_wait_to_response_timeout(void)
     TEST_ASSERT_EQUAL_UINT32(1000u, g_stub_last_timeout);
     TEST_ASSERT_EQUAL_INT(0, g_last_tx_len);
     m1_esp32_rpc_transaction_unlock();
+}
+
+void test_call_shares_one_deadline_between_lock_and_response(void)
+{
+    g_stub_take_advance_ticks = 1200u;
+    g_ret = 1u;
+
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_TRANSPORT,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 2));
+    TEST_ASSERT_EQUAL_UINT32(2000u, g_stub_last_timeout);
+    TEST_ASSERT_EQUAL_INT(1, g_last_response_timeout_sec);
 }
 
 void test_call_does_not_transmit_after_hal_deinit(void)
@@ -641,6 +662,7 @@ int main(void)
     RUN_TEST(test_call_resp_ok_copies_payload);
     RUN_TEST(test_call_serializes_the_entire_exchange);
     RUN_TEST(test_call_bounds_transaction_wait_to_response_timeout);
+    RUN_TEST(test_call_shares_one_deadline_between_lock_and_response);
     RUN_TEST(test_call_does_not_transmit_after_hal_deinit);
     RUN_TEST(test_call_builds_valid_request_frame);
     RUN_TEST(test_call_nak_returns_status_code);

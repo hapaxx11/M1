@@ -346,12 +346,12 @@ void test_m1link_lock_chain_honors_response_timeout(void)
     const char *lock = strstr(content,
         "esp32_m1link_spi_lock_timed(uint32_t timeout_ms)");
     const char *at_take = lock
-        ? strstr(lock, "xSemaphoreTake(pxMutex, pdMS_TO_TICKS(timeout_ms))")
+        ? strstr(lock, "m1_deadline_remaining_ms(")
         : NULL;
     const char *cleanup = at_take
         ? strstr(at_take, "esp32_m1link_lifecycle_unlock();")
         : NULL;
-    const char *caller = strstr(content, "esp32_m1link_spi_lock_timed(timeout_ms)");
+    const char *caller = strstr(content, "if (!esp32_m1link_spi_lock_timed(");
 
     bool complete = lifecycle_take != NULL && at_take != NULL &&
                     cleanup != NULL && caller != NULL;

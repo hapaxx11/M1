@@ -123,31 +123,27 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-void HardFault_Handler(void)
+__attribute__((naked)) void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
-	uint32_t *stack_frame;
-	__asm volatile(
-		"TST LR, #4\n"
-		"ITE EQ\n"
-		"MRSEQ %0, MSP\n"
-		"MRSNE %0, PSP\n"
-		: "=r"(stack_frame));
-	m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_HARD,
-	                              m1_diag_stacked_pc(stack_frame));
-	static volatile int _go_db;
+  __asm volatile(
+    "TST LR, #4\n"
+    "ITE EQ\n"
+    "MRSEQ R0, MSP\n"
+    "MRSNE R0, PSP\n"
+    "MOV R1, LR\n"
+    "B HardFault_Handler_C\n");
+}
 
-	_go_db = 0;
+void HardFault_Handler_C(uint32_t *stack_frame, uint32_t exc_return)
+{
+  (void)exc_return;
+  m1_diag_fault_capture_with_pc(M1_DIAG_FAULT_HARD,
+                                m1_diag_stacked_pc(stack_frame));
+  static volatile int _go_db;
 
-	while( _go_db==0 )
-		;
-	return;
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
+  _go_db = 0;
+  while (_go_db == 0)
+    ;
 }
 
 /**

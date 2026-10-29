@@ -4487,3 +4487,15 @@ if(TARGET sanitizers)
     target_link_libraries(test_diag_boot_no_logging PRIVATE sanitizers)
 endif()
 add_test(NAME diag_boot_no_logging COMMAND test_diag_boot_no_logging)
+
+add_executable(test_deadline
+    test_deadline.c
+)
+target_include_directories(test_deadline PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_deadline PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_deadline PRIVATE sanitizers)
+endif()
+add_test(NAME deadline COMMAND test_deadline)

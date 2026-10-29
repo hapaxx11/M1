@@ -3002,16 +3002,15 @@ void m1_rpc_task(void *param)
      * suspend this report around themselves (see below). */
     m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
     TickType_t rpc_wdt_last = xTaskGetTickCount();
-    bool rpc_notified = false;
 
     for (;;)
     {
         TickType_t rpc_now = xTaskGetTickCount();
-        m1_wdt_send_report(
-            M1_REPORT_ID_RPC_TASK,
-            m1_wdt_heartbeat_run_time(rpc_now - rpc_wdt_last, 100u,
-                                      rpc_notified));
-        rpc_wdt_last = rpc_now;
+        if (m1_wdt_heartbeat_due(rpc_now, rpc_wdt_last))
+        {
+            m1_wdt_send_report_ex(M1_REPORT_ID_RPC_TASK, rpc_wdt_last);
+            rpc_wdt_last = rpc_now;
+        }
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_NOTIFY);
 
         /* Wait for notification with timeout.
@@ -3019,7 +3018,7 @@ void m1_rpc_task(void *param)
          *  - m1_rpc_notify_screen_update() for screen frame ready
          *  - rpc_dispatch_frame() for deferred slow commands
          *  - m1_rpc_usb_session_reset_from_isr() for a host re-enumeration */
-        rpc_notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) > 0u;
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_EPOCH);
 
         /* Drop stale state left by a host re-enumeration (qM reconnect

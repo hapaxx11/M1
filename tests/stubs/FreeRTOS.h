@@ -64,8 +64,15 @@ static inline BaseType_t xSemaphoreGive(SemaphoreHandle_t s)
     return pdFALSE;
 }
 extern TickType_t g_stub_last_timeout;
+extern TickType_t g_stub_now_ticks;
+extern TickType_t g_stub_take_advance_ticks;
+static inline TickType_t xTaskGetTickCount(void)
+{
+    return g_stub_now_ticks;
+}
 static inline BaseType_t xSemaphoreTake(SemaphoreHandle_t s, TickType_t t)
 {
+    g_stub_now_ticks += g_stub_take_advance_ticks;
     g_stub_last_timeout = t;
     if (s && *(bool *)s) { *(bool *)s = false; return pdTRUE; }
     return pdFALSE;

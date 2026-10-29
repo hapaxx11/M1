@@ -29,6 +29,7 @@
 #include "m1_at_response_parser.h"
 #include "esp32_spi_bin.h"
 #include "m1_esp32_rpc.h"      /* M1 Link full-duplex framing helper + MTU */
+#include "m1_deadline.h"
 
 #define STREAM_BUFFER_SIZE    	SPI_TRANS_MAX_LEN
 
@@ -130,10 +131,15 @@ bool esp32_m1link_spi_lock_timed(uint32_t timeout_ms)
      * WiFi AP scan). */
     if (!esp32_m1link_spi_mutex_init())
         return false;
+    uint32_t deadline = (timeout_ms == portMAX_DELAY)
+                            ? portMAX_DELAY
+                            : HAL_GetTick() + timeout_ms;
     if (!esp32_m1link_lifecycle_lock_timed(timeout_ms))
         return false;
     if (pxMutex != NULL &&
-        xSemaphoreTake(pxMutex, pdMS_TO_TICKS(timeout_ms)) != pdPASS)
+        xSemaphoreTake(pxMutex,
+                       pdMS_TO_TICKS(m1_deadline_remaining_ms(
+                           deadline, HAL_GetTick()))) != pdPASS)
     {
         esp32_m1link_lifecycle_unlock();
         return false;
@@ -841,10 +847,12 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (timeout_sec <= 0)
 		timeout_sec = m1link_default_timeout_s;
 	timeout_ms = (uint32_t)timeout_sec * 1000u;
+	uint32_t deadline = t0 + timeout_ms;
 
 	/* Hold the independent transaction mutex across the complete request/reply
 	 * sequence, even when the legacy AT task (and pxMutex) was never started. */
-	if (!esp32_m1link_spi_lock_timed(timeout_ms))
+	if (!esp32_m1link_spi_lock_timed(
+			m1_deadline_remaining_ms(deadline, HAL_GetTick())))
 		return CTRL_ERR_TRANSPORT_SEND;
 	if (!m1_esp32_get_init_status())
 	{
@@ -866,7 +874,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	                                     s_m1link_tx, s_m1link_rx,
 	                                     M1_ESP32_M1LINK_MTU,
 	                                     HAL_GetTick,
-	                                     timeout_ms, 20000,
+	                                     m1_deadline_remaining_ms(deadline, HAL_GetTick()), 20000,
 	                                     m1link_pace_1ms, NULL,
 	                                     tx_buf, tx_len,
 	                                     rx_buf, rx_buf_size, out_len);

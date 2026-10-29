@@ -118,15 +118,15 @@ void test_persistent_diag_block_prevents_marker_coalescing(void)
 void test_boot_report_is_visible_only_for_abnormal_boots(void)
 {
     TEST_ASSERT_FALSE(m1_diag_boot_report_visible(
-        true, M1_DIAG_BOOT_MENU, M1_DIAG_FAULT_NONE, false));
+        true, true, M1_DIAG_FAULT_NONE, false));
     TEST_ASSERT_FALSE(m1_diag_boot_report_visible(
-        false, M1_DIAG_BOOT_EARLY, M1_DIAG_FAULT_NONE, false));
+        false, false, M1_DIAG_FAULT_NONE, false));
     TEST_ASSERT_TRUE(m1_diag_boot_report_visible(
-        true, M1_DIAG_BOOT_NEXT_RPC, M1_DIAG_FAULT_NONE, false));
+        true, false, M1_DIAG_FAULT_NONE, false));
     TEST_ASSERT_TRUE(m1_diag_boot_report_visible(
-        true, M1_DIAG_BOOT_MENU, M1_DIAG_FAULT_NONE, true));
+        true, true, M1_DIAG_FAULT_NONE, true));
     TEST_ASSERT_TRUE(m1_diag_boot_report_visible(
-        true, M1_DIAG_BOOT_MENU, M1_DIAG_FAULT_HARD, false));
+        true, true, M1_DIAG_FAULT_HARD, false));
 }
 
 void test_exception_frame_yields_fault_pc(void)

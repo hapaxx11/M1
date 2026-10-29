@@ -24,6 +24,7 @@ static inline void m1_diag_copy_saved(M1DiagBlock *dest,
     dest->wdt_task_state = src->wdt_task_state;
     dest->wdt_stack_high_water = src->wdt_stack_high_water;
     dest->wdt_wake_delta = src->wdt_wake_delta;
+    dest->boot_completed = src->boot_completed;
 }
 
 static inline void m1_diag_wdt_status_text(uint32_t task_id,
@@ -54,13 +55,13 @@ static inline uint32_t m1_diag_stacked_pc(const uint32_t *frame)
 }
 
 static inline bool m1_diag_boot_report_visible(bool valid,
-                                               M1DiagBootStage stage,
+                                               bool boot_completed,
                                                M1DiagFaultKind fault,
                                                bool watchdog_reset)
 {
     if (watchdog_reset || fault != M1_DIAG_FAULT_NONE)
         return true;
-    return valid && stage != M1_DIAG_BOOT_MENU;
+    return valid && !boot_completed;
 }
 
 static inline const char *m1_diag_reset_origin_text(M1DiagResetOrigin origin)

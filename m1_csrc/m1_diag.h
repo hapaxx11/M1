@@ -25,6 +25,7 @@
 #define M1_DIAG_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -164,7 +165,7 @@ typedef enum {
  * .noinit diagnostic block — survives all soft resets
  * Magic guards against stale RAM and diagnostic-layout changes.
  * ------------------------------------------------------------------------- */
-#define M1_DIAG_MAGIC  0xD1A90C25UL
+#define M1_DIAG_MAGIC  0xD1A90C26UL
 
 typedef struct {
     uint32_t        magic;           /* M1_DIAG_MAGIC when valid */
@@ -181,6 +182,7 @@ typedef struct {
     uint32_t        wdt_task_state;  /* eTaskState at WDT failure */
     uint32_t        wdt_stack_high_water; /* Free task stack, in words */
     int32_t         wdt_wake_delta;  /* Task wake tick minus current tick */
+    bool            boot_completed;  /* Sticky once MENU is reached */
 } M1DiagBlock;
 
 /* The diagnostic block lives in .noinit so it is never zeroed at startup. */
@@ -200,6 +202,10 @@ static inline void m1_diag_set_boot_stage(M1DiagBootStage stage)
 {
     g_m1_diag.magic      = M1_DIAG_MAGIC;
     g_m1_diag.boot_stage = stage;
+    if (stage == M1_DIAG_BOOT_MENU)
+        g_m1_diag.boot_completed = true;
+    else if (stage == M1_DIAG_BOOT_MAIN)
+        g_m1_diag.boot_completed = false;
 }
 
 static inline void m1_diag_set_reset_origin(M1DiagResetOrigin origin)

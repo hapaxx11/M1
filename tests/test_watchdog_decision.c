@@ -66,20 +66,28 @@ void test_short_suspend_resume_cycles_preserve_accumulated_runtime(void)
                              report.inactive));
 }
 
-void test_early_notification_wakeups_retain_the_heartbeat_budget(void)
+void test_wall_time_accounting_handles_fast_and_slow_iterations(void)
 {
+    uint32_t last_report = 100u;
     uint32_t run_time = 0u;
 
-    for (uint32_t i = 0u; i < 80u; i++)
-    {
-        run_time += m1_wdt_heartbeat_run_time(0u, 100u, true);
-    }
+    for (uint32_t i = 0u; i < 1000u; i++)
+        TEST_ASSERT_FALSE(m1_wdt_heartbeat_due(last_report, last_report));
 
-    TEST_ASSERT_EQUAL_UINT32(8000u, run_time);
+    for (uint32_t i = 0u; i < 240u; i++)
+    {
+        uint32_t now = last_report + 33u;
+        TEST_ASSERT_TRUE(m1_wdt_heartbeat_due(now, last_report));
+        run_time += now - last_report;
+        last_report = now;
+    }
+    TEST_ASSERT_EQUAL_UINT32(7920u, run_time);
+
+    uint32_t slow_now = last_report + 250u;
+    run_time += slow_now - last_report;
+    TEST_ASSERT_EQUAL_UINT32(8170u, run_time);
     TEST_ASSERT_EQUAL(M1_WDT_ACTION_OK,
         m1_wdt_decide_action(run_time, 2000u, 20000u, false));
-    TEST_ASSERT_EQUAL_UINT32(100u,
-        m1_wdt_heartbeat_run_time(100u, 100u, false));
 }
 
 void test_resume_grace_allows_a_full_window_after_a_long_probe(void)
@@ -116,7 +124,7 @@ int main(void)
     RUN_TEST(test_run_time_above_max_but_inactive_is_suspended);
     RUN_TEST(test_run_time_exactly_at_bounds_is_ok);
     RUN_TEST(test_short_suspend_resume_cycles_preserve_accumulated_runtime);
-    RUN_TEST(test_early_notification_wakeups_retain_the_heartbeat_budget);
+    RUN_TEST(test_wall_time_accounting_handles_fast_and_slow_iterations);
     RUN_TEST(test_resume_grace_allows_a_full_window_after_a_long_probe);
     return UNITY_END();
 }
