@@ -1,0 +1,1 @@
+**Games: Queens visibility and difficulty** — Added solid-filled queen regions with dashed adjacent boundaries, density-ranked reshading, and a current-cell icon; fixed title clipping, limited small regions on Hard/Expert, and defaulted new high-score initials to the last used or HPX.

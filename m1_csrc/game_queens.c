@@ -18,7 +18,8 @@
  * (0:/apps/queens.dat) with 3 initials, the date, and a no-mistakes flag
  * (earned when the board is solved without any conflict alert).  An
  * auto-exclude assist (default on) dots every cell ruled out by a placed
- * queen.  All options persist and default to the last used.
+ * queen.  Regions containing queens are solid-filled, while remaining regions
+ * use density-ranked patterns.  All options persist and default to last used.
  *
  * Pure game logic lives in queens_logic.c (host-tested); this file is the
  * UI, input, timing and persistence layer.
@@ -136,21 +137,6 @@ static uint32_t queens_today(void)
     return (uint32_t)dt.year * 10000u + (uint32_t)dt.month * 100u + dt.day;
 }
 
-static void sanitize_initials(char ini[4])
-{
-    uint8_t len = 0;
-    for (uint8_t i = 0; i < 3 && ini[i]; i++)
-    {
-        char c = ini[i];
-        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
-        if (c < 'A' || c > 'Z')   c = 'A';
-        ini[len++] = c;
-    }
-    while (len < 3)
-        ini[len++] = 'A';
-    ini[3] = '\0';
-}
-
 /*============================================================================*/
 /* Persistence: 0:/apps/queens.dat                                            */
 /*============================================================================*/
@@ -190,7 +176,7 @@ static void queens_load(queens_ctx_t *ctx)
         {
             strncpy(ctx->initials, line + 4, 3);
             ctx->initials[3] = '\0';
-            sanitize_initials(ctx->initials);
+            queens_sanitize_initials(ctx->initials);
         }
         else
         {
@@ -201,7 +187,7 @@ static void queens_load(queens_ctx_t *ctx)
                 queens_hs_entry_t e;
                 if (queens_hs_parse(val, &e))
                 {
-                    sanitize_initials(e.initials);
+                    queens_sanitize_initials(e.initials);
                     ctx->hs.e[d][r] = e;
                 }
             }
@@ -248,24 +234,6 @@ static void queens_save(const queens_ctx_t *ctx)
 
 static uint8_t cell_px(uint8_t n) { return (uint8_t)(GAME_SCREEN_H / n); }
 
-/* Monochrome fill patterns, drawn per pixel inside a cell.  Pattern indices
- * must match QUEENS_PATTERN_COUNT and the preference order in queens_logic. */
-static bool pattern_pixel(uint8_t pattern, uint8_t dx, uint8_t dy)
-{
-    switch (pattern)
-    {
-        case 1:  return ((dx + dy) & 1u) != 0u;                    /* checker      */
-        case 2:  return (dx % 4u == 1u) && (dy % 4u == 1u);        /* dots         */
-        case 3:  return (dy % 3u) == 1u;                           /* horizontal   */
-        case 4:  return (dx % 3u) == 1u;                           /* vertical     */
-        case 5:  return ((dx + dy) % 4u) == 1u;                    /* diagonal \   */
-        case 6:  return (((int)dx - (int)dy + 64) % 4) == 1;       /* diagonal /   */
-        case 7:  return (((dx >> 1) + (dy >> 1)) & 1u) != 0u;      /* 2x2 checker  */
-        case 8:  return (dx % 4u == 0u) || (dy % 4u == 0u);        /* grid         */
-        default: return false;                                     /* 0: white     */
-    }
-}
-
 static void draw_cell_pattern(const queens_ctx_t *ctx, uint8_t r, uint8_t c,
                               uint8_t cs, uint8_t y0)
 {
@@ -276,7 +244,7 @@ static void draw_cell_pattern(const queens_ctx_t *ctx, uint8_t r, uint8_t c,
     uint8_t cy = (uint8_t)(y0 + r * cs);
     for (uint8_t dy = 0; dy < cs; dy++)
         for (uint8_t dx = 0; dx < cs; dx++)
-            if (pattern_pixel(pat, dx, dy))
+            if (queens_pattern_pixel(pat, dx, dy))
                 u8g2_DrawPixel(&m1_u8g2, (u8g2_uint_t)(x0 + dx),
                                (u8g2_uint_t)(cy + dy));
 }
@@ -290,11 +258,43 @@ static void draw_region_borders(const queens_ctx_t *ctx, uint8_t n, uint8_t cs,
         {
             uint8_t reg = ctx->puzzle.region[r][c];
             if (c + 1 < n && ctx->puzzle.region[r][c + 1] != reg)
-                u8g2_DrawVLine(&m1_u8g2, (u8g2_uint_t)((c + 1) * cs - 1),
-                               (u8g2_uint_t)(y0 + r * cs), cs);
+            {
+                uint8_t other = ctx->puzzle.region[r][c + 1];
+                bool both_solid = ctx->puzzle.pattern[reg] == QUEENS_PATTERN_SOLID &&
+                                  ctx->puzzle.pattern[other] == QUEENS_PATTERN_SOLID;
+                uint8_t x = (uint8_t)((c + 1) * cs - 1);
+                uint8_t y = (uint8_t)(y0 + r * cs);
+                if (both_solid)
+                {
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+                    for (uint8_t i = 0; i < cs; i += 2)
+                        u8g2_DrawPixel(&m1_u8g2, x, (u8g2_uint_t)(y + i));
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                }
+                else
+                {
+                    u8g2_DrawVLine(&m1_u8g2, x, y, cs);
+                }
+            }
             if (r + 1 < n && ctx->puzzle.region[r + 1][c] != reg)
-                u8g2_DrawHLine(&m1_u8g2, (u8g2_uint_t)(c * cs),
-                               (u8g2_uint_t)(y0 + (r + 1) * cs - 1), cs);
+            {
+                uint8_t other = ctx->puzzle.region[r + 1][c];
+                bool both_solid = ctx->puzzle.pattern[reg] == QUEENS_PATTERN_SOLID &&
+                                  ctx->puzzle.pattern[other] == QUEENS_PATTERN_SOLID;
+                uint8_t x = (uint8_t)(c * cs);
+                uint8_t y = (uint8_t)(y0 + (r + 1) * cs - 1);
+                if (both_solid)
+                {
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+                    for (uint8_t i = 0; i < cs; i += 2)
+                        u8g2_DrawPixel(&m1_u8g2, (u8g2_uint_t)(x + i), y);
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                }
+                else
+                {
+                    u8g2_DrawHLine(&m1_u8g2, x, y, cs);
+                }
+            }
         }
     }
     u8g2_DrawFrame(&m1_u8g2, 0, y0, (u8g2_uint_t)(n * cs), (u8g2_uint_t)(n * cs));
@@ -337,13 +337,25 @@ static void draw_board(const queens_ctx_t *ctx)
         {
             uint8_t px = (uint8_t)(c * cs);
             uint8_t py = (uint8_t)(y0 + r * cs);
+            bool solid = ctx->puzzle.pattern[ctx->puzzle.region[r][c]] ==
+                         QUEENS_PATTERN_SOLID;
             if (ctx->cells[r][c] == QUEENS_CELL_QUEEN)
+            {
+                if (solid)
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
                 draw_queen(px, py, cs);
-            else if (ctx->cells[r][c] == QUEENS_CELL_MARK)
+                if (solid)
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+            }
+            else if (!solid && ctx->cells[r][c] == QUEENS_CELL_MARK)
+            {
                 draw_mark_x(px, py, cs);
-            else if (ctx->auto_exclude && ctx->excl[r][c])
+            }
+            else if (!solid && ctx->auto_exclude && ctx->excl[r][c])
+            {
                 u8g2_DrawBox(&m1_u8g2, (u8g2_uint_t)(px + cs / 2 - 1),
                              (u8g2_uint_t)(py + cs / 2 - 1), 2, 2);
+            }
         }
     }
 
@@ -386,20 +398,28 @@ static void draw_play_panel(const queens_ctx_t *ctx, uint32_t secs)
     u8g2_DrawVLine(&m1_u8g2, (u8g2_uint_t)(px - 1), 0, GAME_SCREEN_H);
 
     u8g2_SetFont(&m1_u8g2, Q_FONT_SMALL);
-    u8g2_DrawStr(&m1_u8g2, px, 8, queens_diff_name[ctx->difficulty]);
+    u8g2_DrawStr(&m1_u8g2, px, 7, queens_diff_name[ctx->difficulty]);
 
     u8g2_SetFont(&m1_u8g2, Q_FONT_MONO);
     fmt_time(buf, sizeof(buf), secs);
-    u8g2_DrawStr(&m1_u8g2, px, 21, buf);
+    u8g2_DrawStr(&m1_u8g2, px, 19, buf);
 
     u8g2_SetFont(&m1_u8g2, Q_FONT_SMALL);
     snprintf(buf, sizeof(buf), "Q %u/%u", nq, n);
-    u8g2_DrawStr(&m1_u8g2, px, 33, buf);
+    u8g2_DrawStr(&m1_u8g2, px, 29, buf);
+
+    u8g2_DrawFrame(&m1_u8g2, px, 32, 12, 12);
+    uint8_t state = ctx->cells[ctx->cursor_r][ctx->cursor_c];
+    if (state == QUEENS_CELL_MARK)
+        draw_mark_x((uint8_t)(px + 1), 33, 10);
+    else if (state == QUEENS_CELL_QUEEN)
+        draw_queen((uint8_t)(px + 1), 33, 10);
+    u8g2_DrawStr(&m1_u8g2, (u8g2_uint_t)(px + 15), 42, "Cell");
 
     if (ctx->stuck)
-        u8g2_DrawStr(&m1_u8g2, px, 45, "STUCK!");
+        u8g2_DrawStr(&m1_u8g2, px, 54, "STUCK!");
     else if (ctx->n_conflicts > 0)
-        u8g2_DrawStr(&m1_u8g2, px, 45, "CLASH!");
+        u8g2_DrawStr(&m1_u8g2, px, 54, "CLASH!");
 
     u8g2_DrawStr(&m1_u8g2, px, 62, "OK:cycle");
 }
@@ -480,9 +500,10 @@ static void draw_start(const queens_ctx_t *ctx)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    u8g2_SetFont(&m1_u8g2, Q_FONT_BIG);
-    uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, "QUEENS");
-    u8g2_DrawStr(&m1_u8g2, (u8g2_uint_t)((GAME_SCREEN_W - tw) / 2u), 13, "QUEENS");
+    u8g2_SetFont(&m1_u8g2, Q_FONT_HUGE);
+    u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, "QUEENS");
+    u8g2_uint_t tx = tw < GAME_SCREEN_W ? (GAME_SCREEN_W - tw) / 2u : 0;
+    u8g2_DrawStr(&m1_u8g2, tx, 14, "QUEENS");
     u8g2_DrawHLine(&m1_u8g2, 0, 16, GAME_SCREEN_W);
 
     u8g2_SetFont(&m1_u8g2, Q_FONT_SMALL);
@@ -732,7 +753,7 @@ static void enter_initials(queens_ctx_t *ctx)
                 pos = (uint8_t)((pos + 1u) % 3u);
                 break;
             case GAME_BTN_OK:
-                sanitize_initials(ctx->initials);
+                queens_sanitize_initials(ctx->initials);
                 return;
             case GAME_BTN_BACK:
                 return;    /* keep current (default/last-used) initials */
@@ -866,6 +887,9 @@ static void end_screen(queens_ctx_t *ctx)
 static void recompute(queens_ctx_t *ctx, bool placed_queen)
 {
     uint8_t before = ctx->n_conflicts;
+
+    queens_assign_patterns(&ctx->puzzle,
+                           (const uint8_t (*)[QUEENS_MAX_N])ctx->cells);
 
     if (ctx->auto_exclude)
         queens_auto_exclude(&ctx->puzzle,
@@ -1061,12 +1085,12 @@ void game_queens_run(void)
     ctx->auto_exclude = 1;        /* default on */
     ctx->sel = START_SEL_PLAY;
     ctx->new_rank = -1;
-    memcpy(ctx->initials, "AAA", 4);
+    memcpy(ctx->initials, QUEENS_DEFAULT_INITIALS, 4);
     queens_hs_init(&ctx->hs);
     queens_rng_seed(&ctx->rng, HAL_GetTick() ^ (uint32_t)(uintptr_t)ctx);
 
     queens_load(ctx);
-    sanitize_initials(ctx->initials);
+    queens_sanitize_initials(ctx->initials);
 
     queens_screen_t screen = QS_START;
     while (screen != QS_EXIT)
