@@ -1,0 +1,78 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      next_version:
+        description: 'Next version (for example, v0.9.5.0)'
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump-version:
+    name: Update version
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Validate and update version
+        id: version
+        env:
+          NEXT_VERSION: ${{ inputs.next_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAGS_JSON=$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 1000 \
+              --json tagName \
+              --jq '[.[].tagName]')
+          printf '%s' "$TAGS_JSON" \
+            | python3 scripts/version_selection.py validate-bump --requested "$NEXT_VERSION" \
+            >> "$GITHUB_OUTPUT"
+
+          VERSION=$(sed -n 's/^version=//p' "$GITHUB_OUTPUT" | tail -n1)
+          python3 - "$VERSION" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          header = Path("m1_csrc/m1_fw_update_bl.h")
+          contents = header.read_text()
+          version = tuple(map(int, sys.argv[1].split(".")))
+          macros = ("FW_VERSION_MAJOR", "FW_VERSION_MINOR", "FW_VERSION_BUILD", "FW_VERSION_RC")
+          for macro, value in zip((*macros, "M1_HAPAX_REVISION"), (*version, version[3])):
+              contents, replacements = re.subn(
+                  rf"(?m)^(#define\s+{macro}\s+)\d+\s*$",
+                  rf"\g<1>{value}",
+                  contents,
+                  count=1,
+              )
+              if replacements != 1:
+                  raise SystemExit(f"Could not update {macro} in {header}")
+          header.write_text(contents)
+          PY
+          echo "Version updated to ${VERSION}"
+
+      - name: Commit and push version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add m1_csrc/m1_fw_update_bl.h
+          git commit -m "chore: bump version to v${VERSION} [skip ci]"
+          git push origin HEAD:main
+          gh workflow run update-branches.yml --repo "$GITHUB_REPOSITORY" --ref main
