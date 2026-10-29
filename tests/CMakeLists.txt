@@ -477,6 +477,9 @@ add_executable(test_watchdog_decision
 target_include_directories(test_watchdog_decision PRIVATE
     ${M1_ROOT}/m1_csrc
 )
+target_compile_definitions(test_watchdog_decision PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
 target_link_libraries(test_watchdog_decision PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_watchdog_decision PRIVATE sanitizers)

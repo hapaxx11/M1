@@ -1,5 +1,11 @@
 #include "unity.h"
 #include "m1_watchdog_decision.h"
+#include <stdio.h>
+#include <string.h>
+
+#ifndef M1_ROOT
+#error "M1_ROOT must be defined by CMake"
+#endif
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -66,20 +72,61 @@ void test_short_suspend_resume_cycles_preserve_accumulated_runtime(void)
                              report.inactive));
 }
 
-void test_early_notification_wakeups_retain_the_heartbeat_budget(void)
+void test_rapid_notifications_count_only_supervised_wall_time(void)
 {
     uint32_t run_time = 0u;
 
-    for (uint32_t i = 0u; i < 80u; i++)
+    for (uint32_t i = 0u; i < 240u; i++)
     {
-        run_time += m1_wdt_heartbeat_run_time(0u, 100u, true);
+        run_time += m1_wdt_heartbeat_run_time(33u);
     }
 
-    TEST_ASSERT_EQUAL_UINT32(8000u, run_time);
+    TEST_ASSERT_EQUAL_UINT32(7920u, run_time);
     TEST_ASSERT_EQUAL(M1_WDT_ACTION_OK,
         m1_wdt_decide_action(run_time, 2000u, 20000u, false));
-    TEST_ASSERT_EQUAL_UINT32(100u,
-        m1_wdt_heartbeat_run_time(100u, 100u, false));
+}
+
+void test_slow_notified_iteration_counts_actual_elapsed_time(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(350u, m1_wdt_heartbeat_run_time(350u));
+}
+
+void test_rpc_diagnostic_calls_are_inside_feature_guard(void)
+{
+    char path[512];
+    char source[32768];
+    FILE *fp;
+    size_t len;
+    char *function;
+    char *guard;
+    char *end;
+    char *state_call;
+    char *stack_call;
+    char *wake_call;
+
+    snprintf(path, sizeof(path), "%s/m1_csrc/m1_watchdog.c", M1_ROOT);
+    fp = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
+    len = fread(source, 1, sizeof(source) - 1u, fp);
+    fclose(fp);
+    TEST_ASSERT_LESS_THAN(sizeof(source) - 1u, len);
+    source[len] = '\0';
+
+    function = strstr(source, "static void m1_wdt_system_check(void)\n{");
+    TEST_ASSERT_NOT_NULL(function);
+    guard = strstr(function, "#ifdef M1_APP_RPC_ENABLE");
+    TEST_ASSERT_NOT_NULL(guard);
+    end = strstr(guard, "#endif");
+    TEST_ASSERT_NOT_NULL(end);
+    state_call = strstr(guard, "m1_rpc_task_debug_state()");
+    stack_call = strstr(guard, "m1_rpc_task_debug_stack_high_water()");
+    wake_call = strstr(guard, "m1_rpc_task_debug_wake_delta()");
+    TEST_ASSERT_NOT_NULL(state_call);
+    TEST_ASSERT_NOT_NULL(stack_call);
+    TEST_ASSERT_NOT_NULL(wake_call);
+    TEST_ASSERT_TRUE(state_call < end);
+    TEST_ASSERT_TRUE(stack_call < end);
+    TEST_ASSERT_TRUE(wake_call < end);
 }
 
 void test_resume_grace_allows_a_full_window_after_a_long_probe(void)
@@ -116,7 +163,9 @@ int main(void)
     RUN_TEST(test_run_time_above_max_but_inactive_is_suspended);
     RUN_TEST(test_run_time_exactly_at_bounds_is_ok);
     RUN_TEST(test_short_suspend_resume_cycles_preserve_accumulated_runtime);
-    RUN_TEST(test_early_notification_wakeups_retain_the_heartbeat_budget);
+    RUN_TEST(test_rapid_notifications_count_only_supervised_wall_time);
+    RUN_TEST(test_slow_notified_iteration_counts_actual_elapsed_time);
+    RUN_TEST(test_rpc_diagnostic_calls_are_inside_feature_guard);
     RUN_TEST(test_resume_grace_allows_a_full_window_after_a_long_probe);
     return UNITY_END();
 }

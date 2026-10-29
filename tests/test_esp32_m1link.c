@@ -47,6 +47,14 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     if (out_len) *out_len = 0;
     return 1;
 }
+uint8_t spi_m1link_send_recv_bin_timed(const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       int *out_len, uint32_t timeout_ms)
+{
+    (void)tx_buf; (void)tx_len; (void)rx_buf; (void)rx_buf_size; (void)timeout_ms;
+    if (out_len) *out_len = 0;
+    return 1;
+}
 
 /* Not exercised by this module's framing/pipelining tests (see
  * test_esp32_rpc.c for the Phase 6 "wall-clock diagnostic" coverage); stub so

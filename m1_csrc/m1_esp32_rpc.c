@@ -24,6 +24,7 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include <string.h>
+#include "stm32h5xx_hal.h"
 
 #include "m1_esp32_rpc.h"
 
@@ -38,9 +39,9 @@ extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * (Esp_spi_at master driver).  Clocks fixed 512-byte transactions on hspi_esp
  * with manual CS/HANDSHAKE handling and reassembles the pipelined reply.  This
  * is the transport the M1_RPC client must use to reach the brain. */
-extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
-                                        uint8_t *rx_buf, int rx_buf_size,
-                                        int *out_len, int timeout_sec);
+extern uint8_t spi_m1link_send_recv_bin_timed(const uint8_t *tx_buf, int tx_len,
+                                              uint8_t *rx_buf, int rx_buf_size,
+                                              int *out_len, uint32_t timeout_ms);
 
 /* Declared extern exactly as in m1_esp32_caps.c, rather than pulling in all of
  * m1_esp32_hal.h (FreeRTOS/SPI/UART handles) just for this one status check --
@@ -61,7 +62,7 @@ extern uint32_t m1_esp32_m1link_last_elapsed_ms(void);
 /* Active transport function pointer.  Defaults to the full-duplex M1 Link path
  * (the brain CD3 is a full-duplex spi_slave, not an ESP-AT spi_slave_hd device);
  * host tests swap in a fake via m1_esp32_rpc_set_transport(). */
-static m1_esp32_rpc_transport_fn s_transport = spi_m1link_send_recv_bin;
+static m1_esp32_rpc_transport_fn s_transport = spi_m1link_send_recv_bin_timed;
 static SemaphoreHandle_t s_transaction_mutex;
 
 /* Snapshot of the last m1_esp32_rpc_call() invocation — see the "Feature-call
@@ -100,7 +101,7 @@ void m1_esp32_rpc_transaction_unlock(void)
 
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn)
 {
-    s_transport = fn ? fn : spi_m1link_send_recv_bin;
+    s_transport = fn ? fn : spi_m1link_send_recv_bin_timed;
     /* Host tests call this from setUp()/tearDown() between cases; reset the
      * snapshot alongside the transport so stale diagnostics from a previous
      * test/call never leak into the next one. */
@@ -148,7 +149,8 @@ static void rpc_call_diag_record(uint16_t msg_id, m1_esp32_rpc_status_t status,
 
 static m1_esp32_rpc_status_t m1_esp32_rpc_call_unlocked(
     uint16_t msg_id, const uint8_t *req, uint16_t req_len,
-    uint8_t *resp, uint16_t resp_cap, uint16_t *resp_len, int timeout_sec)
+    uint8_t *resp, uint16_t resp_cap, uint16_t *resp_len,
+    uint32_t timeout_start_ms, uint32_t timeout_ms)
 {
     uint8_t  tx_small[M1_ESP32_RPC_CONTROL_FRAME_MAX];
     uint8_t *tx = tx_small;
@@ -199,9 +201,20 @@ static m1_esp32_rpc_status_t m1_esp32_rpc_call_unlocked(
     }
 
     memset(rx, 0, M1_ESP32_RPC_RESP_FRAME_MAX);
+    uint32_t remaining_timeout_ms = m1_esp32_rpc_remaining_timeout_ms(
+        timeout_start_ms, HAL_GetTick(), timeout_ms);
+    if (remaining_timeout_ms == 0u) {
+        if (tx_heap_allocated)
+            free(tx);
+        free(rx);
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, -1, 0u,
+                             HAL_GetTick() - timeout_start_ms);
+        return M1_ESP32_RPC_ERR_TRANSPORT;
+    }
+
     int transport_rc = s_transport(tx, (int)frame_sz, rx,
                                    (int)M1_ESP32_RPC_RESP_FRAME_MAX,
-                                   &rx_len, timeout_sec);
+                                   &rx_len, remaining_timeout_ms);
     if (tx_heap_allocated)
         free(tx);
     uint32_t elapsed_ms = m1_esp32_m1link_last_elapsed_ms();
@@ -239,11 +252,19 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                         uint8_t *resp, uint16_t resp_cap,
                                         uint16_t *resp_len, int timeout_sec)
 {
-    uint32_t lock_timeout_ms = (timeout_sec > 0)
-                                   ? (uint32_t)timeout_sec * 1000u
-                                   : 2000u;
-    if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(lock_timeout_ms)))
+    uint32_t timeout_ms = (timeout_sec > 0)
+                              ? (uint32_t)timeout_sec * 1000u
+                              : 2000u;
+    uint32_t timeout_start_ms = HAL_GetTick();
+    if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(timeout_ms)))
         return M1_ESP32_RPC_ERR_BUSY;
+
+    if (m1_esp32_rpc_remaining_timeout_ms(
+            timeout_start_ms, HAL_GetTick(), timeout_ms) == 0u)
+    {
+        m1_esp32_rpc_transaction_unlock();
+        return M1_ESP32_RPC_ERR_BUSY;
+    }
 
     if (!m1_esp32_get_init_status())
     {
@@ -253,7 +274,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     }
 
     m1_esp32_rpc_status_t status = m1_esp32_rpc_call_unlocked(
-        msg_id, req, req_len, resp, resp_cap, resp_len, timeout_sec);
+        msg_id, req, req_len, resp, resp_cap, resp_len,
+        timeout_start_ms, timeout_ms);
     m1_esp32_rpc_transaction_unlock();
     return status;
 }

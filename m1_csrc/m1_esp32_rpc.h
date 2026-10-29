@@ -391,24 +391,30 @@ m1_esp32_rpc_decode_resp(const uint8_t *buf, uint16_t buf_len,
 /* =========================================================================
  * Transport injection (for host tests)
  *
- * On-target the client sends frames via spi_m1link_send_recv_bin() (the 512-byte
+ * On-target the client sends frames via spi_m1link_send_recv_bin_timed() (the 512-byte
  * full-duplex "M1 Link" path the native brain CD3 requires — see below).  Host
  * tests install a fake transport to exercise the build / decode path without
  * hardware.
  * =========================================================================*/
 
 /**
- * Transport function signature — matches spi_m1link_send_recv_bin() /
- * spi_AT_send_recv_bin().
+ * Transport function signature; timeout_ms is the remaining request budget.
  * @return 0 (SUCCESS) on success, non-zero on transport error.
  */
 typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
                                              uint8_t *rx_buf, int rx_buf_size,
-                                             int *out_len, int timeout_sec);
+                                             int *out_len, uint32_t timeout_ms);
+
+static inline uint32_t m1_esp32_rpc_remaining_timeout_ms(
+    uint32_t start_ms, uint32_t now_ms, uint32_t timeout_ms)
+{
+    uint32_t elapsed_ms = now_ms - start_ms;
+    return elapsed_ms >= timeout_ms ? 0u : timeout_ms - elapsed_ms;
+}
 
 /**
  * Override the transport used by m1_esp32_rpc_call().  Pass NULL to restore the
- * default (spi_m1link_send_recv_bin).  Intended for host tests only.
+ * default timed M1 Link transport. Intended for host tests only.
  */
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
 

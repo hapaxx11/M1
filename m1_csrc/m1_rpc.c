@@ -283,7 +283,7 @@ static void rpc_send_screen_frame(uint8_t seq,
 static void rpc_flip_buffer_180(uint8_t *buf, uint16_t size);
 static bool rpc_brain_transmit(void *context, const uint8_t *data,
                                uint16_t len);
-static bool rpc_brain_relay_poll(void);
+static bool rpc_brain_relay_poll(TickType_t *supervised_start);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -2812,11 +2812,9 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f)
  * one complete qMonstatek frame; a single heap copy is retained only if the
  * USB parser currently owns an incomplete frame, and is bounded by 2038 bytes.
  *
- * Returns true when this call ran the ESP32 bring-up / capability probe, so
- * the caller can reset its watchdog heartbeat baseline (the probe is wrapped
- * in a supervision suspend/resume below, and the probe seconds must not be
- * counted against the next report window). */
-static bool rpc_brain_relay_poll(void)
+ * Returns true when this call ran the ESP32 bring-up / capability probe and
+ * stores the exact resume tick so only suspended probe time is excluded. */
+static bool rpc_brain_relay_poll(TickType_t *supervised_start)
 {
     /* The bring-up probe (m1_esp32_init + capability classification) can
      * legitimately block for many seconds when the ESP32 is absent or still
@@ -2843,7 +2841,10 @@ static bool rpc_brain_relay_poll(void)
     if (!m1_esp32_get_init_status())
     {
         if (probing)
+        {
             m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+            *supervised_start = xTaskGetTickCount();
+        }
         m1_rpc_set_mobile_session_active(false);
         return probing;
     }
@@ -2852,7 +2853,10 @@ static bool rpc_brain_relay_poll(void)
     if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
     {
         if (probing)
+        {
             m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+            *supervised_start = xTaskGetTickCount();
+        }
         m1_rpc_set_mobile_session_active(false);
         s_brain_rpc_status_unsupported = false;
         s_brain_qmon_poll_unsupported = false;
@@ -2865,7 +2869,10 @@ static bool rpc_brain_relay_poll(void)
     }
 
     if (probing)
+    {
         m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+        *supervised_start = xTaskGetTickCount();
+    }
 
     TickType_t now = xTaskGetTickCount();
     bool status_due = !s_brain_rpc_status_unsupported &&
@@ -3002,15 +3009,13 @@ void m1_rpc_task(void *param)
      * suspend this report around themselves (see below). */
     m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
     TickType_t rpc_wdt_last = xTaskGetTickCount();
-    bool rpc_notified = false;
 
     for (;;)
     {
         TickType_t rpc_now = xTaskGetTickCount();
         m1_wdt_send_report(
             M1_REPORT_ID_RPC_TASK,
-            m1_wdt_heartbeat_run_time(rpc_now - rpc_wdt_last, 100u,
-                                      rpc_notified));
+            m1_wdt_heartbeat_run_time(rpc_now - rpc_wdt_last));
         rpc_wdt_last = rpc_now;
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_NOTIFY);
 
@@ -3019,7 +3024,7 @@ void m1_rpc_task(void *param)
          *  - m1_rpc_notify_screen_update() for screen frame ready
          *  - rpc_dispatch_frame() for deferred slow commands
          *  - m1_rpc_usb_session_reset_from_isr() for a host re-enumeration */
-        rpc_notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) > 0u;
+        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_EPOCH);
 
         /* Drop stale state left by a host re-enumeration (qM reconnect
@@ -3120,12 +3125,10 @@ void m1_rpc_task(void *param)
         }
 
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_RELAY);
-        if (rpc_brain_relay_poll())
+        TickType_t rpc_wdt_probe_resume_tick = rpc_wdt_last;
+        if (rpc_brain_relay_poll(&rpc_wdt_probe_resume_tick))
         {
-            /* A probe ran under suspended supervision: reset the heartbeat
-             * baseline so the probe seconds aren't counted against the next
-             * report window (same pattern as the ESP32 flash op above). */
-            rpc_wdt_last = xTaskGetTickCount();
+            rpc_wdt_last = rpc_wdt_probe_resume_tick;
         }
 
         m1_diag_set_detail(M1_DIAG_DETAIL_RPC_STREAM);

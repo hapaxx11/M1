@@ -75,12 +75,9 @@ static inline m1_wdt_action_t m1_wdt_decide_action_with_grace(
                                 inactive);
 }
 
-static inline uint32_t m1_wdt_heartbeat_run_time(
-    uint32_t elapsed_ms,
-    uint32_t configured_wait_ms,
-    bool notification_received)
+static inline uint32_t m1_wdt_heartbeat_run_time(uint32_t elapsed_ms)
 {
-    return notification_received ? configured_wait_ms : elapsed_ms;
+    return elapsed_ms;
 }
 
 #endif /* M1_WATCHDOG_DECISION_H_ */

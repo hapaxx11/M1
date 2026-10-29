@@ -437,11 +437,19 @@ static void m1_wdt_system_check(void)
 		}
 		else if (wdt_action == M1_WDT_ACTION_FAILURE)
 		{
+			uint32_t task_state = UINT32_MAX;
+			uint32_t stack_high_water = 0u;
+			int32_t wake_delta = 0;
+#ifdef M1_APP_RPC_ENABLE
+			if (wdt_id == M1_REPORT_ID_RPC_TASK)
+			{
+				task_state = m1_rpc_task_debug_state();
+				stack_high_water = m1_rpc_task_debug_stack_high_water();
+				wake_delta = m1_rpc_task_debug_wake_delta();
+			}
+#endif
 			m1_diag_wdt_capture(
-				wdt_id, wdt_rt,
-				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_state() : UINT32_MAX,
-				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_stack_high_water() : 0u,
-				wdt_id == M1_REPORT_ID_RPC_TASK ? m1_rpc_task_debug_wake_delta() : 0);
+				wdt_id, wdt_rt, task_state, stack_high_water, wake_delta);
 			M1_LOG_W(M1_LOGDB_TAG, "WDT failure. Task ID %d, run time: %ld\r\n", wdt_id, wdt_rt);
 			m1_wdt_failure_handler();
 		}

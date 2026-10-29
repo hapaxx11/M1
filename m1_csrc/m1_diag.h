@@ -164,7 +164,7 @@ typedef enum {
  * .noinit diagnostic block — survives all soft resets
  * Magic guards against stale RAM and diagnostic-layout changes.
  * ------------------------------------------------------------------------- */
-#define M1_DIAG_MAGIC  0xD1A90C25UL
+#define M1_DIAG_MAGIC  0xD1A90C26UL
 
 typedef struct {
     uint32_t        magic;           /* M1_DIAG_MAGIC when valid */
@@ -181,6 +181,7 @@ typedef struct {
     uint32_t        wdt_task_state;  /* eTaskState at WDT failure */
     uint32_t        wdt_stack_high_water; /* Free task stack, in words */
     int32_t         wdt_wake_delta;  /* Task wake tick minus current tick */
+    uint32_t        boot_completed; /* Menu reached during this boot */
 } M1DiagBlock;
 
 /* The diagnostic block lives in .noinit so it is never zeroed at startup. */
@@ -190,6 +191,12 @@ extern volatile M1DiagBlock g_m1_diag;
  * Inline setters — called from t5577.c write steps and startup milestones.
  * Always safe to call: writes to globals are atomic enough for diagnostics.
  * ------------------------------------------------------------------------- */
+static inline uint32_t m1_diag_boot_completion_sticky(
+    uint32_t completed, M1DiagBootStage stage)
+{
+    return completed || stage == M1_DIAG_BOOT_MENU ? 1u : 0u;
+}
+
 static inline void m1_diag_set_phase(M1DiagWritePhase phase)
 {
     g_m1_diag.magic       = M1_DIAG_MAGIC;
@@ -200,6 +207,8 @@ static inline void m1_diag_set_boot_stage(M1DiagBootStage stage)
 {
     g_m1_diag.magic      = M1_DIAG_MAGIC;
     g_m1_diag.boot_stage = stage;
+    g_m1_diag.boot_completed =
+        m1_diag_boot_completion_sticky(g_m1_diag.boot_completed, stage);
 }
 
 static inline void m1_diag_set_reset_origin(M1DiagResetOrigin origin)

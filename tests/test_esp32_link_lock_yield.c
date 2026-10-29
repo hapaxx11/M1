@@ -292,7 +292,7 @@ void test_relay_poll_suspends_supervision_around_probe(void)
      * probe and resumed on every path out of the probe section — mirroring
      * the deferred ESP32 flash-op pattern. */
     char *body = slice_between(content,
-        "static bool rpc_brain_relay_poll(void)",
+        "static bool rpc_brain_relay_poll(TickType_t *supervised_start)",
         "void m1_rpc_task(void *param)");
 
     const char *suspend = strstr(body,
@@ -320,14 +320,24 @@ void test_rpc_task_resets_heartbeat_baseline_after_probe(void)
     /* After a probe iteration the task must reset rpc_wdt_last, otherwise
      * the probe seconds are reported as loop run-time and trip the
      * maximum-report-percent check on the next heartbeat. */
-    const char *call = strstr(content, "if (rpc_brain_relay_poll())");
+    const char *call = strstr(content,
+        "if (rpc_brain_relay_poll(&rpc_wdt_probe_resume_tick))");
     TEST_ASSERT_NOT_NULL_MESSAGE(call,
         "m1_rpc_task must act on rpc_brain_relay_poll()'s probe flag");
-    const char *reset = strstr(call, "rpc_wdt_last = xTaskGetTickCount();");
+    const char *reset = strstr(call,
+        "rpc_wdt_last = rpc_wdt_probe_resume_tick;");
     TEST_ASSERT_NOT_NULL_MESSAGE(reset,
-        "heartbeat baseline must be reset after a probe iteration");
+        "heartbeat baseline must use the exact probe-resume tick");
     TEST_ASSERT_TRUE_MESSAGE(reset - call < 400,
         "baseline reset must sit inside the probe-flag block");
+
+    const char *resume = strstr(content,
+        "m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);");
+    const char *resume_tick = resume
+        ? strstr(resume, "*supervised_start = xTaskGetTickCount();")
+        : NULL;
+    TEST_ASSERT_NOT_NULL_MESSAGE(resume_tick,
+        "supervised timing must restart immediately after probe resume");
 
     free(content);
 }
@@ -346,7 +356,8 @@ void test_m1link_lock_chain_honors_response_timeout(void)
     const char *lock = strstr(content,
         "esp32_m1link_spi_lock_timed(uint32_t timeout_ms)");
     const char *at_take = lock
-        ? strstr(lock, "xSemaphoreTake(pxMutex, pdMS_TO_TICKS(timeout_ms))")
+        ? strstr(lock,
+            "xSemaphoreTake(pxMutex, pdMS_TO_TICKS(remaining_timeout_ms))")
         : NULL;
     const char *cleanup = at_take
         ? strstr(at_take, "esp32_m1link_lifecycle_unlock();")
