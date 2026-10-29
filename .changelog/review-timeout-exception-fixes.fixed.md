@@ -1,1 +1,0 @@
-**RPC and diagnostics: complete review fixes** — avoid reducing the M1 Link response budget before lock and abort processing, and correct the extended exception-frame test fixture to read the fault PC from index 6.

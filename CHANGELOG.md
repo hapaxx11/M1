@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Startup: increase the system-init task stack to 4 KB** — prevent stack corruption in the deep diagnostics, display, and peripheral-initialization call chain while leaving other task stacks unchanged.
 - **Watchdog: make boot-loop recovery visible** — shorten the recovery banner and prevent oversized home-screen status text from underflowing its X coordinate and rendering off-screen.
 - **Startup and RPC review hardening** — use supervised wall time for RPC watchdog reports, share one deadline across each RPC lock and response path, keep successful-boot completion sticky, preserve fault details, guard RPC-disabled diagnostics, and capture hard faults from the original exception stack.
+- **RPC and diagnostics: complete review fixes** — avoid reducing the M1 Link response budget before lock and abort processing, and correct the extended exception-frame test fixture to read the fault PC from index 6.
 
 ## [0.9.4.21] - 2026-10-24
 
