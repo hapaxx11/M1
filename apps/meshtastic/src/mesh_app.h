@@ -192,7 +192,7 @@ typedef struct {
     uint32_t last_rx_from;
     uint32_t last_rx_to;
     uint32_t last_rx_id;
-    int8_t last_rx_snr;
+    float last_rx_snr;
     int16_t last_rx_rssi;
     bool has_rx_signal_data;
 

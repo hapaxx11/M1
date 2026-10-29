@@ -38,6 +38,7 @@
 #include "m1_lcd.h"
 #include "m1_file_util.h"
 #include "m1_crypto.h"
+#include "m1_rng.h"
 #include "m1_i2c.h"
 #include "m1_rf_spi.h"
 #include "m1_lib.h"
@@ -391,6 +392,7 @@ void m1_app_api_init(void)
         /* ===== Crypto (AES-256-CBC) ===== */
         { "m1_crypto_derive_key",  (void *)m1_crypto_derive_key },
         { "m1_crypto_generate_iv", (void *)m1_crypto_generate_iv },
+        { "m1_crypto_random_bytes", (void *)m1_crypto_random_bytes },
         { "m1_crypto_encrypt",     (void *)m1_crypto_encrypt },
         { "m1_crypto_decrypt",     (void *)m1_crypto_decrypt },
         { "m1_crypto_encrypt_with_key", (void *)m1_crypto_encrypt_with_key },

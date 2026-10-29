@@ -42,13 +42,11 @@ static InputKey btn_to_key(m1app_button_t b, bool* ok) {
     }
 }
 
-/* Free-text entry via the M1's multi-page keyboard (m1_vkb_get_filename is the
- * alpha keyboard; m1_vkbs_get_data is hex-only). Length is bounded by the
- * firmware keyboard. */
+/* Free-text entry via the M1's text-mode keyboard, which includes spaces. */
 static void run_keyboard(ZeroMeshApp* app) {
     char buf[64];
     buf[0] = '\0';
-    if(m1_vkb_get_filename("Message:", "", buf) && buf[0]) {
+    if(m1_vkb_get_text("Message:", "", buf, sizeof(buf)) && buf[0]) {
         uint32_t to = 0xFFFFFFFFu; /* broadcast */
         if(app->ui_mode == PAGE_ROSTER && app->roster.state == RosterStateChat) {
             to = app->roster.nodes[app->roster.selected_idx].node_id;

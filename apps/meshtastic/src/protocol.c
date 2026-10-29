@@ -59,6 +59,7 @@ typedef struct {
     uint8_t* buf;
     size_t cap;
     size_t len;
+    bool truncated;
 } ByteSink;
 
 static bool str_sink_cb(pb_istream_t* stream, const pb_field_t* field, void** arg) {
@@ -90,6 +91,7 @@ static bool byte_sink_cb(pb_istream_t* stream, const pb_field_t* field, void** a
     size_t take = 0;
     if(sink && sink->cap) {
         take = avail > sink->cap ? sink->cap : avail;
+        sink->truncated = avail > sink->cap;
         if(!pb_read(stream, sink->buf, take)) return false;
         sink->len = take;
     }
@@ -141,16 +143,6 @@ static void handle_routing(ZeroMeshApp* app, const meshtastic_Data* d, uint32_t 
 static void handle_admin(ZeroMeshApp* app, const uint8_t* buf, size_t buflen) {
     meshtastic_AdminMessage am = meshtastic_AdminMessage_init_default;
 
-    char nm[16] = {0};
-    StrSink nsink = {nm, sizeof(nm)};
-    uint8_t psk[32];
-    ByteSink psink = {psk, sizeof(psk), 0};
-
-    am.payload_variant.get_channel_response.settings.name.funcs.decode = str_sink_cb;
-    am.payload_variant.get_channel_response.settings.name.arg = &nsink;
-    am.payload_variant.get_channel_response.settings.psk.funcs.decode = byte_sink_cb;
-    am.payload_variant.get_channel_response.settings.psk.arg = &psink;
-
     pb_istream_t st = pb_istream_from_buffer(buf, buflen);
     if(!pb_decode(&st, meshtastic_AdminMessage_fields, &am)) return;
     if(am.which_payload_variant == meshtastic_AdminMessage_get_config_response_tag) {
@@ -167,15 +159,44 @@ static void handle_admin(ZeroMeshApp* app, const uint8_t* buf, size_t buflen) {
     }
     if(am.which_payload_variant != meshtastic_AdminMessage_get_channel_response_tag) return;
 
-    meshtastic_Channel* ch = &am.payload_variant.get_channel_response;
-    if(ch->index != 0) return;
+    meshtastic_Channel ch = meshtastic_Channel_init_default;
+    char nm[16] = {0};
+    StrSink nsink = {nm, sizeof(nm)};
+    uint8_t psk[32];
+    ByteSink psink = {psk, sizeof(psk), 0, false};
+
+    ch.settings.name.funcs.decode = str_sink_cb;
+    ch.settings.name.arg = &nsink;
+    ch.settings.psk.funcs.decode = byte_sink_cb;
+    ch.settings.psk.arg = &psink;
+
+    pb_istream_t walk = pb_istream_from_buffer(buf, buflen);
+    bool decoded_channel = false;
+    while(walk.bytes_left > 0) {
+        pb_wire_type_t wire_type;
+        uint32_t tag;
+        bool eof;
+        if(!pb_decode_tag(&walk, &wire_type, &tag, &eof) || eof) break;
+        if(tag == meshtastic_AdminMessage_get_channel_response_tag &&
+           wire_type == PB_WT_STRING) {
+            pb_istream_t sub;
+            if(!pb_make_string_substream(&walk, &sub)) return;
+            decoded_channel = pb_decode(&sub, meshtastic_Channel_fields, &ch);
+            pb_close_string_substream(&walk, &sub);
+            break;
+        }
+        if(!pb_skip_field(&walk, wire_type)) return;
+    }
+    if(!decoded_channel || psink.truncated) return;
+
+    if(ch.index != 0) return;
 
     strncpy(app->cfg_ch_name, nm, sizeof(app->cfg_ch_name) - 1);
     app->cfg_ch_name[sizeof(app->cfg_ch_name) - 1] = 0;
     app->cfg_ch_psk_len = (uint8_t)psink.len;
     if(psink.len) memcpy(app->cfg_ch_psk, psk, psink.len);
     app->cfg_ch_private = (psink.len > 1) ? 1 : 0;
-    app->cfg_ch_pos = ch->settings.module_settings.position_precision ? 1 : 0;
+    app->cfg_ch_pos = ch.settings.module_settings.position_precision ? 1 : 0;
     app->cfg_ch_known = true;
 
     log_line(app, "Channel 0: %s", app->cfg_ch_private ? "private" : "public");
@@ -462,6 +483,7 @@ void send_text_message(ZeroMeshApp* app, const char* text, uint32_t to_node) {
     meshtastic_MeshPacket* p = &to.payload_variant.packet;
     p->to = to_node;
     p->id = (uint32_t)furi_hal_random_get();
+    p->channel = app->current_channel;
     p->hop_limit = 3;
     p->want_ack = true;
     app->sent_msg_ids[app->sent_msg_head] = p->id;
@@ -609,7 +631,11 @@ void set_channel_config(ZeroMeshApp* app, bool make_private, bool share_position
             psk_len = app->cfg_ch_psk_len;
             memcpy(psk, app->cfg_ch_psk, psk_len);
         } else {
-            furi_hal_random_fill_buf(psk, sizeof(psk));
+            if(!m1_crypto_random_bytes(psk, sizeof(psk))) {
+                log_line(app, "Secure random unavailable");
+                set_status(app, "Channel key failed");
+                return;
+            }
             psk_len = sizeof(psk);
         }
     } else {

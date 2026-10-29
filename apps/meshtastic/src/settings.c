@@ -12,7 +12,8 @@
 void settings_save(ZeroMeshApp* app) {
     if(!app) return;
 
-    fs_directory_ensure(SETTINGS_DIR);
+    if(fs_directory_ensure("0:/apps_data") != FR_OK ||
+       fs_directory_ensure(SETTINGS_DIR) != FR_OK) return;
 
     FIL file;
     if(f_open(&file, SETTINGS_PATH, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) return;

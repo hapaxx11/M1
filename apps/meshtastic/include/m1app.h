@@ -584,6 +584,7 @@ extern int m1_field_detect_nfc_opctl(void);
 
 extern void     m1_crypto_derive_key(uint8_t key[M1APP_AES_KEY_SIZE]);
 extern void     m1_crypto_generate_iv(uint8_t iv[M1APP_AES_IV_SIZE]);
+extern bool     m1_crypto_random_bytes(uint8_t *buf, size_t len);
 extern uint32_t m1_crypto_encrypt(uint8_t *buf, uint32_t plaintext_len, uint32_t buf_size);
 extern uint32_t m1_crypto_decrypt(uint8_t *buf, uint32_t total_len);
 
@@ -594,6 +595,7 @@ extern uint32_t m1_crypto_decrypt(uint8_t *buf, uint32_t total_len);
 
 /* Show filename entry dialog. Returns 1 on OK, 0 on cancel. */
 extern uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
+extern uint8_t  m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size);
 
 /* Show text entry dialog. Returns 1 on OK, 0 on cancel. */
 extern uint8_t m1_vkbs_get_data(char *description, char *new_data);

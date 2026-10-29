@@ -486,8 +486,7 @@ static void render_signal(Canvas* canvas, ZeroMeshApp* app) {
     snprintf(buf, sizeof(buf), "%d", rssi);
     meter_row(canvas, 30, "RSSI", (rssi + 120) * 100 / 90, sig, buf, "no packets yet");
 
-    /* Raw SNR is quarter dB. Anything past +10 is as good as it gets. */
-    int snr10 = ((int)app->last_rx_snr * 10) / 4;
+    int snr10 = (int)(app->last_rx_snr * 10.0f);
     char sign = snr10 < 0 ? 0x2D : 0x20;
     int a10 = snr10 < 0 ? -snr10 : snr10;
     snprintf(buf, sizeof(buf), "%c%d.%d", sign, a10 / 10, a10 % 10);
@@ -842,4 +841,3 @@ void input_dispatch(InputEvent* e, ZeroMeshApp* app) {
         break;
     }
 }
-

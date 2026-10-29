@@ -8,8 +8,8 @@
 
 ### Phase 1 — Protocol and app behavior
 - **Description**: Fix channel routing/decoding, secure PSK generation, SNR display, keyboard text input, settings directory creation, and nanopb notices.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Fix Meshtastic protocol review findings`
 
 ### Phase 2 — UART ownership lifecycle
 - **Description**: Make bridge handoff, forced app cleanup, and CDC line-coding restoration reliable.
