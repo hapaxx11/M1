@@ -37,6 +37,14 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 #define POCSAG_GAP_RESET_US        16000U
 #define POCSAG_HISTORY_ROWS        4U
 
+static const uint32_t pager_channels[] = {
+    439987500UL, 448425000UL, 465970000UL, 466075000UL,
+    929362500UL, 929387500UL, 929462500UL, 929537500UL,
+    929587500UL, 929612500UL, 929662500UL, 929937500UL,
+    931062500UL, 931212500UL, 931337500UL, 931862500UL, 931937500UL,
+};
+#define PAGER_CHANNEL_COUNT (sizeof(pager_channels) / sizeof(pager_channels[0]))
+
 static void stop_rx(pocsag_receiver_app_state_t *state)
 {
     if (state->radio_active)
@@ -50,6 +58,15 @@ static void stop_rx(pocsag_receiver_app_state_t *state)
     }
 }
 
+static void pager_scene_message(void *context, const pager_message_t *message)
+{
+    SubGhzApp *app = context;
+    (void)pocsag_history_add(&app->pocsag_state->history, message,
+                             app->current_freq_hz);
+    app->pocsag_state->selected_message = 0;
+    app->need_redraw = true;
+}
+
 static void start_rx(SubGhzApp *app)
 {
     pocsag_receiver_app_state_t *state = app->pocsag_state;
@@ -57,6 +74,8 @@ static void start_rx(SubGhzApp *app)
         return;
 
     stop_rx(state);
+    pocsag_receiver_reset(&state->receiver);
+    flex_receiver_reset(&state->flex);
     subghz_record_mode_flag = 0;
     subghz_set_user_custom_freq_ext(
         (app->freq_idx == SUBGHZ_FREQ_PRESET_CUSTOM) ?
@@ -78,6 +97,7 @@ static void scene_on_enter(SubGhzApp *app)
     bool resume_from_child = app->resume_from_child;
     if (app->pocsag_state == NULL)
     {
+        /* Bounded ~8 KB: both decoders, fragments, and ten long messages. */
         app->pocsag_state = malloc(sizeof(*app->pocsag_state));
         if (app->pocsag_state == NULL)
         {
@@ -93,13 +113,14 @@ static void scene_on_enter(SubGhzApp *app)
                                     app->freq_idx, app->mod_idx);
     if (!resume_from_child)
     {
+        app->pocsag_state->channel_index = 0;
         subghz_set_user_custom_freq_ext(POCSAG_DEFAULT_FREQUENCY_HZ);
         app->freq_idx = SUBGHZ_FREQ_PRESET_CUSTOM;
     }
 
     app->resume_from_child = false;
     app->mod_idx = POCSAG_FSK_MODULATION_IDX;
-    pocsag_receiver_reset(&app->pocsag_state->receiver);
+    flex_receiver_init(&app->pocsag_state->flex, pager_scene_message, app);
     start_rx(app);
     subghz_scene_set_tick_period(app, 200U);
     app->need_redraw = true;
@@ -133,6 +154,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (pocsag_history_get(&state->history, state->selected_message) != NULL)
             {
                 state->detail_view = !state->detail_view;
+                state->detail_offset = 0;
                 app->need_redraw = true;
             }
             return true;
@@ -147,8 +169,24 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             return true;
 
+        case SubGhzEventRight:
+            if (!state->detail_view)
+            {
+                state->channel_index = (state->channel_index + 1U) % PAGER_CHANNEL_COUNT;
+                subghz_set_user_custom_freq_ext(pager_channels[state->channel_index]);
+                app->freq_idx = SUBGHZ_FREQ_PRESET_CUSTOM;
+                start_rx(app);
+                app->need_redraw = true;
+            }
+            return true;
+
         case SubGhzEventUp:
-            if (!state->detail_view && state->selected_message > 0U)
+            if (state->detail_view && state->detail_offset >= 21U)
+            {
+                state->detail_offset -= 21U;
+                app->need_redraw = true;
+            }
+            else if (!state->detail_view && state->selected_message > 0U)
             {
                 state->selected_message--;
                 app->need_redraw = true;
@@ -156,8 +194,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventDown:
-            if (!state->detail_view &&
-                state->selected_message + 1U < state->history.count)
+            if (state->detail_view)
+            {
+                const pocsag_message_t *message =
+                    pocsag_history_get(&state->history, state->selected_message);
+                if (message != NULL && state->detail_offset + 21U < strlen(message->text))
+                {
+                    state->detail_offset += 21U;
+                    app->need_redraw = true;
+                }
+            }
+            else if (state->selected_message + 1U < state->history.count)
             {
                 state->selected_message++;
                 app->need_redraw = true;
@@ -171,15 +218,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 uint16_t duration = app->pocsag_pulse_duration_us;
                 if (duration > POCSAG_GAP_RESET_US)
                     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_EOP;
+                flex_receiver_feed(&state->flex, app->pocsag_pulse_level,
+                                   duration, HAL_GetTick());
                 if (pocsag_receiver_feed(&state->receiver,
                                          app->pocsag_pulse_level,
                                          duration) &&
                     pocsag_receiver_take_message(&state->receiver, &message))
                 {
-                    (void)pocsag_history_add(&state->history, &message,
-                                             app->current_freq_hz);
-                    state->selected_message = 0;
-                    app->need_redraw = true;
+                    pager_scene_message(app, &message);
                 }
             }
             return true;
@@ -216,32 +262,52 @@ static void scene_on_exit(SubGhzApp *app)
     }
 }
 
-static void draw_detail(const pocsag_message_t *message)
+static void draw_detail(const pocsag_message_t *message, uint16_t detail_offset)
 {
-    char line[32];
+    char line[40];
+    const bool flex = message->protocol == PAGER_PROTOCOL_FLEX;
+    const char *kind = "Alphanumeric";
+    if (flex)
+    {
+        if (message->function == 0U) kind = "Secure";
+        else if (message->function == 2U) kind = "Tone";
+        else if (message->function == 3U || message->function == 4U ||
+                 message->function == 7U) kind = "Numeric";
+        else if (message->function == 6U) kind = "Binary";
+    }
+    else
+    {
+        kind = message->function == 0U ? "Numeric" :
+               message->function == 1U ? "Alert" : "Alphanumeric";
+    }
+
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    (void)snprintf(line, sizeof(line), "RIC: %lu  %u baud",
-                   (unsigned long)message->ric, message->baud);
+    if (flex)
+    {
+        (void)snprintf(line, sizeof(line), "CAP: %lu  %u/%u",
+                       (unsigned long)message->ric, message->baud, message->levels);
+    }
+    else
+    {
+        (void)snprintf(line, sizeof(line), "RIC: %lu  %u baud",
+                       (unsigned long)message->ric, message->baud);
+    }
     u8g2_DrawStr(&m1_u8g2, 0, 24, line);
 
-    const char *kind = (message->function == 0U) ? "Numeric" :
-                       (message->function == 1U) ? "Alert" :
-                       (message->function == 2U) ? "Alphanumeric" :
-                                                    "Alphanumeric";
-    (void)snprintf(line, sizeof(line), "%s  %lu.%03lu MHz",
-                   kind,
+    (void)snprintf(line, sizeof(line), "%s%s %lu.%03lu MHz", kind,
+                   message->partial ? " partial" : "",
                    (unsigned long)(message->frequency_hz / 1000000UL),
                    (unsigned long)((message->frequency_hz % 1000000UL) / 1000UL));
     u8g2_DrawStr(&m1_u8g2, 0, 34, line);
 
+    const size_t length = strlen(message->text);
     for (uint8_t row = 0; row < 3U; ++row)
     {
-        char text[22];
-        size_t offset = (size_t)row * 21U;
-        if (offset >= POCSAG_MESSAGE_TEXT_MAX - 1U)
+        const size_t offset = (size_t)detail_offset + (size_t)row * 21U;
+        if (offset >= length)
             break;
-        (void)snprintf(text, sizeof(text), "%.*s", 21,
-                       message->text + offset);
+        char text[22];
+        (void)snprintf(text, sizeof(text), "%.*s", 21, message->text + offset);
         u8g2_DrawStr(&m1_u8g2, 0, 44 + row * 8, text);
     }
 }
@@ -267,12 +333,12 @@ static void draw(SubGhzApp *app)
     m1_u8g2_firstpage();
     do
     {
-        subghz_status_bar_draw(frequency, "FM238", "POCSAG", false);
+        subghz_status_bar_draw(frequency, "FM238", "PAGER", false);
         subghz_rssi_bar_draw(app->rssi);
         if (state == NULL)
         {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 0, 32, "POCSAG unavailable");
+            u8g2_DrawStr(&m1_u8g2, 0, 32, "Pager unavailable");
             u8g2_DrawStr(&m1_u8g2, 0, 42, "Not enough memory");
         }
         else if (state->detail_view)
@@ -280,7 +346,7 @@ static void draw(SubGhzApp *app)
             const pocsag_message_t *message =
                 pocsag_history_get(&state->history, state->selected_message);
             if (message != NULL)
-                draw_detail(message);
+                draw_detail(message, state->detail_offset);
         }
         else
         {
@@ -302,8 +368,9 @@ static void draw(SubGhzApp *app)
                     const pocsag_message_t *message =
                         pocsag_history_get(&state->history, index);
                     char line[32];
-                    (void)snprintf(line, sizeof(line), "%c%lu %s",
+                    (void)snprintf(line, sizeof(line), "%c%c%lu %.18s",
                                    index == state->selected_message ? '>' : ' ',
+                                   message->protocol == PAGER_PROTOCOL_FLEX ? 'F' : 'P',
                                    (unsigned long)message->ric,
                                    message->text[0] ? message->text : "Alert");
                     u8g2_DrawStr(&m1_u8g2, 0, 24 + row * 8, line);
@@ -315,7 +382,7 @@ static void draw(SubGhzApp *app)
                                NULL,
                                (state != NULL && state->detail_view) ? NULL : "OK:INFO",
                                NULL,
-                               (state != NULL && state->detail_view) ? NULL : "U/D:LIST");
+                               (state != NULL && state->detail_view) ? "U/D:TEXT" : "FREQ");
     } while (m1_u8g2_nextpage());
 }
 

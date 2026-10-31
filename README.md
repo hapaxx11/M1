@@ -57,7 +57,7 @@ project discussion, and related project resources:
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
-| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG and restaurant pagers, weather, TPMS, fixed-code brute force, playlist) | ✗ | ✓ |
+| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG/FLEX and restaurant pagers, weather, TPMS, fixed-code brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
 | OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
@@ -87,7 +87,7 @@ project discussion, and related project resources:
 ### Sub-GHz Enhancements
 - **130 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **Restaurant Pager app** — receive Princeton/SMC5326 restaurant pages; edit TD157/TD165/TD174 plus experimental L8R/L8S layouts; replay one pager or explicitly confirmed batches; save named stations by category; and configure pager limits and TX repeats. Uses the onboard SI4463.
-- **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
+- **POCSAG/FLEX Pager app** — live POCSAG 512/1200/2400 and FLEX 1600/2 or 3200/2 reception with BCH correction, short/long capcodes, alphanumeric, numeric, tone and binary pages, fragmented-message joining, duplicate suppression, scrollable long-text details, and dedicated POCSAG/FLEX channel presets. FLEX 4-FSK modes are not currently supported.
 - **Weather Station** — non-blocking receiver with automatic OOK/FSK scanning, sensor history and readings, and frequency configuration; decodes Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
 - **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
@@ -99,7 +99,7 @@ project discussion, and related project resources:
 - **Proto Pirate** — rolling-code analysis toolkit: live capture with real decoders for all 19 ProtoPirate automotive protocols (Honda, Ford, Kia, Fiat, Renault, Mazda, Subaru, Chrysler families), offline `.sub` decode, timing analysis, saved-capture match/update, receiver-preset models database, a Remote Analyzer frequency finder, and protocol-specific key recovery from saved captures (PSA TEA / Renault V1); separate from fixed-code code-space transmission above
 - **Add Manually** — select a protocol, enter a hex key, and transmit a single-burst RF signal
 - **Create from Scratch** — protocol picker with per-field editors for KeeLoq/Star Line/Jarolift (serial, button, counter, manufacturer key)
-- **Radio Settings** — adjustable TX power, custom frequency entry (300–928 MHz)
+- **Radio Settings** — adjustable TX power, custom frequency entry (300–932 MHz)
 
 ### NFC Enhancements
 - **Tag Info** — manufacturer lookup, SAK decode, technology identification
@@ -254,7 +254,7 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **MCU:** STM32H573VIT6 (Cortex-M33, 250 MHz, 2 MB dual-bank flash, 640 KB RAM)
 - **Display:** 128×64 monochrome (ST7586s)
 - **WiFi/BT:** ESP32-C6 coprocessor (binary SPI protocol — see ESP32 firmware note below)
-- **RF:** Si4463 sub-GHz transceiver (300–928 MHz)
+- **RF:** Si4463 sub-GHz transceiver (300–932 MHz)
 - **NFC:** ST25R3916 (13.56 MHz)
 - **RFID:** 125 kHz ASK/PSK reader with T5577 write support
 - **IR:** TSOP38238 receiver + IR LED transmitter

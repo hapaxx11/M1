@@ -103,6 +103,9 @@ static void finish_message(pocsag_receiver_t *receiver)
         receiver->message.baud = receiver->baud;
         receiver->message.repeat_count = 1U;
         receiver->message.frequency_hz = 0U;
+        receiver->message.protocol = PAGER_PROTOCOL_POCSAG;
+        receiver->message.levels = 2U;
+        receiver->message.partial = false;
         receiver->message_ready = true;
         emitted = true;
     }
@@ -433,8 +436,8 @@ bool pocsag_history_add(pocsag_history_t *history,
         uint8_t index = (uint8_t)((history->next + POCSAG_HISTORY_CAPACITY -
                                    1U - i) % POCSAG_HISTORY_CAPACITY);
         pocsag_message_t *entry = &history->entries[index];
-        if (entry->ric == message->ric && entry->function == message->function &&
-            entry->baud == message->baud &&
+        if (entry->protocol == message->protocol && entry->ric == message->ric &&
+            entry->function == message->function && entry->baud == message->baud &&
             strncmp(entry->text, message->text, POCSAG_MESSAGE_TEXT_MAX) == 0)
         {
             if (entry->repeat_count < UINT8_MAX)

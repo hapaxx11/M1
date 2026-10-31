@@ -989,7 +989,7 @@ void settings_load_from_sd(void)
         subghz_ignore_deserialize_hex(ign_hex);
     }
 
-    /* Parse "subghz_custom_freq=N" (Hz, 300000000–930000000) */
+    /* Parse "subghz_custom_freq=N" (Hz, 300000000–932000000) */
     p = strstr(buf, "subghz_custom_freq=");
     if (p != NULL)
     {
@@ -997,7 +997,7 @@ void settings_load_from_sd(void)
         unsigned long uval = strtoul(p + 19, &end, 10);
         if (end != p + 19 &&
             (*end == '\n' || *end == '\r' || *end == '\0') &&
-            uval >= 300000000UL && uval <= 930000000UL)
+            uval >= 300000000UL && uval <= 932000000UL)
         {
             subghz_set_user_custom_freq_ext((uint32_t)uval);
         }
