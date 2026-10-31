@@ -13,7 +13,7 @@
 
 ### Phase 2 — Fragment-based changelog
 - **Description**: Restore the Meshtastic entry to a changelog fragment and let the normal workflow stamp version 0.9.5.1.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Restore Meshtastic changelog fragment`
 
 ### Phase 3 — Verification and cleanup

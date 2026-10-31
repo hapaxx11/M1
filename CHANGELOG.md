@@ -9,12 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.5.1] - 2026-10-30
-
-### Added
-
-- **Meshtastic external app** — Added a bundled UART Meshtastic client with messaging, node roster, signal and telemetry views, notifications, and node configuration; firmware builds now produce `m1-meshtastic.m1app` and expose the required header-UART app API.
-
 ## [0.9.5.0] - 2026-10-29
 
 ### Changed
