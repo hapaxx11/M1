@@ -224,7 +224,7 @@ void test_status_str_all_errors_have_strings(void)
 {
 	/* Iterate across the full contiguous error-code range so newly
 	 * added HTTP_ERR_* values are covered automatically. */
-	for (int code = (int)HTTP_ERR_NO_WIFI; code <= (int)HTTP_ERR_PARSE_FAIL; code++)
+	for (int code = (int)HTTP_ERR_NO_WIFI; code <= (int)HTTP_ERR_UNSUPPORTED_TRANSPORT; code++)
 	{
 		const char *s = http_status_str((http_status_t)code);
 		TEST_ASSERT_NOT_NULL_MESSAGE(s, "Error code missing from http_status_str()");

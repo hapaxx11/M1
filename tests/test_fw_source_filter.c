@@ -18,14 +18,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-
-/* Pull in the constant needed by the function */
-#define FW_SOURCE_EXCLUDE_LEN 64
-
-/* Declare the function under test — implementation compiled in a standalone file */
-bool fw_source_asset_matches_filter(const char *asset_name,
-                                     const char *include_filter,
-                                     const char *exclude_filter);
+#include "m1_fw_source.h"
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -165,6 +158,37 @@ void test_filter_md5_excluded(void)
 		"factory_ESP32C6-SPI.md5", ".bin", ""));
 }
 
+static fw_source_t brain_source(void)
+{
+	fw_source_t source;
+	memset(&source, 0, sizeof(source));
+	strcpy(source.github.owner, "bedge117");
+	strcpy(source.github.repo, "m1-esp32-brain");
+	strcpy(source.asset_filter, "factory_m1-esp32-brain.bin");
+	return source;
+}
+
+void test_filter_cd3_brain_factory_name_alias(void)
+{
+	fw_source_t source = brain_source();
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_ESP32C6-SPI.bin"));
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_m1-esp32-brain.bin"));
+}
+
+void test_filter_cd3_brain_alias_rejects_other_assets_and_sources(void)
+{
+	fw_source_t source = brain_source();
+	TEST_ASSERT_FALSE(fw_source_asset_matches_source(
+		&source, "factory_ESP32C6-SPI.md5"));
+	TEST_ASSERT_FALSE(fw_source_asset_matches_source(
+		&source, "app_m1-esp32-brain.bin"));
+	strcpy(source.github.repo, "other-repo");
+	TEST_ASSERT_FALSE(fw_source_asset_matches_source(
+		&source, "factory_ESP32C6-SPI.bin"));
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -198,6 +222,8 @@ int main(void)
 	RUN_TEST(test_filter_hapax_exclude_esp32);
 	RUN_TEST(test_filter_esp32_category);
 	RUN_TEST(test_filter_md5_excluded);
+	RUN_TEST(test_filter_cd3_brain_factory_name_alias);
+	RUN_TEST(test_filter_cd3_brain_alias_rejects_other_assets_and_sources);
 
 	return UNITY_END();
 }

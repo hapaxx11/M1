@@ -3,7 +3,7 @@
 /*
  * m1_esp32_fw_download.c
  *
- * ESP32-C6 AT firmware download manager.
+ * ESP32-C6 firmware download manager.
  * Downloads firmware images (.bin + .md5) from GitHub Releases to SD card.
  *
  * The key difference from M1 firmware download (m1_fw_download.c) is that
@@ -456,6 +456,8 @@ source_selection:
 				case HTTP_ERR_SD_WRITE_FAIL:  err_msg = "SD write error"; break;
 				case HTTP_ERR_SD_OPEN_FAIL:   err_msg = "Cannot create file"; break;
 				case HTTP_ERR_CANCELLED:      err_msg = "Cancelled"; break;
+				case HTTP_ERR_NO_MEM:         err_msg = "ESP32 out of memory"; break;
+				case HTTP_ERR_UNSUPPORTED_TRANSPORT: err_msg = "Update ESP32 firmware"; break;
 				default:                       err_msg = "Download failed"; break;
 			}
 			edl_show_message("Error:", err_msg);

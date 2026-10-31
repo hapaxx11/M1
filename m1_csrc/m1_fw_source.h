@@ -120,6 +120,10 @@ bool fw_source_asset_matches_filter(const char *asset_name,
                                      const char *include_filter,
                                      const char *exclude_filter);
 
+/* Apply source-specific compatibility aliases after the normal filter. */
+bool fw_source_asset_matches_source(const fw_source_t *source,
+                                    const char *asset_name);
+
 /*
  * Fetch available releases for a given source.
  * Queries the remote server (e.g., GitHub API) and populates the release list.

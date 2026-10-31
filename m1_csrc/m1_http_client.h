@@ -4,11 +4,8 @@
  * m1_http_client.h
  *
  * Reusable HTTP client module for M1.
- * Uses ESP32-C6 AT commands for HTTP/HTTPS communication.
- *
- * Both http_get and http_download_to_file use the raw TCP/SSL path
- * (AT+CIPSTART / AT+CIPSEND / AT+CIPRECVDATA) — not AT+HTTPCLIENT — so
- * there is no 2 KB receive-buffer limit from the ESP32 AT HTTP layer.
+ * Native CD3 uses streaming M1_RPC requests; legacy AT firmware uses raw
+ * TCP/SSL AT commands. Both paths support HTTPS and bounded SD downloads.
  *
  * M1 Project
  */
@@ -37,6 +34,8 @@ typedef enum {
 	HTTP_ERR_CANCELLED,         /* Operation cancelled by user */
 	HTTP_ERR_INVALID_ARG,       /* Invalid argument */
 	HTTP_ERR_PARSE_FAIL,        /* Failed to parse response */
+	HTTP_ERR_NO_MEM,            /* ESP32/host allocation failure */
+	HTTP_ERR_UNSUPPORTED_TRANSPORT, /* Firmware lacks native HTTP RPC */
 } http_status_t;
 
 /* Progress callback for download operations.
