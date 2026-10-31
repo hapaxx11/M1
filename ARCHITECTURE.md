@@ -10,6 +10,7 @@ The M1 firmware is organized into the following main components:
 |-----------|-------------|
 | `Core/` | Application entry, FreeRTOS tasks, HAL configuration |
 | `m1_csrc/` | M1 application logic (display, NFC, RFID, IR, Sub-GHz, CAN, firmware update, scenes) |
+| `apps/meshtastic/` | Bundled Meshtastic external app, nanopb, and generated Meshtastic protocol definitions |
 | `Battery/` | Battery monitoring |
 | `NFC/` | NFC (13.56 MHz) support |
 | `lfrfid/` | LF RFID (125 kHz) support — 26 protocol decoders |
@@ -40,7 +41,8 @@ The M1 firmware is organized into the following main components:
 
 ## Build System
 
-- **CMake + Ninja** (primary): Uses `CMakeLists.txt` and `CMakePresets.json`
+- **CMake + Ninja** (primary): Uses `CMakeLists.txt` and `CMakePresets.json`;
+  also builds `apps/meshtastic/m1-meshtastic.m1app` as a relocatable external app
 - **STM32CubeIDE:** Uses `.project` and `.cproject`
 - **Make:** Uses `Makefile` (Linux)
 
