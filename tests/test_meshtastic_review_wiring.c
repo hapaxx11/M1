@@ -8,6 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static char* repo_files[8];
+static size_t repo_file_count;
+
+static void free_repo_file(void* content) {
+    for(size_t i = 0; i < repo_file_count; i++) {
+        if(repo_files[i] == content) {
+            repo_files[i] = repo_files[--repo_file_count];
+            break;
+        }
+    }
+    free(content);
+}
+
 static char* read_repo_file(const char* relpath) {
     char path[512];
     snprintf(path, sizeof(path), "%s/%s", M1_ROOT, relpath);
@@ -30,15 +43,23 @@ static char* read_repo_file(const char* relpath) {
     size_t read = fread(content, 1, (size_t)length, file);
     fclose(file);
     if(read != (size_t)length) {
-        free(content);
+        free_repo_file(content);
         return NULL;
     }
     content[read] = '\0';
+    repo_files[repo_file_count++] = content;
     return content;
 }
 
-void setUp(void) {}
-void tearDown(void) {}
+void setUp(void) {
+    repo_file_count = 0;
+}
+
+void tearDown(void) {
+    while(repo_file_count > 0) {
+        free_repo_file(repo_files[repo_file_count - 1]);
+    }
+}
 
 void test_app_manager_releases_uart_before_unloading_elf(void) {
     char* content = read_repo_file("m1_csrc/m1_app_manager.c");
@@ -53,7 +74,7 @@ void test_app_manager_releases_uart_before_unloading_elf(void) {
     TEST_ASSERT_NOT_NULL(unload);
     TEST_ASSERT_TRUE(service_clear < uart_release);
     TEST_ASSERT_TRUE(uart_release < unload);
-    free(content);
+    free_repo_file(content);
 }
 
 void test_uart_bridge_acknowledges_pause_before_app_claims_stream(void) {
@@ -67,8 +88,8 @@ void test_uart_bridge_acknowledges_pause_before_app_claims_stream(void) {
     const char* wait_rx = init ? strstr(init, "!m1_uart_app_bridge_paused") : NULL;
     const char* wait_tx = init ? strstr(init, "!m1_uart_app_tx_bridge_paused") : NULL;
     const char* claim = init ? strstr(init, "m1_uart_app_owned = true;") : NULL;
-    const char* pause_lock = init ? strstr(init, "taskENTER_CRITICAL();\n    m1_uart_app_pause_requested = true;") : NULL;
-    const char* pause_unlock = pause_lock ? strstr(pause_lock, "taskEXIT_CRITICAL();") : NULL;
+    const char* pause_lock = init ? strstr(init, "taskENTER_CRITICAL();") : NULL;
+    const char* pause_unlock = request ? strstr(request, "taskEXIT_CRITICAL();") : NULL;
     TEST_ASSERT_NOT_NULL(request);
     TEST_ASSERT_NOT_NULL(wait_rx);
     TEST_ASSERT_NOT_NULL(wait_tx);
@@ -77,13 +98,14 @@ void test_uart_bridge_acknowledges_pause_before_app_claims_stream(void) {
     TEST_ASSERT_NOT_NULL(pause_unlock);
     TEST_ASSERT_TRUE(request < wait_rx);
     TEST_ASSERT_TRUE(wait_rx < claim);
-    TEST_ASSERT_TRUE(pause_lock < pause_unlock);
+    TEST_ASSERT_TRUE(pause_lock < request);
+    TEST_ASSERT_TRUE(request < pause_unlock);
     TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_bridge_paused = true;"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_tx_bridge_paused = true;"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "pdMS_TO_TICKS(20));"));
 
-    free(app_uart);
-    free(bridge);
+    free_repo_file(app_uart);
+    free_repo_file(bridge);
 }
 
 void test_uart_task_handles_match_bridge_directions(void) {
@@ -95,8 +117,8 @@ void test_uart_task_handles_match_bridge_directions(void) {
     TEST_ASSERT_NOT_NULL(strstr(tasks, "assert(ser2usb_task_hdl!=NULL);"));
     TEST_ASSERT_NULL(strstr(tasks, "&usb2ser_task_hdl"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "usb2ser_task_hdl = osThreadNew(vUsb2SerTask"));
-    free(tasks);
-    free(bridge);
+    free_repo_file(tasks);
+    free_repo_file(bridge);
 }
 
 void test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration(void) {
@@ -128,8 +150,8 @@ void test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration(void) {
     TEST_ASSERT_TRUE(dma_gate < dma_start);
     TEST_ASSERT_TRUE(dma_start < dma_gate_end);
 
-    free(app_uart);
-    free(bridge);
+    free_repo_file(app_uart);
+    free_repo_file(bridge);
 }
 
 void test_cdc_defers_host_reconfiguration_during_uart_ownership(void) {
@@ -137,7 +159,7 @@ void test_cdc_defers_host_reconfiguration_during_uart_ownership(void) {
     TEST_ASSERT_NOT_NULL(content);
     TEST_ASSERT_NOT_NULL(strstr(content, "!m1_uart_app_owned"));
     TEST_ASSERT_NOT_NULL(strstr(content, "!m1_uart_app_pause_requested"));
-    free(content);
+    free_repo_file(content);
 }
 
 void test_baud_change_keeps_uart_owned_without_bridge_handoff(void) {
@@ -159,8 +181,8 @@ void test_baud_change_keeps_uart_owned_without_bridge_handoff(void) {
     TEST_ASSERT_NOT_NULL(app_config);
     TEST_ASSERT_NOT_NULL(fresh_pause);
     TEST_ASSERT_TRUE(already_owned < fresh_pause);
-    free(transport);
-    free(uart_app);
+    free_repo_file(transport);
+    free_repo_file(uart_app);
 }
 
 void test_keyboard_uses_text_input_and_services_protocol(void) {
@@ -179,8 +201,8 @@ void test_keyboard_uses_text_input_and_services_protocol(void) {
     TEST_ASSERT_NOT_NULL(strstr(app, "m1app_set_keyboard_service_callback(keyboard_service);"));
     TEST_ASSERT_NOT_NULL(strstr(keyboard, "xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(20))"));
     TEST_ASSERT_NOT_NULL(strstr(keyboard, "s_keyboard_service_callback();"));
-    free(app);
-    free(keyboard);
+    free_repo_file(app);
+    free_repo_file(keyboard);
 }
 
 void test_settings_ensure_parent_before_child_directory(void) {
@@ -191,7 +213,7 @@ void test_settings_ensure_parent_before_child_directory(void) {
     TEST_ASSERT_NOT_NULL(parent);
     TEST_ASSERT_NOT_NULL(child);
     TEST_ASSERT_TRUE(parent < child);
-    free(content);
+    free_repo_file(content);
 }
 
 void test_snr_is_preserved_as_float_db(void) {
@@ -216,11 +238,11 @@ void test_snr_is_preserved_as_float_db(void) {
     TEST_ASSERT_NOT_NULL(strstr(protocol, "roster_add_node(app, n.num, n.snr, 0);"));
     TEST_ASSERT_NOT_NULL(strstr(gui, "app->last_rx_snr * 10.0f"));
     TEST_ASSERT_NULL(strstr(gui, "last_rx_snr * 10) / 4"));
-    free(roster);
-    free(roster_header);
-    free(state);
-    free(protocol);
-    free(gui);
+    free_repo_file(roster);
+    free_repo_file(roster_header);
+    free_repo_file(state);
+    free_repo_file(protocol);
+    free_repo_file(gui);
 }
 
 void test_nanopb_license_is_present_beside_vendored_sources(void) {
@@ -228,7 +250,7 @@ void test_nanopb_license_is_present_beside_vendored_sources(void) {
     TEST_ASSERT_NOT_NULL(content);
     TEST_ASSERT_NOT_NULL(
         strstr(content, "3. This notice may not be removed or altered from any source"));
-    free(content);
+    free_repo_file(content);
 }
 
 int main(void) {

@@ -2832,7 +2832,7 @@ void sub_ghz_frequency_reader(void)
         { 300000000UL, 386000000UL, "300-386MHz", false, SUB_GHZ_BAND_315     },
         { 387000000UL, 464000000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
         { 779000000UL, 849000000UL, "779-849MHz", false, SUB_GHZ_BAND_433_92  },
-        { 850000000UL, 928000000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
+        { 850000000UL, 932000000UL, "850-932MHz", true,  SUB_GHZ_BAND_915     },
     };
     #define FREQAN_BAND_COUNT  4
     /* Fine-scan parameters (Momentum-style two-stage approach).
@@ -4840,7 +4840,6 @@ void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
         {
             u8g2_DrawStr(&m1_u8g2, 2, 30, "Listening for sensors");
             u8g2_DrawStr(&m1_u8g2, 2, 42, "no sensors yet ...");
-            u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
         }
         else
         {
@@ -7263,7 +7262,7 @@ void    subghz_set_freq_idx_ext(uint8_t idx)
 uint32_t subghz_get_user_custom_freq_ext(void)       { return subghz_user_custom_freq_hz; }
 void     subghz_set_user_custom_freq_ext(uint32_t hz)
 {
-    /* Clamp to SI4463 operating range (300–928 MHz) */
+    /* Clamp to SI4463 operating range (300–932 MHz) */
     if (hz < SUBGHZ_MIN_FREQ_HZ)  hz = SUBGHZ_MIN_FREQ_HZ;
     if (hz > SUBGHZ_MAX_FREQ_HZ)  hz = SUBGHZ_MAX_FREQ_HZ;
     subghz_user_custom_freq_hz = hz;

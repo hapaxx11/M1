@@ -3,20 +3,16 @@
 #ifndef POCSAG_RECEIVER_H
 #define POCSAG_RECEIVER_H
 
+#include "pager_message.h"
+#include "flex_receiver.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
-#define POCSAG_MESSAGE_TEXT_MAX 48U
+#define POCSAG_MESSAGE_TEXT_MAX PAGER_MESSAGE_TEXT_MAX
 #define POCSAG_HISTORY_CAPACITY 10U
 
-typedef struct {
-    uint32_t ric;
-    uint16_t baud;
-    uint8_t function;
-    uint8_t repeat_count;
-    uint32_t frequency_hz;
-    char text[POCSAG_MESSAGE_TEXT_MAX];
-} pocsag_message_t;
+typedef pager_message_t pocsag_message_t;
 
 typedef enum {
     POCSAG_RX_WAIT_PREAMBLE = 0,
@@ -36,7 +32,7 @@ typedef struct {
     uint8_t codeword_index;
     uint8_t char_value;
     uint8_t char_bit_count;
-    uint8_t text_length;
+    uint16_t text_length;
     uint8_t function;
     uint32_t ric;
     bool previous_bit;
@@ -55,11 +51,14 @@ typedef struct {
 
 typedef struct {
     pocsag_receiver_t receiver;
+    flex_receiver_t flex;
     pocsag_history_t history;
     uint32_t saved_custom_frequency_hz;
     uint8_t saved_frequency_index;
     uint8_t saved_modulation_index;
     uint8_t selected_message;
+    uint16_t detail_offset;
+    uint8_t channel_index;
     bool detail_view;
     bool radio_active;
 } pocsag_receiver_app_state_t;
@@ -74,6 +73,7 @@ void pocsag_receiver_app_state_enter(pocsag_receiver_app_state_t *state,
                                      uint32_t custom_frequency_hz,
                                      uint8_t frequency_index,
                                      uint8_t modulation_index);
+void pocsag_receiver_app_state_select_newest(pocsag_receiver_app_state_t *state);
 
 void pocsag_history_reset(pocsag_history_t *history);
 bool pocsag_history_add(pocsag_history_t *history,

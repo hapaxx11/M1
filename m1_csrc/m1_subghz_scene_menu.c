@@ -15,7 +15,7 @@
  *   4. Playlist
  *   5. Analyzer (Smart ID, Freq/Spectrum Analyzer, RSSI Meter,
  *      Freq Scanner, Proto Pirate)
- *   6. POCSAG pager
+ *   6. POCSAG/FLEX pager
  *   7. Restaurant Pager
  *   8. TPMS
  *   9. Weather Station
@@ -49,7 +49,7 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Saved",
     "Playlist",
     "Analyzer",
-    "POCSAG",
+    "POCSAG/FLEX",
     "Restaurant Pager",
     "TPMS",
     "Weather Station",

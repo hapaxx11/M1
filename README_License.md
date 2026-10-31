@@ -201,6 +201,37 @@ included in or distributed with this repository.
 
 ---
 
+## 8. FLEX Pager Decoder (GPLv3-or-later)
+
+The FLEX receiver is adapted from Geofferey's Flipper Pager and the multimon-ng
+FLEX decoder. The M1 implementation uses bounded protocol state and an
+SI4463-specific scene/radio integration.
+
+### Related Files
+
+- Sub_Ghz/flex_receiver.c / flex_receiver.h
+
+### Original Projects
+
+- https://github.com/Geofferey/Flipper-Momentum-Apps/tree/flex/pocsag_pager
+- https://github.com/EliasOenal/multimon-ng
+
+multimon-ng framing and page parsing: Copyright 2004, 2006, 2010 Free Software
+Foundation, Inc. and contributors.
+
+### License
+
+GNU General Public License v3.0 or later (GPLv3-or-later)
+
+### Modifications
+
+Flipper/Furi dependencies and the CC1101 sampler were replaced with bounded M1
+protocol state, host-testable callbacks, shared POCSAG/FLEX history, and the
+existing SI4463 receive lifecycle. FLEX 4-FSK sampling and transmission are not
+included.
+
+---
+
 ## License Copies
 
 Copies of applicable open source licenses are provided in the `LICENSES/` directory:
@@ -213,8 +244,8 @@ Copies of applicable open source licenses are provided in the `LICENSES/` direct
 
 ## License Scope Clarification
 
-Only the LF RFID module (decoder and T5577-related implementation) and the OpenLogos-derived
-component contain portions covered under GPL licenses.
+The LF RFID module (decoder and T5577-related implementation), OpenLogos-derived
+component, and FLEX receiver contain portions covered under GPL licenses.
 
 The BQ25896 and BQ27421 drivers are licensed under LGPL-3.0 and apply only to their respective
 driver implementations.
@@ -225,8 +256,8 @@ LP5814 driver implementation.
 The Amiibo master-key re-signing feature includes MIT-licensed and public-domain third-party
 components and applies only to the files listed in that section.
 
-All other firmware components in this repository were independently developed by Monstatek and are
-not derived from GPL-licensed works.
+Other firmware components not covered by the third-party notices in this document were
+independently developed.
 
 ---
 

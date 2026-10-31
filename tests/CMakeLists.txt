@@ -3519,6 +3519,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_weather_parse COMMAND test_subghz_weather_parse)
 
+# ── Weather Station button-bar layout regression ──
+add_executable(test_weather_station_ux
+    test_weather_station_ux.c
+)
+target_compile_definitions(test_weather_station_ux PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_weather_station_ux PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_weather_station_ux PRIVATE sanitizers)
+endif()
+add_test(NAME weather_station_ux COMMAND test_weather_station_ux)
+
 # ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c
@@ -4356,6 +4369,22 @@ if(TARGET sanitizers)
     target_link_libraries(test_pocsag_receiver PRIVATE sanitizers)
 endif()
 add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)
+
+# ------------------------------------------------------------------
+# Module under test: FLEX receiver framing and page decoding
+# ------------------------------------------------------------------
+add_executable(test_flex_receiver
+    test_flex_receiver.c
+    ${M1_ROOT}/Sub_Ghz/flex_receiver.c
+)
+target_include_directories(test_flex_receiver PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_flex_receiver PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flex_receiver PRIVATE sanitizers)
+endif()
+add_test(NAME flex_receiver COMMAND test_flex_receiver)
 
 # ------------------------------------------------------------------
 # Module under test: restaurant pager field decoding and editing

@@ -63,7 +63,7 @@
 
 /* SI4463 operating range — single source of truth for all frequency validators */
 #define SUBGHZ_MIN_FREQ_HZ    300000000UL   /* 300.000 MHz — PLL lower bound with outdiv=12 */
-#define SUBGHZ_MAX_FREQ_HZ    928000000UL   /* 928.000 MHz — ISM upper edge */
+#define SUBGHZ_MAX_FREQ_HZ    932000000UL   /* 932.000 MHz — paging-band upper edge */
 
 // SUBGHZ_GPIO_0(RX)	PORTE.9	<--> TIM1_CH1
 // SUBGHZ_GPIO_2(TX) 	PORTD.5	<--> TIM1_CH4N

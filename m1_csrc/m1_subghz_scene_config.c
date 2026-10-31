@@ -491,8 +491,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         frac = strtoul(frac_buf, NULL, 10);
                     }
                     uint32_t hz = (uint32_t)(whole * 1000000UL + frac);
-                    /* Validate SI4463 range (300–930 MHz) */
-                    if (hz >= 300000000UL && hz <= 930000000UL)
+                    /* Validate SI4463 range (300–932 MHz) */
+                    if (hz >= 300000000UL && hz <= 932000000UL)
                         subghz_set_user_custom_freq_ext(hz);
                 }
             }
