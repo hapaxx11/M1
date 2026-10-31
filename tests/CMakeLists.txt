@@ -4351,6 +4351,22 @@ endif()
 add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)
 
 # ------------------------------------------------------------------
+# Module under test: FLEX receiver framing and page decoding
+# ------------------------------------------------------------------
+add_executable(test_flex_receiver
+    test_flex_receiver.c
+    ${M1_ROOT}/Sub_Ghz/flex_receiver.c
+)
+target_include_directories(test_flex_receiver PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_flex_receiver PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flex_receiver PRIVATE sanitizers)
+endif()
+add_test(NAME flex_receiver COMMAND test_flex_receiver)
+
+# ------------------------------------------------------------------
 # Module under test: restaurant pager field decoding and editing
 # ------------------------------------------------------------------
 add_executable(test_restaurant_pager

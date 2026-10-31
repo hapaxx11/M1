@@ -73,9 +73,9 @@
 #define SUBGHZ_MIN_FREQ_HZ   300000000UL   /* 300.000 MHz */
 #endif
 
-/** Upper ISM edge (Hz). */
+/** Upper supported paging-band edge (Hz). */
 #ifndef SUBGHZ_MAX_FREQ_HZ
-#define SUBGHZ_MAX_FREQ_HZ   928000000UL   /* 928.000 MHz */
+#define SUBGHZ_MAX_FREQ_HZ   932000000UL   /* 932.000 MHz */
 #endif
 
 /* ── Type definition ────────────────────────────────────────────────────────── */
