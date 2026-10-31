@@ -300,7 +300,7 @@ static void test_bch_error_correction(void)
     uint32_t page[8];
     const uint8_t count = make_alpha_page("ECC", 3U, false, 1U,
                                           text_signature("ECC"), page, 8U);
-    page[1] ^= 1UL;
+    page[1] ^= 1UL << 15;
     test_frame_t frame;
     build_frame(&frame, 1600U, 1234UL, false, 5U, page, count);
     feed_frame(&receiver, &frame, 1600U, 1000U);
@@ -479,6 +479,94 @@ static void test_fragment_timeout_expires_without_new_frame(void)
     TEST_ASSERT_EQUAL_STRING("WORLD", captured[1].text);
 }
 
+static void test_bracketed_suffixes_remain_distinct(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t first[8];
+    uint32_t second[8];
+    const uint8_t first_count = make_alpha_page(
+        "ALARM [1]", 3U, false, 1U, text_signature("ALARM [1]"), first, 8U);
+    const uint8_t second_count = make_alpha_page(
+        "ALARM [2]", 3U, false, 2U, text_signature("ALARM [2]"), second, 8U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, first, first_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    build_frame(&frame, 1600U, 123456UL, false, 5U, second, second_count);
+    feed_frame(&receiver, &frame, 1600U, 2000U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+    TEST_ASSERT_EQUAL_STRING("ALARM [1]", captured[0].text);
+    TEST_ASSERT_EQUAL_STRING("ALARM [2]", captured[1].text);
+}
+
+static void test_overcapacity_join_is_partial(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    char first_text[201];
+    char last_text[101];
+    char complete[301];
+    memset(first_text, 'A', sizeof(first_text) - 1U);
+    memset(last_text, 'B', sizeof(last_text) - 1U);
+    first_text[sizeof(first_text) - 1U] = '\0';
+    last_text[sizeof(last_text) - 1U] = '\0';
+    strcpy(complete, first_text);
+    strcat(complete, last_text);
+    uint32_t first[90];
+    uint32_t last[90];
+    const uint8_t first_count = make_alpha_page(
+        first_text, 3U, true, 7U, text_signature(complete), first, 90U);
+    const uint8_t last_count = make_alpha_page(last_text, 0U, false, 7U,
+                                               0U, last, 90U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, first, first_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    build_frame(&frame, 1600U, 123456UL, false, 5U, last, last_count);
+    feed_frame(&receiver, &frame, 1600U, 2000U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_TRUE(captured[0].partial);
+}
+
+static void test_expiry_preserves_late_continuation_without_poll(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t first[8];
+    uint32_t last[8];
+    const uint8_t first_count = make_alpha_page(
+        "HELLO ", 3U, true, 7U, text_signature("HELLO WORLD"), first, 8U);
+    const uint8_t last_count = make_alpha_page("WORLD", 0U, false, 7U,
+                                               0U, last, 8U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, first, first_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    build_frame(&frame, 1600U, 123456UL, false, 5U, last, last_count);
+    feed_frame(&receiver, &frame, 1600U, 241001U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+    TEST_ASSERT_EQUAL_STRING("HELLO [...]", captured[0].text);
+    TEST_ASSERT_EQUAL_STRING("WORLD", captured[1].text);
+}
+
+static void test_sequence_gap_marks_join_partial(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t first[8];
+    uint32_t last[8];
+    const uint8_t first_count = make_alpha_page(
+        "AA", 3U, true, 7U, text_signature("AA@@WORLD"), first, 8U);
+    const uint8_t last_count = make_alpha_page("WORLD", 1U, false, 7U,
+                                               0U, last, 8U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, first, first_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    build_frame(&frame, 1600U, 123456UL, false, 5U, last, last_count);
+    feed_frame(&receiver, &frame, 1600U, 2000U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_TRUE(captured[0].partial);
+    TEST_ASSERT_EQUAL_STRING("AA[...]WORLD", captured[0].text);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -492,5 +580,9 @@ int main(void)
     RUN_TEST(test_rejects_oversized_long_alpha_vector);
     RUN_TEST(test_long_numeric_page_at_phase_boundary);
     RUN_TEST(test_fragment_timeout_expires_without_new_frame);
+    RUN_TEST(test_bracketed_suffixes_remain_distinct);
+    RUN_TEST(test_overcapacity_join_is_partial);
+    RUN_TEST(test_expiry_preserves_late_continuation_without_poll);
+    RUN_TEST(test_sequence_gap_marks_join_partial);
     return UNITY_END();
 }

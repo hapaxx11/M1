@@ -295,18 +295,6 @@ static uint32_t flex_text_hash(uint32_t capcode, uint8_t type, const char *text)
     size_t length = strlen(text);
     while (length > 0U && text[length - 1U] == ' ')
         --length;
-    if (length > 0U && text[length - 1U] == ']')
-    {
-        size_t start = length - 1U;
-        while (start > 0U && text[start - 1U] >= '0' && text[start - 1U] <= '9')
-            --start;
-        if (start < length - 1U && start > 0U && text[start - 1U] == '[')
-        {
-            length = start - 1U;
-            while (length > 0U && text[length - 1U] == ' ')
-                --length;
-        }
-    }
 
     uint32_t hash = 2166136261UL;
     hash = (hash ^ capcode) * 16777619UL;
@@ -540,7 +528,10 @@ static void flex_fragment_append(flex_fragment_slot_t *slot, const char *text)
 {
     const size_t capacity = PAGER_MESSAGE_TEXT_MAX - 1U;
     if (slot->text_length >= capacity)
+    {
+        slot->suspect = true;
         return;
+    }
     const size_t room = capacity - slot->text_length;
     const size_t length = strlen(text);
     if (length <= room)
@@ -550,6 +541,7 @@ static void flex_fragment_append(flex_fragment_slot_t *slot, const char *text)
         return;
     }
 
+    slot->suspect = true;
     const size_t mark_length = sizeof(FLEX_TRUNCATION_MARK) - 1U;
     const size_t text_room = room > mark_length ? room - mark_length : 0U;
     if (text_room > 0U)
@@ -644,10 +636,13 @@ static void flex_fragment_add(flex_receiver_t *receiver, uint32_t capcode,
                               uint8_t fragment, bool continuation,
                               char phase)
 {
-    flex_fragment_flush_expired(receiver);
     char part_text[PAGER_MESSAGE_TEXT_MAX];
     (void)snprintf(part_text, sizeof(part_text), "%s", receiver->message.text);
     const bool suspect = receiver->message.partial;
+    flex_fragment_flush_expired(receiver);
+    flex_start_text(receiver);
+    flex_append_string(receiver, part_text);
+    receiver->message.partial = suspect;
     flex_fragment_slot_t *slot = NULL;
     for (uint8_t i = 0; i < FLEX_FRAGMENT_SLOTS; ++i)
     {
@@ -715,7 +710,10 @@ static void flex_fragment_add(flex_receiver_t *receiver, uint32_t capcode,
     {
         slot->suspect |= suspect;
         if (fragment != slot->next_fragment)
+        {
+            slot->suspect = true;
             flex_fragment_append(slot, FLEX_GAP_MARK);
+        }
     }
 
     flex_fragment_append(slot, part_text);
