@@ -1,1 +1,0 @@
-**Sub-GHz: FLEX pager reception** — Added FLEX 1600/2 and 3200/2 decoding to the POCSAG pager scene, including BCH correction, short/long capcodes, alphanumeric, numeric, tone and binary pages, fragmented-message joining, duplicate suppression, scrollable long-text details, and POCSAG/FLEX channel presets through 931.9375 MHz. FLEX 4-FSK modes are not included.

@@ -1,1 +1,0 @@
-**Sub-GHz: FLEX fragment and payload integrity** — Preserve bracketed payload suffixes, mark truncated or out-of-sequence joins partial, retain incoming fragments during expiration, and strengthen BCH correction coverage.

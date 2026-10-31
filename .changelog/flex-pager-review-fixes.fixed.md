@@ -1,1 +1,0 @@
-**Sub-GHz: pager decoder hardening** — Fixed oversized-vector and long numeric bounds, long POCSAG text counters, clean-copy recovery of partial pages, truncated binary identity, fragment expiration without new frames, and detail-scroll reset when new pages arrive.

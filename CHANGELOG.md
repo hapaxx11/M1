@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5.3] - 2026-10-31
+
+### Added
+
+- **Sub-GHz: FLEX pager reception** — Added FLEX 1600/2 and 3200/2 decoding to the POCSAG pager scene, including BCH correction, short/long capcodes, alphanumeric, numeric, tone and binary pages, fragmented-message joining, duplicate suppression, scrollable long-text details, and POCSAG/FLEX channel presets through 931.9375 MHz. FLEX 4-FSK modes are not included.
+
+### Fixed
+
+- **Sub-GHz: FLEX fragment and payload integrity** — Preserve bracketed payload suffixes, mark truncated or out-of-sequence joins partial, retain incoming fragments during expiration, and strengthen BCH correction coverage.
+- **Sub-GHz: pager decoder hardening** — Fixed oversized-vector and long numeric bounds, long POCSAG text counters, clean-copy recovery of partial pages, truncated binary identity, fragment expiration without new frames, and detail-scroll reset when new pages arrive.
+
 ## [0.9.5.2] - 2026-10-31
 
 ### Fixed
