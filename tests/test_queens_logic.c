@@ -137,6 +137,72 @@ static void assert_patterns_valid(const queens_puzzle_t *pz)
     }
 }
 
+/*--- Pattern visibility and dynamic assignment -------------------------------*/
+
+void test_pattern_visibility_follows_shaded_density(void)
+{
+    static const uint8_t expected[QUEENS_PATTERN_COUNT] = {
+        0, 2, 5, 6, 3, 4, 8, 1, 7
+    };
+    unsigned previous_density = 0;
+
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, queens_pattern_preference,
+                                  QUEENS_PATTERN_COUNT);
+
+    for (uint8_t rank = 0; rank < QUEENS_PATTERN_COUNT; rank++)
+    {
+        uint8_t pattern = queens_pattern_preference[rank];
+        unsigned density = 0;
+        for (uint8_t dy = 0; dy < 12; dy++)
+            for (uint8_t dx = 0; dx < 12; dx++)
+                if (queens_pattern_pixel(pattern, dx, dy))
+                    density++;
+
+        TEST_ASSERT_GREATER_OR_EQUAL_UINT(previous_density, density);
+        previous_density = density;
+    }
+
+    TEST_ASSERT_FALSE(queens_pattern_pixel(0, 0, 0));
+    TEST_ASSERT_TRUE(queens_pattern_pixel(QUEENS_PATTERN_SOLID, 0, 0));
+}
+
+void test_dynamic_patterns_fill_queen_regions_and_reuse_best_remaining(void)
+{
+    queens_puzzle_t pz;
+    uint8_t cells[QUEENS_MAX_N][QUEENS_MAX_N];
+    memset(&pz, 0, sizeof(pz));
+    memset(cells, 0, sizeof(cells));
+    pz.n = 6;
+    for (uint8_t r = 0; r < pz.n; r++)
+        for (uint8_t c = 0; c < pz.n; c++)
+            pz.region[r][c] = c;
+
+    queens_assign_patterns(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells);
+    for (uint8_t reg = 0; reg < pz.n; reg++)
+        TEST_ASSERT_EQUAL_UINT8(queens_pattern_preference[reg], pz.pattern[reg]);
+
+    cells[0][0] = QUEENS_CELL_QUEEN;
+    queens_assign_patterns(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells);
+    TEST_ASSERT_TRUE(queens_region_has_queen(&pz,
+        (const uint8_t (*)[QUEENS_MAX_N])cells, 0));
+    TEST_ASSERT_EQUAL_UINT8(QUEENS_PATTERN_SOLID, pz.pattern[0]);
+    for (uint8_t reg = 1; reg < pz.n; reg++)
+        TEST_ASSERT_EQUAL_UINT8(queens_pattern_preference[reg - 1], pz.pattern[reg]);
+
+    cells[1][1] = QUEENS_CELL_QUEEN;
+    queens_assign_patterns(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells);
+    TEST_ASSERT_EQUAL_UINT8(QUEENS_PATTERN_SOLID, pz.pattern[0]);
+    TEST_ASSERT_EQUAL_UINT8(QUEENS_PATTERN_SOLID, pz.pattern[1]);
+    for (uint8_t reg = 2; reg < pz.n; reg++)
+        TEST_ASSERT_EQUAL_UINT8(queens_pattern_preference[reg - 2], pz.pattern[reg]);
+
+    cells[0][0] = QUEENS_CELL_EMPTY;
+    queens_assign_patterns(&pz, (const uint8_t (*)[QUEENS_MAX_N])cells);
+    TEST_ASSERT_FALSE(queens_region_has_queen(&pz,
+        (const uint8_t (*)[QUEENS_MAX_N])cells, 0));
+    TEST_ASSERT_NOT_EQUAL(QUEENS_PATTERN_SOLID, pz.pattern[0]);
+}
+
 /*--- RNG --------------------------------------------------------------------*/
 
 void test_rng_seed_zero_is_remapped(void)
@@ -190,10 +256,51 @@ void test_generate_all_difficulties_valid_and_unique(void)
             assert_regions_valid(&pz);
             assert_patterns_valid(&pz);
 
+            uint8_t region_size[QUEENS_MAX_N] = { 0 };
+            uint8_t small_regions = 0;
+            for (uint8_t r = 0; r < n; r++)
+                for (uint8_t c = 0; c < n; c++)
+                    region_size[pz.region[r][c]]++;
+            for (uint8_t reg = 0; reg < n; reg++)
+            {
+                if (d >= 2)
+                    TEST_ASSERT_GREATER_OR_EQUAL_UINT8_MESSAGE(2, region_size[reg],
+                        "Hard/Expert singleton region");
+                if (region_size[reg] <= 2)
+                    small_regions++;
+            }
+            if (d >= 2)
+                TEST_ASSERT_LESS_OR_EQUAL_UINT8_MESSAGE(n / 4u, small_regions,
+                    "too many small regions for difficulty");
+
             TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, queens_count_solutions(&pz, 2),
                                             "solver disagrees on uniqueness");
         }
     }
+}
+
+void test_generate_keeps_shape_valid_fallback_after_retries_exhaust(void)
+{
+    queens_puzzle_t pz;
+    uint32_t rng;
+    queens_rng_seed(&rng, 47);
+
+    TEST_ASSERT_TRUE(queens_generate(&pz, 9, &rng));
+    TEST_ASSERT_FALSE(pz.unique);
+    assert_solution_valid(&pz);
+    assert_regions_valid(&pz);
+    assert_patterns_valid(&pz);
+}
+
+void test_generate_randomizes_region_labels_away_from_solution_rows(void)
+{
+    queens_puzzle_t pz;
+    uint32_t rng;
+    queens_rng_seed(&rng, 1);
+
+    TEST_ASSERT_TRUE(queens_generate(&pz, 6, &rng));
+    for (uint8_t r = 0; r < pz.n; r++)
+        TEST_ASSERT_NOT_EQUAL(r, pz.region[r][pz.solution_col[r]]);
 }
 
 void test_generate_rejects_bad_size(void)
@@ -437,6 +544,23 @@ void test_all_decided(void)
 
 /*--- High scores --------------------------------------------------------------*/
 
+void test_initials_default_to_hpx_and_preserve_recent_value(void)
+{
+    char initials[4];
+
+    memset(initials, 0, sizeof(initials));
+    queens_sanitize_initials(initials);
+    TEST_ASSERT_EQUAL_STRING(QUEENS_DEFAULT_INITIALS, initials);
+
+    memcpy(initials, "bob", 4);
+    queens_sanitize_initials(initials);
+    TEST_ASSERT_EQUAL_STRING("BOB", initials);
+
+    memcpy(initials, "Q", 2);
+    queens_sanitize_initials(initials);
+    TEST_ASSERT_EQUAL_STRING("QAA", initials);
+}
+
 static queens_hs_entry_t mk_entry(const char *ini, uint32_t secs, uint32_t date,
                                   uint8_t nm)
 {
@@ -647,11 +771,16 @@ int main(void)
 {
     UNITY_BEGIN();
 
+    RUN_TEST(test_pattern_visibility_follows_shaded_density);
+    RUN_TEST(test_dynamic_patterns_fill_queen_regions_and_reuse_best_remaining);
+
     RUN_TEST(test_rng_seed_zero_is_remapped);
     RUN_TEST(test_rng_deterministic);
     RUN_TEST(test_rng_range_bounds);
 
     RUN_TEST(test_generate_all_difficulties_valid_and_unique);
+    RUN_TEST(test_generate_keeps_shape_valid_fallback_after_retries_exhaust);
+    RUN_TEST(test_generate_randomizes_region_labels_away_from_solution_rows);
     RUN_TEST(test_generate_rejects_bad_size);
     RUN_TEST(test_generate_varies_with_seed);
 
@@ -665,6 +794,7 @@ int main(void)
     RUN_TEST(test_auto_exclude_empty_board_excludes_nothing);
     RUN_TEST(test_all_decided);
 
+    RUN_TEST(test_initials_default_to_hpx_and_preserve_recent_value);
     RUN_TEST(test_hs_insert_ranks_and_truncates);
     RUN_TEST(test_hs_tables_are_per_difficulty);
     RUN_TEST(test_hs_format_parse_roundtrip);

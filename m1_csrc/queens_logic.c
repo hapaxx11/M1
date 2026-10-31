@@ -18,13 +18,30 @@
 const uint8_t queens_diff_size[QUEENS_DIFF_COUNT] = { 6, 7, 8, 9 };
 
 #define QUEENS_UNASSIGNED   0xFFu
-#define QUEENS_GEN_ATTEMPTS 25u
+#define QUEENS_GEN_ATTEMPTS 75u
 
-/* Pattern draw order preference: strong structural differences first so
- * adjacent regions are as easy as possible to tell apart at a glance. */
-static const uint8_t pattern_preference[QUEENS_PATTERN_COUNT] = {
-    0, 3, 4, 5, 6, 2, 7, 1, 8
+/* Lower shaded-pixel density first: blank, dots, diagonals, stripes, grid,
+ * then the two checkerboards. */
+const uint8_t queens_pattern_preference[QUEENS_PATTERN_COUNT] = {
+    0, 2, 5, 6, 3, 4, 8, 1, 7
 };
+
+bool queens_pattern_pixel(uint8_t pattern, uint8_t dx, uint8_t dy)
+{
+    switch (pattern)
+    {
+        case 1:  return ((dx + dy) & 1u) != 0u;
+        case 2:  return (dx % 4u == 1u) && (dy % 4u == 1u);
+        case 3:  return (dy % 3u) == 1u;
+        case 4:  return (dx % 3u) == 1u;
+        case 5:  return ((dx + dy) % 4u) == 1u;
+        case 6:  return (((int)dx - (int)dy + 64) % 4) == 1;
+        case 7:  return (((dx >> 1) + (dy >> 1)) & 1u) != 0u;
+        case 8:  return (dx % 4u == 0u) || (dy % 4u == 0u);
+        case QUEENS_PATTERN_SOLID: return true;
+        default: return false;
+    }
+}
 
 /*============================================================================*/
 /* RNG                                                                        */
@@ -177,72 +194,94 @@ static void grow_regions(uint8_t n, uint32_t *rng,
     }
 }
 
+static bool region_shape_valid(uint8_t n,
+                               const uint8_t region[QUEENS_MAX_N][QUEENS_MAX_N])
+{
+    if (n < queens_diff_size[2])
+        return true;    /* singleton regions are allowed on Easy and Medium */
+
+    uint8_t size[QUEENS_MAX_N] = { 0 };
+    uint8_t small = 0;
+    for (uint8_t r = 0; r < n; r++)
+        for (uint8_t c = 0; c < n; c++)
+            size[region[r][c]]++;
+
+    for (uint8_t reg = 0; reg < n; reg++)
+    {
+        if (size[reg] < 2)
+            return false;
+        if (size[reg] == 2)
+            small++;
+    }
+    return small <= n / 4u;
+}
+
 /*============================================================================*/
-/* Pattern assignment (adjacent regions get visually distinct patterns)       */
+/* Pattern assignment (solid completed regions, density-ranked others)        */
 /*============================================================================*/
 
-static void assign_patterns(uint8_t n, uint32_t *rng,
-                            const uint8_t region[QUEENS_MAX_N][QUEENS_MAX_N],
-                            uint8_t pattern[QUEENS_MAX_N])
+bool queens_region_has_queen(const queens_puzzle_t *pz,
+                             const uint8_t cells[][QUEENS_MAX_N], uint8_t region)
 {
-    bool     adj[QUEENS_MAX_N][QUEENS_MAX_N];  /* adj[i][j]: regions i,j touch */
-    uint8_t  used[QUEENS_PATTERN_COUNT];       /* how many regions use a pattern */
-    uint8_t  order[QUEENS_MAX_N];
+    if (cells == NULL || region >= pz->n)
+        return false;
+
+    for (uint8_t r = 0; r < pz->n; r++)
+        for (uint8_t c = 0; c < pz->n; c++)
+            if (pz->region[r][c] == region && cells[r][c] == QUEENS_CELL_QUEEN)
+                return true;
+    return false;
+}
+
+void queens_assign_patterns(queens_puzzle_t *pz,
+                            const uint8_t cells[][QUEENS_MAX_N])
+{
+    uint8_t n = pz->n;
+    bool adj[QUEENS_MAX_N][QUEENS_MAX_N];
+    bool completed[QUEENS_MAX_N];
+    uint8_t used[QUEENS_PATTERN_COUNT];
 
     memset(adj, 0, sizeof(adj));
     memset(used, 0, sizeof(used));
+
+    for (uint8_t reg = 0; reg < n; reg++)
+    {
+        completed[reg] = queens_region_has_queen(pz, cells, reg);
+        pz->pattern[reg] = completed[reg] ? QUEENS_PATTERN_SOLID : 0;
+    }
 
     for (uint8_t r = 0; r < n; r++)
     {
         for (uint8_t c = 0; c < n; c++)
         {
-            uint8_t a = region[r][c];
-            if (c + 1 < n && region[r][c + 1] != a)
+            uint8_t a = pz->region[r][c];
+            if (c + 1 < n && pz->region[r][c + 1] != a)
             {
-                adj[a][region[r][c + 1]] = true;
-                adj[region[r][c + 1]][a] = true;
+                adj[a][pz->region[r][c + 1]] = true;
+                adj[pz->region[r][c + 1]][a] = true;
             }
-            if (r + 1 < n && region[r + 1][c] != a)
+            if (r + 1 < n && pz->region[r + 1][c] != a)
             {
-                adj[a][region[r + 1][c]] = true;
-                adj[region[r + 1][c]][a] = true;
+                adj[a][pz->region[r + 1][c]] = true;
+                adj[pz->region[r + 1][c]][a] = true;
             }
         }
     }
 
-    /* Visit regions in a random order so the preferred patterns do not
-     * always land on the same region ids */
-    for (uint8_t i = 0; i < n; i++)
-        order[i] = i;
-    for (uint8_t i = (uint8_t)(n - 1u); i > 0; i--)
+    for (uint8_t reg = 0; reg < n; reg++)
     {
-        uint8_t j = queens_rng_range(rng, 0, i);
-        uint8_t t = order[i];
-        order[i] = order[j];
-        order[j] = t;
-    }
+        if (completed[reg])
+            continue;
 
-    for (uint8_t oi = 0; oi < n; oi++)
-    {
-        uint8_t reg = order[oi];
         uint8_t best = QUEENS_PATTERN_COUNT;
         uint8_t best_used = 0xFF;
-
         for (uint8_t pi = 0; pi < QUEENS_PATTERN_COUNT; pi++)
         {
-            uint8_t p = pattern_preference[pi];
+            uint8_t p = queens_pattern_preference[pi];
             bool bad = false;
-            for (uint8_t other = 0; other < n; other++)
+            for (uint8_t other = 0; other < reg; other++)
             {
-                if (other == reg)
-                    continue;
-                if (!adj[reg][other])
-                    continue;
-                /* Only regions assigned earlier constrain us */
-                bool assigned = false;
-                for (uint8_t k = 0; k < oi; k++)
-                    if (order[k] == other) { assigned = true; break; }
-                if (assigned && pattern[other] == p)
+                if (adj[reg][other] && !completed[other] && pz->pattern[other] == p)
                 {
                     bad = true;
                     break;
@@ -255,10 +294,7 @@ static void assign_patterns(uint8_t n, uint32_t *rng,
             }
         }
 
-        if (best == QUEENS_PATTERN_COUNT)
-            best = (uint8_t)(reg % QUEENS_PATTERN_COUNT);  /* unreachable with 9 patterns, 9 regions */
-
-        pattern[reg] = best;
+        pz->pattern[reg] = best;
         used[best]++;
     }
 }
@@ -485,7 +521,7 @@ static bool kill_alt(queens_puzzle_t *pz, const uint8_t alt[QUEENS_MAX_N],
         for (uint8_t k = 0; k < nd; k++)
         {
             pz->region[r1][c1] = dsts[k];
-            if (region_connected(pz, src))
+            if (region_connected(pz, src) && region_shape_valid(n, (const uint8_t (*)[QUEENS_MAX_N])pz->region))
                 return true;
             pz->region[r1][c1] = src;
         }
@@ -509,7 +545,7 @@ static bool kill_alt(queens_puzzle_t *pz, const uint8_t alt[QUEENS_MAX_N],
                 continue;
 
             pz->region[r1][c1] = dst;
-            if (region_connected(pz, src))
+            if (region_connected(pz, src) && region_shape_valid(n, (const uint8_t (*)[QUEENS_MAX_N])pz->region))
                 return true;   /* alt now uses region dst twice */
             pz->region[r1][c1] = src;
         }
@@ -531,6 +567,25 @@ static bool repair_uniqueness(queens_puzzle_t *pz, uint32_t *rng)
     return false;
 }
 
+static void randomize_region_ids(queens_puzzle_t *pz, uint32_t *rng)
+{
+    uint8_t relabel[QUEENS_MAX_N];
+    for (uint8_t i = 0; i < pz->n; i++)
+        relabel[i] = i;
+
+    for (uint8_t i = pz->n; i > 1; i--)
+    {
+        uint8_t j = queens_rng_range(rng, 0, (uint8_t)(i - 2u));
+        uint8_t t = relabel[i - 1u];
+        relabel[i - 1u] = relabel[j];
+        relabel[j] = t;
+    }
+
+    for (uint8_t r = 0; r < pz->n; r++)
+        for (uint8_t c = 0; c < pz->n; c++)
+            pz->region[r][c] = relabel[pz->region[r][c]];
+}
+
 /*============================================================================*/
 /* Generation                                                                 */
 /*============================================================================*/
@@ -544,30 +599,40 @@ bool queens_generate(queens_puzzle_t *pz, uint8_t n, uint32_t *rng)
     pz->n = n;
     pz->unique = false;
 
-    bool have_layout = false;
+    bool have_fallback = false;
+    bool have_unique = false;
+    queens_puzzle_t fallback;
 
     for (uint8_t attempt = 0; attempt < QUEENS_GEN_ATTEMPTS; attempt++)
     {
         if (!place_queens(n, rng, pz->solution_col))
             continue;
-        have_layout = true;
         grow_regions(n, rng, pz->solution_col, pz->region);
+        if (!region_shape_valid(n, (const uint8_t (*)[QUEENS_MAX_N])pz->region))
+            continue;
+        fallback = *pz;
+        have_fallback = true;
 
         if (repair_uniqueness(pz, rng))
         {
             pz->unique = true;
+            have_unique = true;
             break;
         }
-        /* Repair failed: reroll a fresh layout.  The last attempt is kept
-         * as a fallback (still solvable by construction, just not proven
-         * unique). */
     }
 
-    if (have_layout)
-        assign_patterns(n, rng, (const uint8_t (*)[QUEENS_MAX_N])pz->region,
-                        pz->pattern);
+    if (!have_unique)
+    {
+        if (!have_fallback)
+            return false;
+        *pz = fallback;
+        pz->unique = false;
+    }
 
-    return have_layout;
+    randomize_region_ids(pz, rng);
+    queens_assign_patterns(pz, NULL);
+
+    return true;
 }
 
 /*============================================================================*/
@@ -717,6 +782,27 @@ bool queens_all_decided(const queens_puzzle_t *pz,
 void queens_hs_init(queens_hs_table_t *t)
 {
     memset(t, 0, sizeof(*t));
+}
+
+void queens_sanitize_initials(char initials[4])
+{
+    if (initials[0] == '\0')
+    {
+        memcpy(initials, QUEENS_DEFAULT_INITIALS, 4);
+        return;
+    }
+
+    uint8_t len = 0;
+    for (uint8_t i = 0; i < 3 && initials[i]; i++)
+    {
+        char c = initials[i];
+        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+        if (c < 'A' || c > 'Z')   c = 'A';
+        initials[len++] = c;
+    }
+    while (len < 3)
+        initials[len++] = 'A';
+    initials[3] = '\0';
 }
 
 int queens_hs_insert(queens_hs_table_t *t, uint8_t diff,

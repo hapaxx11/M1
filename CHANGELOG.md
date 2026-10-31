@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Meshtastic external app** — Added a bundled UART Meshtastic client with messaging, node roster, signal and telemetry views, notifications, and node configuration; firmware builds now produce `m1-meshtastic.m1app` and expose the required header-UART app API.
 
+### Changed
+
+- **Games: Queens visibility and difficulty** — Added solid-filled queen regions with dashed adjacent boundaries, density-ranked reshading, and a current-cell icon; fixed title clipping, limited small regions on Hard/Expert, and defaulted new high-score initials to the last used or HPX.
+
 ## [0.9.4.22] - 2026-10-29
 
 ### Added

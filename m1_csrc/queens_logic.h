@@ -28,13 +28,16 @@
 extern "C" {
 #endif
 
-#define QUEENS_MAX_N         9   /* largest board (Expert) */
-#define QUEENS_DIFF_COUNT    4   /* Easy/Medium/Hard/Expert */
-#define QUEENS_HS_PER_DIFF   3   /* top-3 times per difficulty */
-#define QUEENS_PATTERN_COUNT 9   /* distinct monochrome fill patterns */
+#define QUEENS_MAX_N            9   /* largest board (Expert) */
+#define QUEENS_DIFF_COUNT       4   /* Easy/Medium/Hard/Expert */
+#define QUEENS_HS_PER_DIFF      3   /* top-3 times per difficulty */
+#define QUEENS_PATTERN_COUNT    9   /* regular monochrome fill patterns */
+#define QUEENS_PATTERN_SOLID    QUEENS_PATTERN_COUNT
+#define QUEENS_DEFAULT_INITIALS "HPX"
 
-/* Board size per difficulty level (Easy..Expert). */
+/* Board size and density-ranked patterns (most visible first). */
 extern const uint8_t queens_diff_size[QUEENS_DIFF_COUNT];
+extern const uint8_t queens_pattern_preference[QUEENS_PATTERN_COUNT];
 
 /* Cell states held by the UI layer. */
 #define QUEENS_CELL_EMPTY    0u
@@ -48,6 +51,13 @@ typedef struct {
     uint8_t solution_col[QUEENS_MAX_N];              /* queen column per row */
     bool    unique;                                  /* solution proven unique */
 } queens_puzzle_t;
+
+/* Monochrome pixels and density-ranked patterns for regions without queens. */
+bool queens_pattern_pixel(uint8_t pattern, uint8_t dx, uint8_t dy);
+bool queens_region_has_queen(const queens_puzzle_t *pz,
+                             const uint8_t cells[][QUEENS_MAX_N], uint8_t region);
+void queens_assign_patterns(queens_puzzle_t *pz,
+                            const uint8_t cells[][QUEENS_MAX_N]);
 
 /*--- RNG (xorshift32) ------------------------------------------------------*/
 
@@ -67,10 +77,13 @@ uint8_t  queens_rng_range(uint32_t *state, uint8_t min, uint8_t max);
  * grows one region from each queen cell by random flood fill, assigns
  * visually distinct patterns to adjacent regions, then verifies with the
  * solver that the solution is unique (retrying with fresh random layouts
- * up to a bounded number of attempts).
+ * up to a bounded number of attempts).  Hard and Expert layouts prohibit
+ * singleton regions and limit two-cell regions to avoid small-region boards
+ * that would make those difficulties too easy.
  *
  * @retval true  Puzzle generated (pz->unique reports uniqueness).
- * @retval false n out of range; pz contents undefined.
+ * @retval false Invalid arguments or no shape-valid layout found; pz contents
+ *               undefined.
  */
 bool queens_generate(queens_puzzle_t *pz, uint8_t n, uint32_t *rng);
 
@@ -134,6 +147,7 @@ typedef struct {
 } queens_hs_table_t;
 
 void queens_hs_init(queens_hs_table_t *t);
+void queens_sanitize_initials(char initials[4]);
 
 /**
  * @brief  Insert an entry into one difficulty's top-3 (ascending by time).
