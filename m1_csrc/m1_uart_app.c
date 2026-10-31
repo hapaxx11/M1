@@ -10,9 +10,8 @@
  *     stream, so the bridge cannot consume radio responses while the app reads.
  *
  * TX: transmit straight to USART1 through huart_logdb (the USART1 handle) with
- *     a blocking, bounded HAL_UART_Transmit. While the app owns the UART,
- *     vUsb2SerTask's USART forwarding is gated off before USART1 is reconfigured,
- *     so there is no DMA-TX in flight to contend with.
+ *     a blocking, bounded HAL_UART_Transmit. Before USART1 is reconfigured,
+ *     vUsb2SerTask also acknowledges a paused state with no DMA-TX in flight.
  *
  * This reuses existing, tested infrastructure and adds no new peripheral
  * bring-up. It assumes the CDC is in VCP mode (the default) — that is the mode
@@ -40,6 +39,7 @@
 volatile bool m1_uart_app_owned = false;
 volatile bool m1_uart_app_pause_requested = false;
 volatile bool m1_uart_app_bridge_paused = false;
+volatile bool m1_uart_app_tx_bridge_paused = false;
 static TaskHandle_t s_uart_app_waiter;
 
 void m1_uart_app_bridge_paused_notify(void) {
@@ -54,13 +54,17 @@ void m1_uart_app_init(uint32_t baud) {
         return;
     }
 
+    s_uart_app_waiter = xTaskGetCurrentTaskHandle();
+    m1_uart_app_pause_requested = true;
     if(ser2usb_task_hdl) {
-        s_uart_app_waiter = xTaskGetCurrentTaskHandle();
-        m1_uart_app_pause_requested = true;
         xTaskNotifyGive(ser2usb_task_hdl);
-        while(!m1_uart_app_bridge_paused) {
-            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
-        }
+    }
+    if(usb2ser_task_hdl) {
+        xTaskNotifyGive(usb2ser_task_hdl);
+    }
+    while((ser2usb_task_hdl && !m1_uart_app_bridge_paused) ||
+          (usb2ser_task_hdl && !m1_uart_app_tx_bridge_paused)) {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
     }
 
     m1_uart_app_owned = true;
@@ -84,6 +88,9 @@ void m1_uart_app_deinit(void) {
     m1_uart_app_pause_requested = false;
     if(ser2usb_task_hdl) {
         xTaskNotifyGive(ser2usb_task_hdl);
+    }
+    if(usb2ser_task_hdl) {
+        xTaskNotifyGive(usb2ser_task_hdl);
     }
     s_uart_app_waiter = NULL;
 }

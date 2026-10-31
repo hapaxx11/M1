@@ -360,6 +360,23 @@ void vUsb2SerTask(void *pvParameters)
 
   for(;;)
   {
+    if (m1_uart_app_pause_requested)
+    {
+      if (tx_cptl_usart1)
+      {
+        HAL_UART_DMAStop(&huart_logdb);
+        huart_logdb.gState = HAL_UART_STATE_READY;
+        tx_cptl_usart1 = 0;
+      }
+      m1_uart_app_tx_bridge_paused = true;
+      m1_uart_app_bridge_paused_notify();
+      while (m1_uart_app_pause_requested)
+      {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      }
+      m1_uart_app_tx_bridge_paused = false;
+      continue;
+    }
 #if 0
     /* Wait indefinitely until data arrives */
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
@@ -468,6 +485,8 @@ void vUsb2SerTask(void *pvParameters)
 
       while(bytes_remaining > 0)
       {
+        if (m1_uart_app_pause_requested) break;
+
         bytes_to_send = (bytes_remaining > CHUNK_SIZE) ? CHUNK_SIZE : bytes_remaining;
         //bytes_to_send = (bytes_remaining > M1_LOGDB_TX_BUFFER_SIZE) ? M1_LOGDB_TX_BUFFER_SIZE : bytes_remaining;
 
@@ -482,24 +501,24 @@ if (DEBUG_bytes_to_send < bytes_to_send) DEBUG_bytes_to_send = bytes_to_send;
         {
           /* Wait for DMA completion via polling with bounded timeout.
            * Using osDelay(1) keeps the task yielding and avoids busy-wait.
-           * A hard timeout prevents indefinite stall if DMA never completes. */
+           * An app claim or a hard timeout aborts DMA before reconfiguration. */
           uint32_t dma_wait_ticks = 0;
           while (tx_cptl_usart1 == 1)
           {
             osDelay(1);
             dma_wait_ticks++;
-            if (dma_wait_ticks >= (uint32_t)xMaxBlockTime)
+            if (m1_uart_app_pause_requested || dma_wait_ticks >= (uint32_t)xMaxBlockTime)
             {
-              /* DMA completion missed — abort and recover */
               HAL_UART_DMAStop(&huart_logdb);
               huart_logdb.gState = HAL_UART_STATE_READY;
               tx_cptl_usart1 = 0;
-              DEBUG_dma_timeout++;
+              if (!m1_uart_app_pause_requested) DEBUG_dma_timeout++;
               break;
             }
           }
           //osDelay(1); //osDelay(10);
 
+          if (m1_uart_app_pause_requested) break;
           current_buffer_ptr += bytes_to_send;
           bytes_remaining -= bytes_to_send;
         }

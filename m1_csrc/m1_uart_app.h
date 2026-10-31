@@ -20,6 +20,7 @@
 extern volatile bool m1_uart_app_owned;
 extern volatile bool m1_uart_app_pause_requested;
 extern volatile bool m1_uart_app_bridge_paused;
+extern volatile bool m1_uart_app_tx_bridge_paused;
 void m1_uart_app_bridge_paused_notify(void);
 
 /* Pause and acknowledge the USB bridge, claim the header UART at `baud`, and

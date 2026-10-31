@@ -64,15 +64,56 @@ void test_uart_bridge_acknowledges_pause_before_app_claims_stream(void) {
 
     const char* init = strstr(app_uart, "void m1_uart_app_init(uint32_t baud)");
     const char* request = init ? strstr(init, "m1_uart_app_pause_requested = true;") : NULL;
-    const char* wait = init ? strstr(init, "while(!m1_uart_app_bridge_paused)") : NULL;
+    const char* wait_rx = init ? strstr(init, "!m1_uart_app_bridge_paused") : NULL;
+    const char* wait_tx = init ? strstr(init, "!m1_uart_app_tx_bridge_paused") : NULL;
     const char* claim = init ? strstr(init, "m1_uart_app_owned = true;") : NULL;
     TEST_ASSERT_NOT_NULL(request);
-    TEST_ASSERT_NOT_NULL(wait);
+    TEST_ASSERT_NOT_NULL(wait_rx);
+    TEST_ASSERT_NOT_NULL(wait_tx);
     TEST_ASSERT_NOT_NULL(claim);
-    TEST_ASSERT_TRUE(request < wait);
-    TEST_ASSERT_TRUE(wait < claim);
+    TEST_ASSERT_TRUE(request < wait_rx);
+    TEST_ASSERT_TRUE(wait_rx < claim);
     TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_bridge_paused = true;"));
+    TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_tx_bridge_paused = true;"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "pdMS_TO_TICKS(20));"));
+
+    free(app_uart);
+    free(bridge);
+}
+
+void test_uart_task_handles_match_bridge_directions(void) {
+    char* tasks = read_repo_file("m1_csrc/m1_tasks.c");
+    char* bridge = read_repo_file("m1_csrc/m1_usb_cdc_msc.c");
+    TEST_ASSERT_NOT_NULL(tasks);
+    TEST_ASSERT_NOT_NULL(bridge);
+    TEST_ASSERT_NOT_NULL(strstr(tasks, "&ser2usb_task_hdl);"));
+    TEST_ASSERT_NOT_NULL(strstr(tasks, "assert(ser2usb_task_hdl!=NULL);"));
+    TEST_ASSERT_NULL(strstr(tasks, "&usb2ser_task_hdl"));
+    TEST_ASSERT_NOT_NULL(strstr(bridge, "usb2ser_task_hdl = osThreadNew(vUsb2SerTask"));
+    free(tasks);
+    free(bridge);
+}
+
+void test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration(void) {
+    char* app_uart = read_repo_file("m1_csrc/m1_uart_app.c");
+    char* bridge = read_repo_file("m1_csrc/m1_usb_cdc_msc.c");
+    TEST_ASSERT_NOT_NULL(app_uart);
+    TEST_ASSERT_NOT_NULL(bridge);
+
+    const char* init = strstr(app_uart, "void m1_uart_app_init(uint32_t baud)");
+    const char* wait = init ? strstr(init, "!m1_uart_app_tx_bridge_paused") : NULL;
+    const char* config = wait ? strstr(wait, "m1_usb_cdc_app_comconfig(baud);") : NULL;
+    TEST_ASSERT_NOT_NULL(wait);
+    TEST_ASSERT_NOT_NULL(config);
+    TEST_ASSERT_TRUE(wait < config);
+    TEST_ASSERT_NOT_NULL(strstr(init, "xTaskNotifyGive(usb2ser_task_hdl);"));
+
+    const char* task = strstr(bridge, "void vUsb2SerTask(void *pvParameters)");
+    TEST_ASSERT_NOT_NULL(task);
+    TEST_ASSERT_NOT_NULL(strstr(task, "m1_uart_app_tx_bridge_paused = true;"));
+    TEST_ASSERT_NOT_NULL(strstr(task, "m1_uart_app_pause_requested || dma_wait_ticks"));
+    TEST_ASSERT_NOT_NULL(strstr(task, "HAL_UART_DMAStop(&huart_logdb);"));
+    TEST_ASSERT_NOT_NULL(strstr(task, "if (m1_uart_app_pause_requested) break;"));
 
     free(app_uart);
     free(bridge);
@@ -168,6 +209,8 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_app_manager_releases_uart_before_unloading_elf);
     RUN_TEST(test_uart_bridge_acknowledges_pause_before_app_claims_stream);
+    RUN_TEST(test_uart_task_handles_match_bridge_directions);
+    RUN_TEST(test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration);
     RUN_TEST(test_cdc_defers_host_reconfiguration_during_uart_ownership);
     RUN_TEST(test_baud_change_keeps_uart_owned_without_bridge_handoff);
     RUN_TEST(test_keyboard_uses_text_input_and_services_protocol);
