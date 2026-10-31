@@ -8,11 +8,15 @@
 
 static pager_message_t captured[TEST_CAPTURE_CAPACITY];
 static uint8_t captured_count;
+static int test_vector_length_override = -1;
+static int test_message_start_override = -1;
 
 void setUp(void)
 {
     memset(captured, 0, sizeof(captured));
     captured_count = 0;
+    test_vector_length_override = -1;
+    test_message_start_override = -1;
 }
 
 void tearDown(void) { }
@@ -64,10 +68,10 @@ static uint8_t text_signature(const char *text)
     return (uint8_t)((~sum) & 0x7FU);
 }
 
-static uint8_t make_alpha_page(const char *text, uint8_t fragment,
+static uint8_t make_alpha_page_with_checksum(const char *text, uint8_t fragment,
                                bool continuation, uint8_t message_number,
                                uint8_t signature, uint32_t *output,
-                               uint8_t capacity)
+                               uint8_t capacity, bool valid_checksum)
 {
     if (capacity < 2U)
         return 0;
@@ -104,10 +108,22 @@ static uint8_t make_alpha_page(const char *text, uint8_t fragment,
         checksum += (output[i] >> 8) & 0xFFU;
         checksum += (output[i] >> 16) & 0x1FU;
     }
+    if (!valid_checksum)
+        checksum++;
     output[0] |= (~checksum) & 0x3FFU;
     for (uint8_t i = 0; i < count; ++i)
         output[i] = encode_word(output[i]);
     return count;
+}
+
+static uint8_t make_alpha_page(const char *text, uint8_t fragment,
+                               bool continuation, uint8_t message_number,
+                               uint8_t signature, uint32_t *output,
+                               uint8_t capacity)
+{
+    return make_alpha_page_with_checksum(text, fragment, continuation,
+                                         message_number, signature, output,
+                                         capacity, true);
 }
 
 typedef struct {
@@ -197,7 +213,8 @@ static void build_frame(test_frame_t *frame, uint16_t baud, uint32_t capcode,
         words[i] = (i & 1U) ? 0U : 0xFFFFFFFFUL;
     const uint8_t address_start = 1U;
     const uint8_t vector_start = long_address ? 3U : 2U;
-    const uint8_t message_start = vector_start + (long_address ? 2U : 1U);
+    const uint8_t message_start = test_message_start_override >= 0 ?
+        (uint8_t)test_message_start_override : vector_start + (long_address ? 2U : 1U);
     words[0] = encode_word(with_checksum(
         ((uint32_t)(address_start - 1U) << 8) | ((uint32_t)vector_start << 10)));
     if (long_address)
@@ -216,13 +233,14 @@ static void build_frame(test_frame_t *frame, uint16_t baud, uint32_t capcode,
     }
     else
     {
-        const uint8_t vector_length = type == 3U || type == 4U || type == 7U ?
-            page_count - 1U : page_count;
+        const uint8_t vector_length = test_vector_length_override >= 0 ?
+            (uint8_t)test_vector_length_override :
+            (type == 3U || type == 4U || type == 7U ? page_count - 1U : page_count);
         vector = ((uint32_t)type << 4) | ((uint32_t)message_start << 7) |
             ((uint32_t)vector_length << 14);
     }
     words[vector_start] = encode_word(with_checksum(vector));
-    if (long_address && (type == 5U || type == 0U))
+    if (long_address && (type == 5U || type == 0U || type == 3U || type == 4U || type == 7U))
     {
         words[vector_start + 1U] = page[0];
         for (uint8_t i = 1U; i < page_count; ++i)
@@ -363,6 +381,104 @@ static void test_fragmented_message_join(void)
     TEST_ASSERT_FALSE(captured[0].partial);
 }
 
+static void test_clean_copy_upgrades_partial_page(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t partial[8];
+    uint32_t clean[8];
+    const uint8_t partial_count = make_alpha_page_with_checksum(
+        "RECOVER", 3U, false, 1U, text_signature("RECOVER"), partial, 8U, false);
+    const uint8_t clean_count = make_alpha_page(
+        "RECOVER", 3U, false, 1U, text_signature("RECOVER"), clean, 8U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, partial, partial_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_TRUE(captured[0].partial);
+
+    build_frame(&frame, 1600U, 123456UL, false, 5U, clean, clean_count);
+    feed_frame(&receiver, &frame, 1600U, 2000U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+    TEST_ASSERT_FALSE(captured[1].partial);
+    feed_frame(&receiver, &frame, 1600U, 3000U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+}
+
+static void test_truncated_binary_pages_remain_distinct(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t page[40];
+    for (uint8_t i = 0; i < 40U; ++i)
+        page[i] = encode_word((uint32_t)i * 0x101UL + 1UL);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 6U, page, 40U);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_TRUE(captured[0].partial);
+
+    page[39] = encode_word((39U * 0x101UL + 1UL) ^ 0x100UL);
+    build_frame(&frame, 1600U, 123456UL, false, 6U, page, 40U);
+    feed_frame(&receiver, &frame, 1600U, 2000U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+}
+
+static void test_rejects_oversized_long_alpha_vector(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t page[8];
+    const uint8_t count = make_alpha_page("SAFE", 3U, false, 1U,
+                                          text_signature("SAFE"), page, 8U);
+    test_vector_length_override = 89;
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 0x1F9000UL + 12345UL, true, 5U, page, count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    TEST_ASSERT_EQUAL_UINT8(0U, captured_count);
+    TEST_ASSERT_EQUAL_UINT32(0U, receiver.message.ric);
+}
+
+static void test_long_numeric_page_at_phase_boundary(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t page[2] = {make_numeric_word("1234"), encode_word(0U)};
+    test_message_start_override = 87;
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 0x1F9000UL + 12345UL, true, 3U, page, 2U);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_EQUAL_MEMORY("1234", captured[0].text, 4U);
+}
+
+static void test_fragment_timeout_expires_without_new_frame(void)
+{
+    flex_receiver_t receiver;
+    flex_receiver_init(&receiver, capture_message, NULL);
+    uint32_t first[8];
+    uint32_t last[8];
+    const uint8_t first_count = make_alpha_page(
+        "HELLO ", 3U, true, 7U, text_signature("HELLO WORLD"), first, 8U);
+    const uint8_t last_count = make_alpha_page("WORLD", 0U, false, 7U,
+                                               0U, last, 8U);
+    test_frame_t frame;
+    build_frame(&frame, 1600U, 123456UL, false, 5U, first, first_count);
+    feed_frame(&receiver, &frame, 1600U, 1000U);
+    TEST_ASSERT_EQUAL_UINT8(0U, captured_count);
+
+    flex_receiver_poll(&receiver, 241001U);
+    TEST_ASSERT_EQUAL_UINT8(1U, captured_count);
+    TEST_ASSERT_TRUE(captured[0].partial);
+    TEST_ASSERT_EQUAL_STRING("HELLO [...]", captured[0].text);
+
+    build_frame(&frame, 1600U, 123456UL, false, 5U, last, last_count);
+    feed_frame(&receiver, &frame, 1600U, 242000U);
+    TEST_ASSERT_EQUAL_UINT8(2U, captured_count);
+    TEST_ASSERT_TRUE(captured[1].partial);
+    TEST_ASSERT_EQUAL_STRING("WORLD", captured[1].text);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -371,5 +487,10 @@ int main(void)
     RUN_TEST(test_alpha_3200_with_long_capcode);
     RUN_TEST(test_numeric_and_tone_pages);
     RUN_TEST(test_fragmented_message_join);
+    RUN_TEST(test_clean_copy_upgrades_partial_page);
+    RUN_TEST(test_truncated_binary_pages_remain_distinct);
+    RUN_TEST(test_rejects_oversized_long_alpha_vector);
+    RUN_TEST(test_long_numeric_page_at_phase_boundary);
+    RUN_TEST(test_fragment_timeout_expires_without_new_frame);
     return UNITY_END();
 }

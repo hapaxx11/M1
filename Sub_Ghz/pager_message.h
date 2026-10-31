@@ -26,6 +26,7 @@ typedef struct {
     uint8_t frame;
     char phase;
     bool partial;
+    uint32_t content_hash;
 } pager_message_t;
 
 #endif

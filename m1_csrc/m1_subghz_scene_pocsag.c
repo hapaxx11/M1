@@ -63,7 +63,7 @@ static void pager_scene_message(void *context, const pager_message_t *message)
     SubGhzApp *app = context;
     (void)pocsag_history_add(&app->pocsag_state->history, message,
                              app->current_freq_hz);
-    app->pocsag_state->selected_message = 0;
+    pocsag_receiver_app_state_select_newest(app->pocsag_state);
     app->need_redraw = true;
 }
 
@@ -233,6 +233,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventTick:
             if (state->radio_active)
             {
+                flex_receiver_poll(&state->flex, HAL_GetTick());
                 app->rssi = subghz_read_rssi_ext();
                 app->need_redraw = true;
             }

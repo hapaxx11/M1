@@ -53,14 +53,14 @@ static uint32_t make_numeric_word(const char *digits)
     return 0x80000000UL | (payload << 11);
 }
 
-static uint32_t make_alphanumeric_word(const char *text, uint8_t offset)
+static uint32_t make_alphanumeric_word(const char *text, uint16_t offset)
 {
     uint32_t payload = 0;
     size_t text_length = strlen(text);
     for (uint8_t i = 0; i < 20U; ++i)
     {
-        uint8_t absolute_bit = (uint8_t)(offset + i);
-        uint8_t character = (uint8_t)(absolute_bit / 7U);
+        uint16_t absolute_bit = (uint16_t)(offset + i);
+        uint16_t character = (uint16_t)(absolute_bit / 7U);
         uint8_t bit = (uint8_t)(absolute_bit % 7U);
         if (character < text_length && ((text[character] >> bit) & 1U))
             payload |= 1UL << (19U - i);
@@ -277,6 +277,102 @@ static void test_history_deduplicates_and_evicts_oldest(void)
     TEST_ASSERT_NULL(pocsag_history_get(&history, POCSAG_HISTORY_CAPACITY));
 }
 
+static void test_decodes_alphanumeric_longer_than_255(void)
+{
+    pocsag_receiver_t receiver;
+    pocsag_message_t message;
+    char long_text[261];
+    uint8_t bits[24U + 6U * (32U + 16U * 32U)];
+    uint32_t count = 0;
+    uint16_t message_word = 0;
+    memset(long_text, 'A', sizeof(long_text) - 1U);
+    long_text[sizeof(long_text) - 1U] = '\0';
+    pocsag_receiver_reset(&receiver);
+
+    for (uint8_t i = 0; i < 24U; ++i)
+        bits[count++] = (uint8_t)((i & 1U) == 0U);
+    for (uint8_t batch = 0; batch < 6U; ++batch)
+    {
+        append_word(bits, &count, TEST_SYNC_WORD);
+        for (uint8_t word = 0; word < 16U; ++word)
+        {
+            uint32_t encoded;
+            if (batch == 0U && word == 0U)
+                encoded = protect_codeword(make_address_word(0x12340U, 3U));
+            else if (message_word < 91U)
+                encoded = protect_codeword(
+                    make_alphanumeric_word(long_text, message_word * 20U));
+            else
+                encoded = protect_codeword(TEST_IDLE_WORD);
+            append_word(bits, &count, encoded);
+            if (batch != 0U || word != 0U)
+                message_word++;
+        }
+    }
+    TEST_ASSERT_TRUE(feed_stream(&receiver, bits, count, 833U));
+    TEST_ASSERT_TRUE(pocsag_receiver_take_message(&receiver, &message));
+    TEST_ASSERT_EQUAL_UINT16(260U, strlen(message.text));
+    TEST_ASSERT_EQUAL_STRING(long_text, message.text);
+}
+
+static void test_history_clean_copy_upgrades_partial_metadata(void)
+{
+    pocsag_history_t history;
+    pocsag_message_t message = {
+        .ric = 123456U,
+        .baud = 1600U,
+        .function = 5U,
+        .protocol = PAGER_PROTOCOL_FLEX,
+        .levels = 2U,
+        .cycle = 2U,
+        .frame = 9U,
+        .phase = 'A',
+        .partial = true,
+        .text = "RECOVER"
+    };
+    pocsag_history_reset(&history);
+    TEST_ASSERT_TRUE(pocsag_history_add(&history, &message, 929612500U));
+    message.partial = false;
+    message.frame = 10U;
+    TEST_ASSERT_FALSE(pocsag_history_add(&history, &message, 929612500U));
+
+    const pocsag_message_t *entry = pocsag_history_get(&history, 0);
+    TEST_ASSERT_EQUAL_UINT8(1U, history.count);
+    TEST_ASSERT_EQUAL_UINT8(2U, entry->repeat_count);
+    TEST_ASSERT_FALSE(entry->partial);
+    TEST_ASSERT_EQUAL_UINT8(10U, entry->frame);
+}
+
+static void test_history_binary_hash_distinguishes_truncated_payloads(void)
+{
+    pocsag_history_t history;
+    pocsag_message_t message = {
+        .ric = 123456U,
+        .baud = 1600U,
+        .function = 6U,
+        .protocol = PAGER_PROTOCOL_FLEX,
+        .partial = true,
+        .content_hash = 1U,
+        .text = "000001 000002"
+    };
+    pocsag_history_reset(&history);
+    TEST_ASSERT_TRUE(pocsag_history_add(&history, &message, 929612500U));
+    message.content_hash = 2U;
+    TEST_ASSERT_TRUE(pocsag_history_add(&history, &message, 929612500U));
+    TEST_ASSERT_EQUAL_UINT8(2U, history.count);
+}
+
+static void test_newest_selection_resets_detail_offset(void)
+{
+    pocsag_receiver_app_state_t state;
+    memset(&state, 0, sizeof(state));
+    state.selected_message = 4U;
+    state.detail_offset = 63U;
+    pocsag_receiver_app_state_select_newest(&state);
+    TEST_ASSERT_EQUAL_UINT8(0U, state.selected_message);
+    TEST_ASSERT_EQUAL_UINT16(0U, state.detail_offset);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -286,5 +382,9 @@ int main(void)
     RUN_TEST(test_preserves_message_when_next_address_terminates_it);
     RUN_TEST(test_app_state_refreshes_config_only_on_fresh_entry);
     RUN_TEST(test_history_deduplicates_and_evicts_oldest);
+    RUN_TEST(test_decodes_alphanumeric_longer_than_255);
+    RUN_TEST(test_history_clean_copy_upgrades_partial_metadata);
+    RUN_TEST(test_history_binary_hash_distinguishes_truncated_payloads);
+    RUN_TEST(test_newest_selection_resets_detail_offset);
     return UNITY_END();
 }

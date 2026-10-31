@@ -32,7 +32,7 @@ typedef struct {
     uint8_t codeword_index;
     uint8_t char_value;
     uint8_t char_bit_count;
-    uint8_t text_length;
+    uint16_t text_length;
     uint8_t function;
     uint32_t ric;
     bool previous_bit;
@@ -73,6 +73,7 @@ void pocsag_receiver_app_state_enter(pocsag_receiver_app_state_t *state,
                                      uint32_t custom_frequency_hz,
                                      uint8_t frequency_index,
                                      uint8_t modulation_index);
+void pocsag_receiver_app_state_select_newest(pocsag_receiver_app_state_t *state);
 
 void pocsag_history_reset(pocsag_history_t *history);
 bool pocsag_history_add(pocsag_history_t *history,

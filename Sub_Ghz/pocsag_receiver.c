@@ -418,6 +418,14 @@ void pocsag_receiver_app_state_enter(pocsag_receiver_app_state_t *state,
     state->saved_modulation_index = modulation_index;
 }
 
+void pocsag_receiver_app_state_select_newest(pocsag_receiver_app_state_t *state)
+{
+    if (state == NULL)
+        return;
+    state->selected_message = 0;
+    state->detail_offset = 0;
+}
+
 void pocsag_history_reset(pocsag_history_t *history)
 {
     if (history != NULL)
@@ -436,13 +444,26 @@ bool pocsag_history_add(pocsag_history_t *history,
         uint8_t index = (uint8_t)((history->next + POCSAG_HISTORY_CAPACITY -
                                    1U - i) % POCSAG_HISTORY_CAPACITY);
         pocsag_message_t *entry = &history->entries[index];
+        const bool binary = entry->protocol == PAGER_PROTOCOL_FLEX &&
+                            entry->function == 6U;
+        const bool same_content = binary ?
+            entry->content_hash == message->content_hash :
+            strncmp(entry->text, message->text, POCSAG_MESSAGE_TEXT_MAX) == 0;
         if (entry->protocol == message->protocol && entry->ric == message->ric &&
             entry->function == message->function && entry->baud == message->baud &&
-            strncmp(entry->text, message->text, POCSAG_MESSAGE_TEXT_MAX) == 0)
+            same_content)
         {
             if (entry->repeat_count < UINT8_MAX)
                 entry->repeat_count++;
             entry->frequency_hz = frequency_hz;
+            if (entry->partial && !message->partial)
+            {
+                entry->partial = false;
+                entry->cycle = message->cycle;
+                entry->frame = message->frame;
+                entry->phase = message->phase;
+                entry->content_hash = message->content_hash;
+            }
             return false;
         }
     }

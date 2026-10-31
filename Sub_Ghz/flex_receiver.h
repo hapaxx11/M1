@@ -25,6 +25,7 @@ typedef struct {
     uint32_t hash;
     uint32_t tick;
     uint32_t capcode;
+    bool partial;
 } flex_seen_page_t;
 
 typedef struct {
@@ -79,6 +80,8 @@ typedef struct {
     uint8_t alpha_signature;
     uint32_t alpha_signature_sum;
     uint32_t now_ms;
+    bool page_truncated;
+    uint32_t page_hash;
 } flex_receiver_t;
 
 void flex_receiver_init(flex_receiver_t *receiver,
@@ -89,6 +92,7 @@ void flex_receiver_feed(flex_receiver_t *receiver, bool level,
                         uint16_t duration_us, uint32_t now_ms);
 void flex_receiver_feed_symbol(flex_receiver_t *receiver, uint8_t symbol,
                                uint32_t now_ms);
+void flex_receiver_poll(flex_receiver_t *receiver, uint32_t now_ms);
 void flex_receiver_flush_fragments(flex_receiver_t *receiver);
 
 #endif

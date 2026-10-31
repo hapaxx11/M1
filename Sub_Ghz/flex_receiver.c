@@ -317,7 +317,7 @@ static uint32_t flex_text_hash(uint32_t capcode, uint8_t type, const char *text)
 }
 
 static bool flex_seen_check(flex_receiver_t *receiver, uint32_t hash,
-                            uint32_t capcode)
+                            uint32_t capcode, bool partial)
 {
     for (uint8_t i = 0; i < FLEX_SEEN_PAGES; ++i)
     {
@@ -325,8 +325,11 @@ static bool flex_seen_check(flex_receiver_t *receiver, uint32_t hash,
         if (seen->hash == hash && seen->capcode == capcode &&
             receiver->now_ms - seen->tick < FLEX_DUPLICATE_WINDOW_MS)
         {
+            const bool was_partial = seen->partial;
             seen->tick = receiver->now_ms;
-            return true;
+            if (!partial)
+                seen->partial = false;
+            return was_partial ? partial : true;
         }
     }
 
@@ -334,16 +337,21 @@ static bool flex_seen_check(flex_receiver_t *receiver, uint32_t hash,
     seen->hash = hash;
     seen->capcode = capcode;
     seen->tick = receiver->now_ms;
+    seen->partial = partial;
     receiver->seen_next = (receiver->seen_next + 1U) % FLEX_SEEN_PAGES;
     return false;
 }
 
 static void flex_emit_page(flex_receiver_t *receiver)
 {
-    const uint32_t hash = flex_text_hash(receiver->message.ric,
-                                         receiver->message.function,
-                                         receiver->message.text);
-    if (flex_seen_check(receiver, hash, receiver->message.ric))
+    const uint32_t hash = receiver->message.function == 6U &&
+                          receiver->page_hash != 0U ?
+        receiver->page_hash : flex_text_hash(receiver->message.ric,
+                                             receiver->message.function,
+                                             receiver->message.text);
+    receiver->message.content_hash = hash;
+    if (flex_seen_check(receiver, hash, receiver->message.ric,
+                        receiver->message.partial))
         return;
     if (receiver->callback != NULL)
         receiver->callback(receiver->callback_context, &receiver->message);
@@ -398,8 +406,11 @@ static bool flex_parse_numeric(flex_receiver_t *receiver, const uint32_t *words,
     static const char flex_bcd[] = "0123456789 U -][";
     const uint8_t first = (vector >> 7) & 0x7FU;
     const uint16_t last = first + ((vector >> 14) & 0x07U);
-    if (last >= FLEX_PHASE_WORDS)
+    if ((long_data_index == FLEX_NO_WORD && last >= FLEX_PHASE_WORDS) ||
+        (long_data_index != FLEX_NO_WORD && last > FLEX_PHASE_WORDS))
+    {
         return false;
+    }
 
     uint8_t order[FLEX_NUMERIC_MAX_WORDS];
     uint8_t count = 0;
@@ -470,14 +481,40 @@ static bool flex_parse_tone(flex_receiver_t *receiver, uint32_t vector,
     return true;
 }
 
+static uint32_t flex_binary_hash(uint32_t capcode, uint8_t type,
+                                 const uint32_t *words, uint8_t first,
+                                 uint8_t last)
+{
+    uint32_t hash = 2166136261UL;
+    hash = (hash ^ capcode) * 16777619UL;
+    hash = (hash ^ type) * 16777619UL;
+    for (uint8_t i = first; i <= last; ++i)
+    {
+        for (uint8_t byte = 0; byte < 3U; ++byte)
+            hash = (hash ^ ((words[i] >> (byte * 8U)) & 0xFFU)) * 16777619UL;
+    }
+    return hash | 1U;
+}
+
 static bool flex_parse_binary(flex_receiver_t *receiver, const uint32_t *words,
                               const bool *valid, uint8_t first, uint8_t last)
 {
     if (!flex_word_range_valid(valid, first, last))
         return false;
     flex_start_text(receiver);
+    receiver->page_truncated = false;
+    receiver->page_hash = flex_binary_hash(receiver->message.ric,
+                                           receiver->message.function,
+                                           words, first, last);
     for (uint8_t i = first; i <= last; ++i)
     {
+        const size_t needed = i == first ? 6U : 7U;
+        if (receiver->text_length + needed >= PAGER_MESSAGE_TEXT_MAX)
+        {
+            receiver->page_truncated = true;
+            flex_append_string(receiver, FLEX_TRUNCATION_MARK);
+            break;
+        }
         char encoded[10];
         (void)snprintf(encoded, sizeof(encoded), "%s%06lX",
                        i == first ? "" : " ", (unsigned long)words[i]);
@@ -551,6 +588,14 @@ static void flex_fragment_flush_expired(flex_receiver_t *receiver)
     }
 }
 
+void flex_receiver_poll(flex_receiver_t *receiver, uint32_t now_ms)
+{
+    if (receiver == NULL)
+        return;
+    receiver->now_ms = now_ms;
+    flex_fragment_flush_expired(receiver);
+}
+
 void flex_receiver_flush_fragments(flex_receiver_t *receiver)
 {
     if (receiver == NULL)
@@ -599,6 +644,7 @@ static void flex_fragment_add(flex_receiver_t *receiver, uint32_t capcode,
                               uint8_t fragment, bool continuation,
                               char phase)
 {
+    flex_fragment_flush_expired(receiver);
     char part_text[PAGER_MESSAGE_TEXT_MAX];
     (void)snprintf(part_text, sizeof(part_text), "%s", receiver->message.text);
     const bool suspect = receiver->message.partial;
@@ -781,11 +827,14 @@ static void flex_decode_phase(flex_receiver_t *receiver, uint32_t *words,
         uint8_t first = (vector >> 7) & 0x7FU;
         const uint8_t length = numeric ? ((vector >> 14) & 0x07U) + 1U :
             (vector >> 14) & 0x7FU;
-        const uint8_t field_words = alpha && long_address && length > 0U ?
+        const uint8_t field_words = (alpha || numeric) && long_address && length > 0U ?
             length - 1U : length;
         uint16_t last = first + field_words - 1U;
-        if (length == 0U || (field_words > 0U && last >= FLEX_PHASE_WORDS))
+        if (length == 0U || length > FLEX_PHASE_WORDS ||
+            (field_words > 0U && last >= FLEX_PHASE_WORDS))
+        {
             continue;
+        }
 
         const uint32_t *page_words = words;
         const bool *page_valid = valid;
@@ -806,6 +855,10 @@ static void flex_decode_phase(flex_receiver_t *receiver, uint32_t *words,
 
         const bool checksum_valid = !alpha ||
             flex_alpha_checksum_valid(page_words, first, (uint8_t)last);
+        receiver->page_hash = 0U;
+        receiver->page_truncated = false;
+        receiver->message.ric = capcode;
+        receiver->message.function = type;
         bool parsed;
         if (numeric)
         {
@@ -826,7 +879,7 @@ static void flex_decode_phase(flex_receiver_t *receiver, uint32_t *words,
             continue;
 
         flex_prepare_message(receiver, capcode, type, phase, receiver->frame,
-                             !checksum_valid);
+                             !checksum_valid || receiver->page_truncated);
         if (alpha && checksum_valid)
         {
             const uint32_t header = page_words[first];
