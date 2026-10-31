@@ -365,6 +365,20 @@ stay on `spi_AT_send_recv_bin`. ESP-NOW (`m1_espnow_hal.c`) is the first
 consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
 `m1_esp32_active_transport()`.
 
+#### Native streaming HTTP (`m1_esp32_rpc_http.c/.h`)
+
+OTA release listings and firmware downloads no longer send ESP-AT commands to
+the native brain. Brain firmware with `M1_CAP_HTTP` (bit 28) implements
+`NET_HTTP_OPEN` (`0x0800`), `NET_HTTP_READ` (`0x0801`), and `NET_HTTP_CLOSE`
+(`0x0802`). OPEN carries the Accept selector, timeout, and URL; its response
+returns a separate network result, HTTP status, and optional content length.
+READ transfers at most 1024 body bytes per call (an empty response means EOF),
+so the ESP32 never buffers a complete release image and the STM32 can stream
+it directly to SD. The brain's ESP-IDF HTTP client handles TLS, redirects, and
+chunked transfer decoding. Older brain builds NAK OPEN as unsupported, which
+the M1 reports as an ESP32 compatibility error instead of a DNS timeout. The
+legacy raw TCP/SSL AT path remains in use for CD3-AT and other AT firmware.
+
 > **Feature-call diagnostics (issue #719 Phase 2).** A successful CD3 probe
 > only proves the tiny single-frame `SYS_PING`/`SYS_GET_STATUS` exchange
 > works — it does not prove a bulk-list feature call (`WIFI_SCAN`,

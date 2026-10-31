@@ -4,7 +4,7 @@
  * m1_http_client.c
  *
  * Reusable HTTP client module for M1.
- * Uses ESP32-C6 AT commands for HTTP/HTTPS communication.
+ * Native CD3 uses M1_RPC; legacy firmware uses ESP32-C6 AT commands.
  *
  * M1 Project
  */
@@ -18,6 +18,8 @@
 #include "main.h"
 #include "m1_http_client.h"
 #include "m1_wifi.h"
+#include "m1_esp32_rpc.h"
+#include "m1_esp32_rpc_http.h"
 #include "m1_esp32_hal.h"
 #include "m1_compile_cfg.h"
 #include "m1_file_browser.h"
@@ -106,6 +108,8 @@ const char *http_status_str(http_status_t status)
 		case HTTP_ERR_CANCELLED:          return "Cancelled";
 		case HTTP_ERR_INVALID_ARG:        return "Internal request error";
 		case HTTP_ERR_PARSE_FAIL:         return "Bad response";
+		case HTTP_ERR_NO_MEM:             return "ESP32 out of memory";
+		case HTTP_ERR_UNSUPPORTED_TRANSPORT: return "ESP32 HTTP unsupported";
 		default:                          return NULL;
 	}
 }
@@ -226,6 +230,9 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
+
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+		return m1_esp32_rpc_http_get(url, response_buf, buf_size, timeout_sec);
 
 	/* Parse URL */
 	if (!parse_url(url, host, sizeof(host), &port, path, sizeof(path), &is_https))
@@ -1079,6 +1086,9 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
+
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+		return m1_esp32_rpc_http_download_to_file(url, sd_path, progress_cb, timeout_sec);
 
 retry_with_redirect:
 	if (redirects > HTTP_MAX_REDIRECTS)

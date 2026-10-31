@@ -35,6 +35,8 @@ const char *http_status_str(http_status_t status)
 		case HTTP_ERR_CANCELLED:          return "Cancelled";
 		case HTTP_ERR_INVALID_ARG:        return "Internal request error";
 		case HTTP_ERR_PARSE_FAIL:         return "Bad response";
+		case HTTP_ERR_NO_MEM:             return "ESP32 out of memory";
+		case HTTP_ERR_UNSUPPORTED_TRANSPORT: return "ESP32 HTTP unsupported";
 		default:                          return NULL;
 	}
 }
