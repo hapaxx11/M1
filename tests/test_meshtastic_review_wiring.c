@@ -196,15 +196,28 @@ void test_settings_ensure_parent_before_child_directory(void) {
 
 void test_snr_is_preserved_as_float_db(void) {
     char* state = read_repo_file("apps/meshtastic/src/mesh_app.h");
+    char* roster_header = read_repo_file("apps/meshtastic/src/roster.h");
+    char* roster = read_repo_file("apps/meshtastic/src/roster.c");
     char* protocol = read_repo_file("apps/meshtastic/src/protocol.c");
     char* gui = read_repo_file("apps/meshtastic/src/gui.c");
     TEST_ASSERT_NOT_NULL(state);
+    TEST_ASSERT_NOT_NULL(roster_header);
+    TEST_ASSERT_NOT_NULL(roster);
     TEST_ASSERT_NOT_NULL(protocol);
     TEST_ASSERT_NOT_NULL(gui);
     TEST_ASSERT_NOT_NULL(strstr(state, "float last_rx_snr;"));
+    TEST_ASSERT_NOT_NULL(strstr(state, "float last_snr;"));
+    TEST_ASSERT_NOT_NULL(strstr(roster_header, "uint32_t node_id, float snr, int16_t rssi"));
+    TEST_ASSERT_NOT_NULL(strstr(roster, "void roster_add_node(ZeroMeshApp* app, uint32_t node_id, float snr"));
+    TEST_ASSERT_NOT_NULL(strstr(roster, "selected->last_snr * 10.0f"));
+    TEST_ASSERT_NOT_NULL(strstr(roster, "Signal: SNR %c%d.%d / RSSI %d"));
     TEST_ASSERT_NOT_NULL(strstr(protocol, "app->last_rx_snr = p->rx_snr;"));
+    TEST_ASSERT_NOT_NULL(strstr(protocol, "roster_add_node(app, sender_id, p->rx_snr, p->rx_rssi);"));
+    TEST_ASSERT_NOT_NULL(strstr(protocol, "roster_add_node(app, n.num, n.snr, 0);"));
     TEST_ASSERT_NOT_NULL(strstr(gui, "app->last_rx_snr * 10.0f"));
     TEST_ASSERT_NULL(strstr(gui, "last_rx_snr * 10) / 4"));
+    free(roster);
+    free(roster_header);
     free(state);
     free(protocol);
     free(gui);

@@ -114,7 +114,7 @@ static void draw_wrapped_text_in_bubble(
     }
 }
 
-void roster_add_node(ZeroMeshApp* app, uint32_t node_id, int8_t snr, int16_t rssi) {
+void roster_add_node(ZeroMeshApp* app, uint32_t node_id, float snr, int16_t rssi) {
     if(!app || node_id == 0 || node_id == 0xFFFFFFFF) return;
 
     furi_mutex_acquire(app->lock, FuriWaitForever);
@@ -519,7 +519,12 @@ void render_roster(Canvas* canvas, ZeroMeshApp* app) {
         snprintf(buf, sizeof(buf), "Last Seen: %lus ago", (unsigned long)diff);
         canvas_draw_str(canvas, 4, 24, buf);
 
-        snprintf(buf, sizeof(buf), "Signal: SNR %d / RSSI %d", selected->last_snr, selected->last_rssi);
+        int snr10 = (int)(selected->last_snr * 10.0f);
+        char snr_sign = snr10 < 0 ? 0x2D : 0x20;
+        int abs_snr10 = snr10 < 0 ? -snr10 : snr10;
+        snprintf(
+            buf, sizeof(buf), "Signal: SNR %c%d.%d / RSSI %d",
+            snr_sign, abs_snr10 / 10, abs_snr10 % 10, selected->last_rssi);
         canvas_draw_str(canvas, 4, 36, buf);
 
         if(selected->has_telemetry) {

@@ -402,7 +402,7 @@ static void decode_fromradio(ZeroMeshApp* app, const uint8_t* frame, size_t len)
                     meshtastic_NodeInfo n = meshtastic_NodeInfo_init_default;
                     bind_user_names(&n.user, &ssink, &lsink);
                     if(pb_decode(&sub, meshtastic_NodeInfo_fields, &n) && n.num) {
-                        roster_add_node(app, n.num, (int8_t)n.snr, 0);
+                        roster_add_node(app, n.num, n.snr, 0);
                         roster_update_name(app, n.num, sn, ln);
                         if(app->my_node_num && n.num == app->my_node_num) {
                             if(ln[0]) strncpy(app->my_long_name, ln, sizeof(app->my_long_name) - 1);

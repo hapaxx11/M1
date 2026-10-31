@@ -352,7 +352,7 @@ void vUsb2SerTask(void *pvParameters)
   size_t bytes_to_send;
   size_t bytes_remaining;
   uint8_t* current_buffer_ptr;
-  HAL_StatusTypeDef dma_status;
+  HAL_StatusTypeDef dma_status = HAL_ERROR;
   uint8_t pause_before_dma;
   enCdcMode prev_cdc_mode = m1_usbcdc_mode;
 

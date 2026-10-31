@@ -72,7 +72,7 @@ typedef enum {
 typedef struct {
     uint32_t node_id;
     uint32_t last_seen;
-    int8_t last_snr;
+    float last_snr;
     int16_t last_rssi;
     uint8_t battery_level;
     float voltage;

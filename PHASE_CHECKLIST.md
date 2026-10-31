@@ -12,11 +12,11 @@
 - **Commit**: `Serialize UART DMA handoff`
 
 ### Phase 2 — Roster SNR precision
-- **Description**: Preserve fractional SNR in roster storage and details display with regression coverage.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Description**: Preserve fractional SNR in roster storage and details display with regression coverage and a changelog fragment.
+- **Status**: ✅ Complete
+- **Commit**: `Preserve Meshtastic roster SNR`
 
 ### Phase 3 — Final verification
 - **Description**: Run targeted tests/builds and remove this temporary checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
