@@ -352,6 +352,8 @@ void vUsb2SerTask(void *pvParameters)
   size_t bytes_to_send;
   size_t bytes_remaining;
   uint8_t* current_buffer_ptr;
+  HAL_StatusTypeDef dma_status;
+  uint8_t pause_before_dma;
   enCdcMode prev_cdc_mode = m1_usbcdc_mode;
 
   UNUSED(pvParameters);
@@ -494,10 +496,19 @@ if (DEBUG_bytes_to_send < bytes_to_send) DEBUG_bytes_to_send = bytes_to_send;
 
         // Start USART1 transmission using GPDMA1 channel 1
 
-        tx_cptl_usart1 = 1;
-        __DSB();  /* Ensure flag is visible before DMA starts */
+        taskENTER_CRITICAL();
+        pause_before_dma = m1_uart_app_pause_requested || m1_uart_app_owned;
+        if (!pause_before_dma)
+        {
+          tx_cptl_usart1 = 1;
+          __DSB();  /* Ensure flag is visible before DMA starts */
+          dma_status = HAL_UART_Transmit_DMA(&huart_logdb, current_buffer_ptr, bytes_to_send);
+        }
+        taskEXIT_CRITICAL();
 
-        if (HAL_UART_Transmit_DMA(&huart_logdb, current_buffer_ptr, bytes_to_send) == HAL_OK)
+        if (pause_before_dma) break;
+
+        if (dma_status == HAL_OK)
         {
           /* Wait for DMA completion via polling with bounded timeout.
            * Using osDelay(1) keeps the task yielding and avoids busy-wait.

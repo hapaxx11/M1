@@ -67,12 +67,17 @@ void test_uart_bridge_acknowledges_pause_before_app_claims_stream(void) {
     const char* wait_rx = init ? strstr(init, "!m1_uart_app_bridge_paused") : NULL;
     const char* wait_tx = init ? strstr(init, "!m1_uart_app_tx_bridge_paused") : NULL;
     const char* claim = init ? strstr(init, "m1_uart_app_owned = true;") : NULL;
+    const char* pause_lock = init ? strstr(init, "taskENTER_CRITICAL();\n    m1_uart_app_pause_requested = true;") : NULL;
+    const char* pause_unlock = pause_lock ? strstr(pause_lock, "taskEXIT_CRITICAL();") : NULL;
     TEST_ASSERT_NOT_NULL(request);
     TEST_ASSERT_NOT_NULL(wait_rx);
     TEST_ASSERT_NOT_NULL(wait_tx);
     TEST_ASSERT_NOT_NULL(claim);
+    TEST_ASSERT_NOT_NULL(pause_lock);
+    TEST_ASSERT_NOT_NULL(pause_unlock);
     TEST_ASSERT_TRUE(request < wait_rx);
     TEST_ASSERT_TRUE(wait_rx < claim);
+    TEST_ASSERT_TRUE(pause_lock < pause_unlock);
     TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_bridge_paused = true;"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "m1_uart_app_tx_bridge_paused = true;"));
     TEST_ASSERT_NOT_NULL(strstr(bridge, "pdMS_TO_TICKS(20));"));
@@ -114,6 +119,14 @@ void test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration(void) {
     TEST_ASSERT_NOT_NULL(strstr(task, "m1_uart_app_pause_requested || dma_wait_ticks"));
     TEST_ASSERT_NOT_NULL(strstr(task, "HAL_UART_DMAStop(&huart_logdb);"));
     TEST_ASSERT_NOT_NULL(strstr(task, "if (m1_uart_app_pause_requested) break;"));
+    const char* dma_gate = strstr(task, "pause_before_dma = m1_uart_app_pause_requested || m1_uart_app_owned;");
+    const char* dma_start = dma_gate ? strstr(dma_gate, "HAL_UART_Transmit_DMA(&huart_logdb") : NULL;
+    const char* dma_gate_end = dma_gate ? strstr(dma_gate, "taskEXIT_CRITICAL();") : NULL;
+    TEST_ASSERT_NOT_NULL(dma_gate);
+    TEST_ASSERT_NOT_NULL(dma_start);
+    TEST_ASSERT_NOT_NULL(dma_gate_end);
+    TEST_ASSERT_TRUE(dma_gate < dma_start);
+    TEST_ASSERT_TRUE(dma_start < dma_gate_end);
 
     free(app_uart);
     free(bridge);

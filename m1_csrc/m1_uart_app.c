@@ -55,7 +55,9 @@ void m1_uart_app_init(uint32_t baud) {
     }
 
     s_uart_app_waiter = xTaskGetCurrentTaskHandle();
+    taskENTER_CRITICAL();
     m1_uart_app_pause_requested = true;
+    taskEXIT_CRITICAL();
     if(ser2usb_task_hdl) {
         xTaskNotifyGive(ser2usb_task_hdl);
     }
@@ -84,8 +86,10 @@ void m1_uart_app_deinit(void) {
     if(was_owned && h_uart_rx_streambuf) {
         xStreamBufferReset(h_uart_rx_streambuf);
     }
+    taskENTER_CRITICAL();
     m1_uart_app_owned = false;
     m1_uart_app_pause_requested = false;
+    taskEXIT_CRITICAL();
     if(ser2usb_task_hdl) {
         xTaskNotifyGive(ser2usb_task_hdl);
     }
