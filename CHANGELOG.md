@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5.2] - 2026-10-31
+
+### Fixed
+
+- **Sub-GHz: Weather Station button labels** — Removed an overlapping BACK hint so the bottom action buttons remain readable.
+
 ## [0.9.5.1] - 2026-10-31
 
 ### Added
