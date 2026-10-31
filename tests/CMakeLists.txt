@@ -3499,6 +3499,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_weather_parse COMMAND test_subghz_weather_parse)
 
+# ── Weather Station button-bar layout regression ──
+add_executable(test_weather_station_ux
+    test_weather_station_ux.c
+)
+target_compile_definitions(test_weather_station_ux PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_weather_station_ux PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_weather_station_ux PRIVATE sanitizers)
+endif()
+add_test(NAME weather_station_ux COMMAND test_weather_station_ux)
+
 # ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c
