@@ -257,7 +257,7 @@ The Amiibo master-key re-signing feature includes MIT-licensed and public-domain
 components and applies only to the files listed in that section.
 
 Other firmware components not covered by the third-party notices in this document were
-independently developed by Monstatek.
+independently developed.
 
 ---
 
