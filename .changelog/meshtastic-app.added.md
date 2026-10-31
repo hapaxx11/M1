@@ -1,1 +1,0 @@
-**Meshtastic external app** — Added a bundled UART Meshtastic client with messaging, node roster, signal and telemetry views, notifications, and node configuration; firmware builds now produce `m1-meshtastic.m1app` and expose the required header-UART app API.
