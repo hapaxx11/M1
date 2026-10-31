@@ -4840,7 +4840,6 @@ void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
         {
             u8g2_DrawStr(&m1_u8g2, 2, 30, "Listening for sensors");
             u8g2_DrawStr(&m1_u8g2, 2, 42, "no sensors yet ...");
-            u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
         }
         else
         {

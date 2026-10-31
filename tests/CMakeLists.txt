@@ -3499,6 +3499,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_weather_parse COMMAND test_subghz_weather_parse)
 
+# ── Weather Station button-bar layout regression ──
+add_executable(test_weather_station_ux
+    test_weather_station_ux.c
+)
+target_compile_definitions(test_weather_station_ux PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_weather_station_ux PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_weather_station_ux PRIVATE sanitizers)
+endif()
+add_test(NAME weather_station_ux COMMAND test_weather_station_ux)
+
 # ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c
@@ -4506,3 +4519,104 @@ if(TARGET sanitizers)
     target_link_libraries(test_diag_boot_no_logging PRIVATE sanitizers)
 endif()
 add_test(NAME diag_boot_no_logging COMMAND test_diag_boot_no_logging)
+
+# ------------------------------------------------------------------
+# Module under test: Meshtastic serial stream framing
+# ------------------------------------------------------------------
+add_executable(test_meshtastic_framing
+    test_meshtastic_framing.c
+    ${M1_ROOT}/apps/meshtastic/src/meshtastic_framing.c
+)
+target_include_directories(test_meshtastic_framing PRIVATE
+    ${M1_ROOT}/apps/meshtastic/src
+)
+target_link_libraries(test_meshtastic_framing PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_meshtastic_framing PRIVATE sanitizers)
+endif()
+add_test(NAME meshtastic_framing COMMAND test_meshtastic_framing)
+
+# Meshtastic protocol review regressions: selected channel serialization,
+# secure-key entropy failure handling, channel response callback decoding.
+file(GLOB MESHTASTIC_PROTO_SOURCES CONFIGURE_DEPENDS
+    ${M1_ROOT}/apps/meshtastic/lib/meshtastic_api/meshtastic/*.pb.c
+)
+add_executable(test_meshtastic_review
+    test_meshtastic_review.c
+    ${M1_ROOT}/apps/meshtastic/src/protocol.c
+    ${M1_ROOT}/apps/meshtastic/lib/nanopb/pb_common.c
+    ${M1_ROOT}/apps/meshtastic/lib/nanopb/pb_decode.c
+    ${M1_ROOT}/apps/meshtastic/lib/nanopb/pb_encode.c
+    ${MESHTASTIC_PROTO_SOURCES}
+)
+target_include_directories(test_meshtastic_review PRIVATE
+    ${M1_ROOT}/apps/meshtastic
+    ${M1_ROOT}/apps/meshtastic/include
+    ${M1_ROOT}/apps/meshtastic/src
+    ${M1_ROOT}/apps/meshtastic/lib/nanopb
+    ${M1_ROOT}/apps/meshtastic/lib/meshtastic_api
+)
+if(MSVC)
+    target_compile_options(test_meshtastic_review PRIVATE /Gy /Gw)
+    target_link_options(test_meshtastic_review PRIVATE /OPT:REF)
+else()
+    target_compile_options(test_meshtastic_review PRIVATE -ffunction-sections -fdata-sections)
+    target_link_options(test_meshtastic_review PRIVATE -Wl,--gc-sections)
+endif()
+target_link_libraries(test_meshtastic_review PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_meshtastic_review PRIVATE sanitizers)
+endif()
+add_test(NAME meshtastic_review COMMAND test_meshtastic_review)
+
+# Meshtastic notification sequencing is tick-driven so it never blocks the
+# app's UART polling loop while tones and LED alerts are playing.
+add_executable(test_meshtastic_notify
+    test_meshtastic_notify.c
+    ${M1_ROOT}/apps/meshtastic/src/notify.c
+    ${M1_ROOT}/apps/meshtastic/src/rtttl.c
+)
+target_include_directories(test_meshtastic_notify PRIVATE
+    ${M1_ROOT}/apps/meshtastic
+    ${M1_ROOT}/apps/meshtastic/include
+    ${M1_ROOT}/apps/meshtastic/src
+    ${M1_ROOT}/apps/meshtastic/lib/nanopb
+    ${M1_ROOT}/apps/meshtastic/lib/meshtastic_api
+)
+target_link_libraries(test_meshtastic_notify PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_meshtastic_notify PRIVATE sanitizers)
+endif()
+add_test(NAME meshtastic_notify COMMAND test_meshtastic_notify)
+
+# Secure random bytes must fail closed instead of using the legacy rand()
+# fallback when the STM32 TRNG reports an entropy error.
+add_executable(test_m1_rng_secure
+    test_m1_rng_secure.c
+    ${M1_ROOT}/m1_csrc/m1_rng.c
+)
+target_include_directories(test_m1_rng_secure BEFORE PRIVATE
+    ${STUBS_DIR}/rng
+)
+target_include_directories(test_m1_rng_secure PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_m1_rng_secure PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_m1_rng_secure PRIVATE sanitizers)
+endif()
+add_test(NAME m1_rng_secure COMMAND test_m1_rng_secure)
+
+# Firmware wiring regressions for UART ownership cleanup/handoff, keyboard
+# service cadence, settings directories, SNR units, and vendored license text.
+add_executable(test_meshtastic_review_wiring
+    test_meshtastic_review_wiring.c
+)
+target_compile_definitions(test_meshtastic_review_wiring PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_meshtastic_review_wiring PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_meshtastic_review_wiring PRIVATE sanitizers)
+endif()
+add_test(NAME meshtastic_review_wiring COMMAND test_meshtastic_review_wiring)

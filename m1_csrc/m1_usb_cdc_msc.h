@@ -43,7 +43,8 @@ typedef enum
 #define USB_RX_BUF_SIZE         1024  //128 //512 //1024  //(USB_FS_CHUNK_SIZE * 8)
 #define USB_TX_BUF_SIZE         1024  //(USB_FS_CHUNK_SIZE * 8)
 
-#define RXSTREAMBUF_UART_SIZE   256
+/* 2 KB FreeRTOS-heap allocation absorbs multi-KB Meshtastic config bursts. */
+#define RXSTREAMBUF_UART_SIZE   2048
 #define RXSTREAMBUF_USB_SIZE    2048 //8192 //4096 //2048 //USB_RX_BUF_SIZE*2
 
 /*********************************************/
@@ -83,6 +84,7 @@ void USB_DRD_FS_IRQHandler(void);
 void CDC_Signal_Next_Tx(void);
 void m1_usb_cdc_comdefault(void);
 void m1_usb_cdc_comconfig(void);
+void m1_usb_cdc_app_comconfig(uint32_t baud);
 
 /*********************************************/
 // USB MSC
@@ -103,4 +105,3 @@ static inline int8_t m1_usb_get_current_mode(void) { return m1_USB_CDC_ready; }
 #endif
 
 #endif /* M1_USB_CDC_MSC_H_ */
-

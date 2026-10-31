@@ -51,6 +51,7 @@ See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord 
 | `M1_Hapax_v{ver}.bin` | Raw binary |
 | `M1_Hapax_v{ver}.hex` | Intel HEX |
 | `M1_Hapax_v{ver}_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
+| `apps/meshtastic/m1-meshtastic.m1app` | Meshtastic external app (under `build/`) |
 
 ## Coding Standards
 

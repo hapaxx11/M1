@@ -21,6 +21,7 @@
 #include "m1_cli.h"
 #include "m1_compile_cfg.h"
 #include "m1_sdcard.h"
+#include "m1_uart_app.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -264,11 +265,23 @@ void vSer2UsbTask(void *pvParameters)
 
   for(;;)
   {
-    /* Read data from the USART RX Stream Buffer (blocking) */
+    if (m1_uart_app_pause_requested)
+    {
+      m1_uart_app_bridge_paused = true;
+      m1_uart_app_bridge_paused_notify();
+      while (m1_uart_app_pause_requested)
+      {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      }
+      m1_uart_app_bridge_paused = false;
+      continue;
+    }
+    /* A finite wait lets the app pause and acknowledge the bridge before it
+     * claims the stream buffer. */
     received_bytes = xStreamBufferReceive(h_uart_rx_streambuf,
                                           (void *)usb_tx_temp_buffer,
                                           sizeof(usb_tx_temp_buffer),
-                                          portMAX_DELAY);
+                                          pdMS_TO_TICKS(20));
     if (received_bytes > 0)
     {
       /* Wait for previous USB transfer to complete (return semaphore in TxCpltCallback) */
@@ -339,6 +352,8 @@ void vUsb2SerTask(void *pvParameters)
   size_t bytes_to_send;
   size_t bytes_remaining;
   uint8_t* current_buffer_ptr;
+  HAL_StatusTypeDef dma_status = HAL_ERROR;
+  uint8_t pause_before_dma;
   enCdcMode prev_cdc_mode = m1_usbcdc_mode;
 
   UNUSED(pvParameters);
@@ -347,6 +362,23 @@ void vUsb2SerTask(void *pvParameters)
 
   for(;;)
   {
+    if (m1_uart_app_pause_requested)
+    {
+      if (tx_cptl_usart1)
+      {
+        HAL_UART_DMAStop(&huart_logdb);
+        huart_logdb.gState = HAL_UART_STATE_READY;
+        tx_cptl_usart1 = 0;
+      }
+      m1_uart_app_tx_bridge_paused = true;
+      m1_uart_app_bridge_paused_notify();
+      while (m1_uart_app_pause_requested)
+      {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      }
+      m1_uart_app_tx_bridge_paused = false;
+      continue;
+    }
 #if 0
     /* Wait indefinitely until data arrives */
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
@@ -448,11 +480,15 @@ void vUsb2SerTask(void *pvParameters)
       }
 #endif /* M1_APP_RPC_ENABLE */
 
+      if (m1_uart_app_owned || m1_uart_app_pause_requested) continue;
+
       bytes_remaining = received_bytes;
       current_buffer_ptr = logdb_tx_buffer;
 
       while(bytes_remaining > 0)
       {
+        if (m1_uart_app_pause_requested) break;
+
         bytes_to_send = (bytes_remaining > CHUNK_SIZE) ? CHUNK_SIZE : bytes_remaining;
         //bytes_to_send = (bytes_remaining > M1_LOGDB_TX_BUFFER_SIZE) ? M1_LOGDB_TX_BUFFER_SIZE : bytes_remaining;
 
@@ -460,31 +496,40 @@ if (DEBUG_bytes_to_send < bytes_to_send) DEBUG_bytes_to_send = bytes_to_send;
 
         // Start USART1 transmission using GPDMA1 channel 1
 
-        tx_cptl_usart1 = 1;
-        __DSB();  /* Ensure flag is visible before DMA starts */
+        taskENTER_CRITICAL();
+        pause_before_dma = m1_uart_app_pause_requested || m1_uart_app_owned;
+        if (!pause_before_dma)
+        {
+          tx_cptl_usart1 = 1;
+          __DSB();  /* Ensure flag is visible before DMA starts */
+          dma_status = HAL_UART_Transmit_DMA(&huart_logdb, current_buffer_ptr, bytes_to_send);
+        }
+        taskEXIT_CRITICAL();
 
-        if (HAL_UART_Transmit_DMA(&huart_logdb, current_buffer_ptr, bytes_to_send) == HAL_OK)
+        if (pause_before_dma) break;
+
+        if (dma_status == HAL_OK)
         {
           /* Wait for DMA completion via polling with bounded timeout.
            * Using osDelay(1) keeps the task yielding and avoids busy-wait.
-           * A hard timeout prevents indefinite stall if DMA never completes. */
+           * An app claim or a hard timeout aborts DMA before reconfiguration. */
           uint32_t dma_wait_ticks = 0;
           while (tx_cptl_usart1 == 1)
           {
             osDelay(1);
             dma_wait_ticks++;
-            if (dma_wait_ticks >= (uint32_t)xMaxBlockTime)
+            if (m1_uart_app_pause_requested || dma_wait_ticks >= (uint32_t)xMaxBlockTime)
             {
-              /* DMA completion missed — abort and recover */
               HAL_UART_DMAStop(&huart_logdb);
               huart_logdb.gState = HAL_UART_STATE_READY;
               tx_cptl_usart1 = 0;
-              DEBUG_dma_timeout++;
+              if (!m1_uart_app_pause_requested) DEBUG_dma_timeout++;
               break;
             }
           }
           //osDelay(1); //osDelay(10);
 
+          if (m1_uart_app_pause_requested) break;
           current_buffer_ptr += bytes_to_send;
           bytes_remaining -= bytes_to_send;
         }
@@ -657,14 +702,14 @@ void m1_usb_cdc_comdefault(void)
   * @note   When a configuration is not supported, a default value is used.
   */
 /*============================================================================*/
-void m1_usb_cdc_comconfig(void)
+static void m1_usb_cdc_apply_linecoding(const USBD_CDC_LineCodingTypeDef *coding)
 {
 	/* Deinitialize USART1 */
 	m1_logdb_deinit();
 
 	/* Initialize USART1 */
 	/* Stop bit */
-	switch (linecoding.format)
+	switch (coding->format)
 	{
 		case 0:
 			huart_logdb.Init.StopBits = UART_STOPBITS_1;
@@ -680,7 +725,7 @@ void m1_usb_cdc_comconfig(void)
 	}
 
 	/* parity bit*/
-	switch (linecoding.paritytype)
+	switch (coding->paritytype)
 	{
 		case 0:
 			huart_logdb.Init.Parity = UART_PARITY_NONE;
@@ -700,7 +745,7 @@ void m1_usb_cdc_comconfig(void)
 	}
 
 	/* data type : 8bits and 9bits is supported */
-	switch (linecoding.datatype)
+	switch (coding->datatype)
 	{
 		case 0x07:
 			/* configuration a parity (Even or Odd) */
@@ -723,9 +768,20 @@ void m1_usb_cdc_comconfig(void)
 			break;
 	}
 
-	huart_logdb.Init.BaudRate = linecoding.bitrate;
+	huart_logdb.Init.BaudRate = coding->bitrate;
 
 	m1_logdb_init();
+}
+
+void m1_usb_cdc_comconfig(void)
+{
+	m1_usb_cdc_apply_linecoding(&linecoding);
+}
+
+void m1_usb_cdc_app_comconfig(uint32_t baud)
+{
+	const USBD_CDC_LineCodingTypeDef app_linecoding = {baud, 0, 0, 8};
+	m1_usb_cdc_apply_linecoding(&app_linecoding);
 }
 
 /*============================================================================*/

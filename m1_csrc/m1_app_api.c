@@ -38,6 +38,7 @@
 #include "m1_lcd.h"
 #include "m1_file_util.h"
 #include "m1_crypto.h"
+#include "m1_rng.h"
 #include "m1_i2c.h"
 #include "m1_rf_spi.h"
 #include "m1_lib.h"
@@ -54,6 +55,8 @@
 #include "m1_field_detect.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_badusb.h"
+#include "m1_uart_app.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -229,6 +232,9 @@ void m1_app_api_init(void)
         { "m1_info_box_display_init",  (void *)m1_info_box_display_init },
         { "m1_info_box_display_clear", (void *)m1_info_box_display_clear },
         { "m1_info_box_display_draw",  (void *)m1_info_box_display_draw },
+        { "m1_menu_item_h",       (void *)m1_menu_item_h },
+        { "m1_menu_max_visible",  (void *)m1_menu_max_visible },
+        { "m1_menu_font",         (void *)m1_menu_font },
 
         /* ===== Timing and delays ===== */
         { "m1app_delay",       (void *)m1app_delay },
@@ -252,12 +258,14 @@ void m1_app_api_init(void)
 
         /* ===== Input ===== */
         { "game_poll_button",  (void *)game_poll_button },
+        { "m1_poll_button_ex", (void *)m1_poll_button_ex },
         { "game_rand_seed",    (void *)game_rand_seed },
         { "game_rand_range",   (void *)game_rand_range },
 
         /* ===== Virtual keyboard ===== */
         { "m1_vkb_get_filename", (void *)m1_vkb_get_filename },
         { "m1_vkb_get_text",     (void *)m1_vkb_get_text },
+        { "m1app_set_keyboard_service_callback", (void *)m1app_set_keyboard_service_callback },
         { "m1_vkbs_get_data",    (void *)m1_vkbs_get_data },
 
         /* ===== Audio / Buzzer ===== */
@@ -275,6 +283,13 @@ void m1_app_api_init(void)
         { "lp5814_fastblink_on_R_G_B", (void *)lp5814_fastblink_on_R_G_B },
         { "lp5814_led_on",           (void *)lp5814_led_on },
         { "lp5814_led_off",          (void *)lp5814_led_off },
+
+        /* ===== Header UART ===== */
+        { "m1_uart_app_init",      (void *)m1_uart_app_init },
+        { "m1_uart_app_deinit",    (void *)m1_uart_app_deinit },
+        { "m1_uart_app_read",      (void *)m1_uart_app_read },
+        { "m1_uart_app_write",     (void *)m1_uart_app_write },
+        { "m1_uart_app_available", (void *)m1_uart_app_available },
 
         /* ===== GPIO ===== */
         { "ext_power_5V_set",      (void *)ext_power_5V_set },
@@ -378,6 +393,7 @@ void m1_app_api_init(void)
         /* ===== Crypto (AES-256-CBC) ===== */
         { "m1_crypto_derive_key",  (void *)m1_crypto_derive_key },
         { "m1_crypto_generate_iv", (void *)m1_crypto_generate_iv },
+        { "m1_crypto_random_bytes", (void *)m1_crypto_random_bytes },
         { "m1_crypto_encrypt",     (void *)m1_crypto_encrypt },
         { "m1_crypto_decrypt",     (void *)m1_crypto_decrypt },
         { "m1_crypto_encrypt_with_key", (void *)m1_crypto_encrypt_with_key },
@@ -440,7 +456,9 @@ void m1_app_api_init(void)
         { "strncat",   (void *)strncat },
         { "strstr",    (void *)strstr },
         { "strchr",    (void *)strchr },
+        { "strcpy",    (void *)strcpy },
         { "snprintf",  (void *)snprintf },
+        { "vsnprintf", (void *)vsnprintf },
         { "atoi",      (void *)atoi },
         { "strtol",    (void *)strtol },
         { "rand",      (void *)rand },

@@ -34,6 +34,12 @@
 /* M1_VIRTUAL_KB_FILENAME_MAX is defined in m1_virtual_kb.h */
 //#define M1_VIRTUAL_KBS_DATA_MAX			14 // 10 + 4 spaces
 uint8_t M1_VIRTUAL_KBS_DATA_MAX;
+static void (*s_keyboard_service_callback)(void);
+
+void m1app_set_keyboard_service_callback(void (*callback)(void))
+{
+	s_keyboard_service_callback = callback;
+}
 
 #define M1_VIRTUAL_KB_FONT_N			u8g2_font_resoledmedium_tr //u8g2_font_6x10_tf // u8g2_font_5x8_tf, u8g2_font_7x13_tf
 
@@ -524,7 +530,9 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 
 	while (1 ) // Main loop of this task
 	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(20));
+		if (s_keyboard_service_callback != NULL)
+			s_keyboard_service_callback();
 		if (ret==pdTRUE)
 		{
 			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
@@ -1343,4 +1351,3 @@ uint8_t m1_vkbs_get_data(char *description, char *data_buffer)
 
 	return len;
 }// uint8_t m1_vkbs_get_data(char *description, char *data_buffer)
-

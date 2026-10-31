@@ -13,6 +13,7 @@
 #include "stm32h5xx_hal.h"     /* CMSIS device (RNG/RCC) + HAL_GetTick */
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define RNG_SPIN_MAX   200000u
 
@@ -73,4 +74,69 @@ uint32_t m1_rng_get(void)
     }
 
     return sw_rand();
+}
+
+bool m1_rng_get_secure(uint32_t *value)
+{
+    if (!value)
+        return false;
+
+    if (s_state == 0)
+        rng_hw_init();
+    if (s_state != 1)
+        return false;
+
+    for (volatile uint32_t i = 0; i < RNG_SPIN_MAX; i++) {
+        uint32_t sr = RNG->SR;
+        if (sr & (RNG_SR_SEIS | RNG_SR_CEIS)) {
+            s_state = 2;
+            return false;
+        }
+        if (sr & RNG_SR_DRDY) {
+            uint32_t v = 0;
+            bool drdy_seen = false;
+            __disable_irq();
+            sr = RNG->SR;
+            if (sr & (RNG_SR_SEIS | RNG_SR_CEIS)) {
+                s_state = 2;
+            } else if (sr & RNG_SR_DRDY) {
+                v = RNG->DR;
+                drdy_seen = true;
+            }
+            __enable_irq();
+            if (s_state != 1)
+                return false;
+            if (drdy_seen) {
+                *value = v;
+                return true;
+            }
+        }
+    }
+
+    s_state = 2;
+    return false;
+}
+
+bool m1_crypto_random_bytes(uint8_t *buf, size_t len)
+{
+    if (len == 0)
+        return true;
+    if (!buf)
+        return false;
+
+    size_t offset = 0;
+    while (offset < len) {
+        uint32_t value;
+        if (!m1_rng_get_secure(&value)) {
+            memset(buf, 0, len);
+            return false;
+        }
+
+        size_t bytes = len - offset;
+        if (bytes > sizeof(value))
+            bytes = sizeof(value);
+        memcpy(buf + offset, &value, bytes);
+        offset += bytes;
+    }
+    return true;
 }

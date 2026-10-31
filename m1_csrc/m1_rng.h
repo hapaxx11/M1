@@ -11,8 +11,14 @@
 #define M1_RNG_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 /* @return a 32-bit random word (hardware TRNG, or rand() fallback). */
 uint32_t m1_rng_get(void);
+
+/* Fill bytes only from the hardware TRNG; fail rather than falling back to rand(). */
+bool m1_rng_get_secure(uint32_t *value);
+bool m1_crypto_random_bytes(uint8_t *buf, size_t len);
 
 #endif /* M1_RNG_H_ */

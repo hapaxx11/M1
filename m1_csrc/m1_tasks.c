@@ -126,9 +126,9 @@ void m1_tasks_init(void)
 	free_heap = xPortGetFreeHeapSize();
 	assert(free_heap >= M1_LOW_FREE_HEAP_WARNING_SIZE);
 
-	ret = xTaskCreate(vSer2UsbTask, "m1_ser2usb_task_n", M1_TASK_STACK_SIZE_2048, NULL, TASK_PRIORITY_RUNONCE_TASK_HANDLER, &usb2ser_task_hdl);
+	ret = xTaskCreate(vSer2UsbTask, "m1_ser2usb_task_n", M1_TASK_STACK_SIZE_2048, NULL, TASK_PRIORITY_RUNONCE_TASK_HANDLER, &ser2usb_task_hdl);
 	assert(ret==pdPASS);
-	assert(usb2ser_task_hdl!=NULL);
+	assert(ser2usb_task_hdl!=NULL);
 	free_heap = xPortGetFreeHeapSize();
 	assert(free_heap >= M1_LOW_FREE_HEAP_WARNING_SIZE);
 

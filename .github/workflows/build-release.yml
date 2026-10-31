@@ -374,8 +374,9 @@ jobs:
           BIN="build/${PROJECT}.bin"
           HEX="build/${PROJECT}.hex"
           WCRC="build/${{ steps.meta.outputs.release_file_base }}_wCRC.bin"
+          MESHTASTIC_APP="build/apps/meshtastic/m1-meshtastic.m1app"
 
-          for f in "$ELF" "$BIN" "$HEX" "$WCRC"; do
+          for f in "$ELF" "$BIN" "$HEX" "$WCRC" "$MESHTASTIC_APP"; do
             if [ ! -f "$f" ]; then
               echo "ERROR: expected artifact missing: $f"
               exit 1
@@ -407,6 +408,7 @@ jobs:
             build/${{ steps.meta.outputs.project_name }}.hex
             build/${{ steps.meta.outputs.project_name }}.bin
             build/${{ steps.meta.outputs.release_file_base }}_wCRC.bin
+            build/apps/meshtastic/m1-meshtastic.m1app
           if-no-files-found: error
           retention-days: 90
 
@@ -444,6 +446,7 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.hex
             artifacts/${{ needs.build.outputs.project_name }}.bin
             artifacts/${{ needs.build.outputs.release_file_base }}_wCRC.bin
+            artifacts/apps/meshtastic/m1-meshtastic.m1app
           body: |
             ## M1 Hapax ${{ needs.build.outputs.tag }}
 
@@ -457,6 +460,7 @@ jobs:
             | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for direct flashing / reference) |
             | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
+            | `m1-meshtastic.m1app`                                 | Meshtastic external app (copy to `apps/` on the SD card) |
 
             > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
 

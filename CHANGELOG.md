@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5.2] - 2026-10-31
+
+### Fixed
+
+- **Sub-GHz: Weather Station button labels** — Removed an overlapping BACK hint so the bottom action buttons remain readable.
+
+## [0.9.5.1] - 2026-10-31
+
+### Added
+
+- **Meshtastic external app** — Added a bundled UART Meshtastic client with messaging, node roster, signal and telemetry views, notifications, and node configuration; firmware builds now produce `m1-meshtastic.m1app` and expose the required header-UART app API.
+
+### Fixed
+
+- **Meshtastic: preserve fractional roster SNR** — Keep node signal-to-noise values as floating-point dB through roster storage and display.
+- **Meshtastic: serialize UART bridge DMA handoff** — Prevent USB-to-UART DMA startup from racing app ownership changes.
+
 ## [0.9.5.0] - 2026-10-29
 
 ### Changed
