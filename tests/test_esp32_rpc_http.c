@@ -18,6 +18,7 @@ typedef struct {
     uint8_t nak;
     uint16_t payload_len;
     uint8_t payload[MAX_PAYLOAD];
+    uint32_t advance_ms;
 } rpc_step_t;
 
 static rpc_step_t s_steps[MAX_STEPS];
@@ -27,14 +28,17 @@ static char s_open_url[1025];
 static uint8_t s_accept;
 static uint32_t s_timeout_ms;
 static uint16_t s_read_wants[MAX_STEPS];
+static uint32_t s_read_timeouts_ms[MAX_STEPS];
 static int s_read_count;
 static int s_close_count;
+static uint32_t s_now_ms;
 
 uint64_t m1_esp32_caps_get_bitmap(void) { return 0u; }
 bool m1_esp32_caps_is_queried(void) { return true; }
 void m1_esp32_caps_init(void) {}
 uint8_t m1_esp32_get_init_status(void) { return 1u; }
 void m1_wdt_reset(void) {}
+uint32_t HAL_GetTick(void) { return s_now_ms; }
 
 uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                              uint8_t *rx_buf, int rx_buf_size,
@@ -71,7 +75,6 @@ static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
                               int *out_len, uint32_t timeout_ms)
 {
-    (void)timeout_ms;
     TEST_ASSERT_NOT_NULL(tx_buf);
     TEST_ASSERT_NOT_NULL(rx_buf);
     TEST_ASSERT_NOT_NULL(out_len);
@@ -94,10 +97,13 @@ static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
     } else if (step->msg_id == M1_ESP32_RPC_NET_HTTP_READ) {
         TEST_ASSERT_EQUAL_UINT16(2u, req_len);
         TEST_ASSERT_TRUE(s_read_count < MAX_STEPS);
-        s_read_wants[s_read_count++] = rd16(req);
+        s_read_wants[s_read_count] = rd16(req);
+        s_read_timeouts_ms[s_read_count] = timeout_ms;
+        s_read_count++;
     } else if (step->msg_id == M1_ESP32_RPC_NET_HTTP_CLOSE) {
         s_close_count++;
     }
+    s_now_ms += step->advance_ms;
 
     const uint8_t *payload = step->payload;
     uint16_t payload_len = step->payload_len;
@@ -163,13 +169,17 @@ void setUp(void)
     s_accept = 0xFFu;
     s_timeout_ms = 0u;
     memset(s_read_wants, 0, sizeof(s_read_wants));
+    memset(s_read_timeouts_ms, 0, sizeof(s_read_timeouts_ms));
     s_read_count = 0;
     s_close_count = 0;
+    s_now_ms = 0u;
+    ff_stub_close_result = FR_OK;
     m1_esp32_rpc_set_transport(fake_transport);
 }
 
 void tearDown(void)
 {
+    ff_stub_close_result = FR_OK;
     TEST_ASSERT_EQUAL_INT(s_step_count, s_step_index);
     m1_esp32_rpc_set_transport(NULL);
     remove(TEST_PATH);
@@ -211,6 +221,58 @@ static void test_get_rejects_truncated_json(void)
     TEST_ASSERT_EQUAL_INT(1, s_close_count);
 }
 
+static void test_get_unknown_length_exact_fit_succeeds(void)
+{
+    queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 200u, -1);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "12345", 5u);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, NULL, 0u);
+    queue_close();
+
+    char response[6];
+    TEST_ASSERT_EQUAL(HTTP_OK,
+        m1_esp32_rpc_http_get("https://api.github.com/test", response,
+                              sizeof(response), 30u));
+    TEST_ASSERT_EQUAL_STRING("12345", response);
+    TEST_ASSERT_EQUAL_INT(2, s_read_count);
+    TEST_ASSERT_EQUAL_UINT16(1u, s_read_wants[1]);
+}
+
+static void test_get_unknown_length_overflow_is_rejected(void)
+{
+    queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 200u, -1);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "12345", 5u);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "6", 1u);
+    queue_close();
+
+    char response[6];
+    TEST_ASSERT_EQUAL(HTTP_ERR_RESPONSE_TOO_LARGE,
+        m1_esp32_rpc_http_get("https://api.github.com/test", response,
+                              sizeof(response), 30u));
+    TEST_ASSERT_EQUAL_STRING("12345", response);
+    TEST_ASSERT_EQUAL_INT(2, s_read_count);
+}
+
+static void test_get_uses_response_wide_deadline(void)
+{
+    queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 200u, 9);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "abc", 3u);
+    s_steps[s_step_count - 1].advance_ms = 4000u;
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "def", 3u);
+    s_steps[s_step_count - 1].advance_ms = 4000u;
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "ghi", 3u);
+    s_steps[s_step_count - 1].advance_ms = 4000u;
+    queue_close();
+
+    char response[16];
+    TEST_ASSERT_EQUAL(HTTP_ERR_TIMEOUT,
+        m1_esp32_rpc_http_get("https://api.github.com/test", response,
+                              sizeof(response), 10u));
+    TEST_ASSERT_EQUAL_INT(3, s_read_count);
+    TEST_ASSERT_EQUAL_UINT32(10000u, s_read_timeouts_ms[0]);
+    TEST_ASSERT_EQUAL_UINT32(6000u, s_read_timeouts_ms[1]);
+    TEST_ASSERT_EQUAL_UINT32(2000u, s_read_timeouts_ms[2]);
+}
+
 static void test_download_streams_binary_to_sd(void)
 {
     queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 200u, 6);
@@ -233,6 +295,21 @@ static void test_download_streams_binary_to_sd(void)
     TEST_ASSERT_EQUAL_INT(1, s_close_count);
 }
 
+static void test_download_close_failure_is_write_error(void)
+{
+    queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 200u, 3);
+    queue_step(M1_ESP32_RPC_NET_HTTP_READ, "abc", 3u);
+    queue_close();
+
+    ff_stub_close_result = FR_DISK_ERR;
+    http_status_t status = m1_esp32_rpc_http_download_to_file(
+        "https://github.com/fw.bin", TEST_PATH, NULL, 60u);
+    ff_stub_close_result = FR_OK;
+
+    TEST_ASSERT_EQUAL(HTTP_ERR_SD_WRITE_FAIL, status);
+    TEST_ASSERT_NULL(fopen(TEST_PATH, "rb"));
+}
+
 static void test_open_dns_error_is_specific(void)
 {
     queue_open(M1_ESP32_RPC_HTTP_RESULT_DNS, 0u, -1);
@@ -253,6 +330,17 @@ static void test_old_brain_is_unsupported_not_dns(void)
     TEST_ASSERT_EQUAL_INT(0, s_close_count);
 }
 
+static void test_ambiguous_open_timeout_closes_stream(void)
+{
+    queue_nak(M1_ESP32_RPC_NET_HTTP_OPEN, M1_ESP32_RPC_ERR_TIMEOUT);
+    queue_close();
+    char response[16];
+    TEST_ASSERT_EQUAL(HTTP_ERR_TIMEOUT,
+        m1_esp32_rpc_http_get("https://api.github.com/test", response,
+                              sizeof(response), 30u));
+    TEST_ASSERT_EQUAL_INT(1, s_close_count);
+}
+
 static void test_http_error_closes_stream(void)
 {
     queue_open(M1_ESP32_RPC_HTTP_RESULT_OK, 404u, 0);
@@ -271,9 +359,12 @@ static void test_read_timeout_closes_and_deletes_partial_file(void)
     queue_nak(M1_ESP32_RPC_NET_HTTP_READ, M1_ESP32_RPC_ERR_TIMEOUT);
     queue_close();
 
-    TEST_ASSERT_EQUAL(HTTP_ERR_TIMEOUT,
-        m1_esp32_rpc_http_download_to_file("https://github.com/fw.bin", TEST_PATH,
-                                           NULL, 60u));
+    ff_stub_close_result = FR_DISK_ERR;
+    http_status_t status = m1_esp32_rpc_http_download_to_file(
+        "https://github.com/fw.bin", TEST_PATH, NULL, 60u);
+    ff_stub_close_result = FR_OK;
+
+    TEST_ASSERT_EQUAL(HTTP_ERR_TIMEOUT, status);
     TEST_ASSERT_EQUAL_INT(1, s_close_count);
     TEST_ASSERT_NULL(fopen(TEST_PATH, "rb"));
 }
@@ -313,9 +404,14 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_get_streams_release_json);
     RUN_TEST(test_get_rejects_truncated_json);
+    RUN_TEST(test_get_unknown_length_exact_fit_succeeds);
+    RUN_TEST(test_get_unknown_length_overflow_is_rejected);
+    RUN_TEST(test_get_uses_response_wide_deadline);
     RUN_TEST(test_download_streams_binary_to_sd);
+    RUN_TEST(test_download_close_failure_is_write_error);
     RUN_TEST(test_open_dns_error_is_specific);
     RUN_TEST(test_old_brain_is_unsupported_not_dns);
+    RUN_TEST(test_ambiguous_open_timeout_closes_stream);
     RUN_TEST(test_http_error_closes_stream);
     RUN_TEST(test_read_timeout_closes_and_deletes_partial_file);
     RUN_TEST(test_cancel_closes_and_deletes_partial_file);

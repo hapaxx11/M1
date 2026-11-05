@@ -141,6 +141,27 @@ http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool tas
 	return HTTP_OK;
 }
 
+bool http_rpc_is_ready_check(bool wifi_connected, bool hal_init, bool task_init)
+{
+	(void)task_init;
+	return wifi_connected && hal_init;
+}
+
+http_status_t http_rpc_readiness_status(bool wifi_connected, bool hal_init, bool task_init)
+{
+	(void)task_init;
+	if (!wifi_connected)
+		return HTTP_ERR_NO_WIFI;
+	if (!hal_init)
+		return HTTP_ERR_ESP_NOT_READY;
+	return HTTP_OK;
+}
+
+bool http_should_start_at_task(bool rpc_transport, bool task_init)
+{
+	return !rpc_transport && !task_init;
+}
+
 /*
  * parse_http_headers() — test-only copy of the pure-logic header parser
  * from m1_csrc/m1_http_client.c.

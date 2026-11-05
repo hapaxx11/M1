@@ -83,7 +83,9 @@ static int parse_http_headers(const char *data, int data_len,
 bool http_is_ready(void)
 {
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	return wifi_is_connected() && m1_esp32_get_init_status() && get_esp32_main_init_status();
+	return wifi_is_connected() && m1_esp32_get_init_status() &&
+	       (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC ||
+	        get_esp32_main_init_status());
 #else
 	return false;
 #endif
@@ -225,13 +227,14 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 	if (!wifi_is_connected())
 		return HTTP_ERR_NO_WIFI;
-	if (!m1_esp32_get_init_status() || !get_esp32_main_init_status())
+	bool rpc_transport = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
+	if (!m1_esp32_get_init_status() || (!rpc_transport && !get_esp32_main_init_status()))
 		return HTTP_ERR_ESP_NOT_READY;
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (rpc_transport)
 		return m1_esp32_rpc_http_get(url, response_buf, buf_size, timeout_sec);
 
 	/* Parse URL */
@@ -1081,13 +1084,14 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
 
 	if (!wifi_is_connected())
 		return HTTP_ERR_NO_WIFI;
-	if (!m1_esp32_get_init_status() || !get_esp32_main_init_status())
+	bool rpc_transport = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
+	if (!m1_esp32_get_init_status() || (!rpc_transport && !get_esp32_main_init_status()))
 		return HTTP_ERR_ESP_NOT_READY;
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
 
-	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	if (rpc_transport)
 		return m1_esp32_rpc_http_download_to_file(url, sd_path, progress_cb, timeout_sec);
 
 retry_with_redirect:

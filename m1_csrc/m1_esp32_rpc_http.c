@@ -11,6 +11,7 @@
 #define RPC_HTTP_OPEN_RESP_LEN 7u
 
 extern void m1_wdt_reset(void);
+extern uint32_t HAL_GetTick(void);
 
 static uint16_t rpc_http_rd16(const uint8_t *p)
 {
@@ -71,6 +72,17 @@ static void rpc_http_close(void)
                             NULL, 0u, NULL, 2);
 }
 
+static uint8_t rpc_http_remaining_timeout(uint32_t start_tick, uint8_t timeout_sec)
+{
+    uint32_t elapsed = HAL_GetTick() - start_tick;
+    uint32_t budget_ms = (uint32_t)timeout_sec * 1000u;
+    if (elapsed >= budget_ms)
+        return 0u;
+
+    uint32_t remaining_ms = budget_ms - elapsed;
+    return (uint8_t)((remaining_ms + 999u) / 1000u);
+}
+
 static http_status_t rpc_http_open(const char *url, bool json, uint8_t timeout_sec,
                                    uint32_t *content_length)
 {
@@ -100,8 +112,13 @@ static http_status_t rpc_http_open(const char *url, bool json, uint8_t timeout_s
     free(req);
 
     http_status_t status = rpc_http_status(rpc_status);
-    if (status != HTTP_OK)
+    if (status != HTTP_OK) {
+        if (rpc_status == M1_ESP32_RPC_ERR_TIMEOUT ||
+            rpc_status == M1_ESP32_RPC_ERR_TRANSPORT ||
+            rpc_status == M1_ESP32_RPC_ERR_BAD_FRAME)
+            rpc_http_close();
         return status;
+    }
     if (rlen != RPC_HTTP_OPEN_RESP_LEN) {
         rpc_http_close();
         return HTTP_ERR_PARSE_FAIL;
@@ -144,6 +161,7 @@ http_status_t m1_esp32_rpc_http_get(const char *url, char *response_buf,
     if (timeout_sec == 0u)
         timeout_sec = 30u;
 
+    uint32_t start_tick = HAL_GetTick();
     uint32_t content_length = 0u;
     http_status_t status = rpc_http_open(url, true, timeout_sec, &content_length);
     if (status != HTTP_OK)
@@ -153,6 +171,12 @@ http_status_t m1_esp32_rpc_http_get(const char *url, char *response_buf,
     while (total < buf_size - 1u &&
            (content_length == 0u || total < content_length)) {
         m1_wdt_reset();
+        uint8_t remaining = rpc_http_remaining_timeout(start_tick, timeout_sec);
+        if (remaining == 0u) {
+            status = HTTP_ERR_TIMEOUT;
+            break;
+        }
+
         uint16_t want = (uint16_t)(buf_size - 1u - total);
         if (want > RPC_HTTP_CHUNK_SIZE)
             want = RPC_HTTP_CHUNK_SIZE;
@@ -161,11 +185,29 @@ http_status_t m1_esp32_rpc_http_get(const char *url, char *response_buf,
 
         uint16_t received = 0u;
         status = rpc_http_read((uint8_t *)response_buf + total, want,
-                               &received, timeout_sec);
+                               &received, remaining);
         if (status != HTTP_OK || received == 0u)
             break;
         total = (uint16_t)(total + received);
+        if (rpc_http_remaining_timeout(start_tick, timeout_sec) == 0u) {
+            status = HTTP_ERR_TIMEOUT;
+            break;
+        }
     }
+
+    if (status == HTTP_OK && total == buf_size - 1u && content_length == 0u) {
+        uint8_t remaining = rpc_http_remaining_timeout(start_tick, timeout_sec);
+        if (remaining == 0u) {
+            status = HTTP_ERR_TIMEOUT;
+        } else {
+            uint8_t extra;
+            uint16_t extra_len = 0u;
+            status = rpc_http_read(&extra, 1u, &extra_len, remaining);
+            if (status == HTTP_OK && extra_len > 0u)
+                status = HTTP_ERR_RESPONSE_TOO_LARGE;
+        }
+    }
+
     response_buf[total] = '\0';
     rpc_http_close();
 
@@ -175,8 +217,6 @@ http_status_t m1_esp32_rpc_http_get(const char *url, char *response_buf,
         return HTTP_ERR_PARSE_FAIL;
     if (content_length > 0u && total < content_length)
         return total == buf_size - 1u ? HTTP_ERR_RESPONSE_TOO_LARGE : HTTP_ERR_TIMEOUT;
-    if (total == buf_size - 1u && content_length == 0u)
-        return HTTP_ERR_RESPONSE_TOO_LARGE;
     return HTTP_OK;
 }
 
@@ -189,6 +229,7 @@ http_status_t m1_esp32_rpc_http_download_to_file(const char *url, const char *sd
     if (timeout_sec == 0u)
         timeout_sec = 30u;
 
+    uint32_t start_tick = HAL_GetTick();
     uint32_t content_length = 0u;
     http_status_t status = rpc_http_open(url, false, timeout_sec, &content_length);
     if (status != HTTP_OK)
@@ -211,15 +252,25 @@ http_status_t m1_esp32_rpc_http_download_to_file(const char *url, const char *sd
 
     while (content_length == 0u || downloaded < content_length) {
         m1_wdt_reset();
+        uint8_t remaining = rpc_http_remaining_timeout(start_tick, timeout_sec);
+        if (remaining == 0u) {
+            status = HTTP_ERR_TIMEOUT;
+            break;
+        }
+
         uint16_t want = RPC_HTTP_CHUNK_SIZE;
         if (content_length > 0u && want > content_length - downloaded)
             want = (uint16_t)(content_length - downloaded);
 
         uint8_t chunk[RPC_HTTP_CHUNK_SIZE];
         uint16_t received = 0u;
-        status = rpc_http_read(chunk, want, &received, timeout_sec);
+        status = rpc_http_read(chunk, want, &received, remaining);
         if (status != HTTP_OK || received == 0u)
             break;
+        if (rpc_http_remaining_timeout(start_tick, timeout_sec) == 0u) {
+            status = HTTP_ERR_TIMEOUT;
+            break;
+        }
 
         UINT written = 0u;
         fr = f_write(&file, chunk, received, &written);
@@ -235,9 +286,11 @@ http_status_t m1_esp32_rpc_http_download_to_file(const char *url, const char *sd
         }
     }
 
-    f_close(&file);
+    fr = f_close(&file);
     rpc_http_close();
 
+    if (status == HTTP_OK && fr != FR_OK)
+        status = HTTP_ERR_SD_WRITE_FAIL;
     if (status == HTTP_OK && content_length > 0u && downloaded < content_length)
         status = HTTP_ERR_TIMEOUT;
     if (status != HTTP_OK)

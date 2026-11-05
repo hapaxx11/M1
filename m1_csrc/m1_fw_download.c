@@ -18,6 +18,7 @@
 #include "m1_fw_download.h"
 #include "m1_fw_source.h"
 #include "m1_http_client.h"
+#include "m1_esp32_rpc.h"
 #include "m1_wifi.h"
 #include "m1_fw_update.h"
 #include "m1_fw_update_bl.h"
@@ -442,7 +443,8 @@ void fw_download_start(void)
 	{
 		if (!m1_esp32_get_init_status())
 			m1_esp32_init();
-		if (!get_esp32_main_init_status())
+		if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC &&
+		    !get_esp32_main_init_status())
 			esp32_main_init();
 	}
 #endif

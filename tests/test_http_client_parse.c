@@ -39,6 +39,11 @@ extern bool http_is_ready_check(bool wifi_connected, bool hal_init, bool task_in
 /* Stub for the layered readiness check used inside http_get() / http_download_to_file() */
 extern http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool task_init);
 
+/* Transport-aware OTA initialization logic in tests/stubs/http_client_parse_impl.c */
+extern bool http_rpc_is_ready_check(bool wifi_connected, bool hal_init, bool task_init);
+extern http_status_t http_rpc_readiness_status(bool wifi_connected, bool hal_init, bool task_init);
+extern bool http_should_start_at_task(bool rpc_transport, bool task_init);
+
 /* Stub implementation of parse_http_headers in tests/stubs/http_client_parse_impl.c */
 extern int http_parse_headers(const char *data, int data_len,
                               uint32_t *content_length, char *location, uint16_t loc_size,
@@ -309,6 +314,22 @@ void test_readiness_status_wifi_checked_before_esp(void)
 	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, true, false));
 }
 
+void test_native_ota_is_ready_without_at_task(void)
+{
+	TEST_ASSERT_TRUE(http_rpc_is_ready_check(true, true, false));
+	TEST_ASSERT_EQUAL_INT(HTTP_OK, http_rpc_readiness_status(true, true, false));
+	TEST_ASSERT_FALSE(http_should_start_at_task(true, false));
+}
+
+void test_legacy_ota_still_requires_and_starts_at_task(void)
+{
+	TEST_ASSERT_FALSE(http_is_ready_check(true, true, false));
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_ESP_NOT_READY,
+		http_readiness_status(true, true, false));
+	TEST_ASSERT_TRUE(http_should_start_at_task(false, false));
+	TEST_ASSERT_FALSE(http_should_start_at_task(false, true));
+}
+
 /* ---- parse_http_headers: header parsing and fragmentation ---- */
 
 /* Regression: SSL fragmentation means the first tcp_recv() may not
@@ -513,6 +534,8 @@ int main(void)
 	RUN_TEST(test_readiness_status_hal_deinit_returns_esp_not_ready);
 	RUN_TEST(test_readiness_status_task_not_init_returns_esp_not_ready);
 	RUN_TEST(test_readiness_status_wifi_checked_before_esp);
+	RUN_TEST(test_native_ota_is_ready_without_at_task);
+	RUN_TEST(test_legacy_ota_still_requires_and_starts_at_task);
 	RUN_TEST(test_parse_headers_incomplete_returns_zero);
 	RUN_TEST(test_parse_headers_complete_returns_status);
 	RUN_TEST(test_parse_headers_redirect_extracts_location);

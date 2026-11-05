@@ -68,7 +68,8 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
  * url:          Full URL to download
  * sd_path:      Destination path on SD card (e.g., "0:/Firmware/file.bin")
  * progress_cb:  Optional progress callback (may be NULL)
- * timeout_sec:  Per-chunk timeout in seconds (0 for default 30s)
+ * timeout_sec:  Response timeout in seconds (0 for default 30s). Native RPC
+ *               applies one deadline across the complete transfer.
  *
  * Returns: HTTP_OK on success, error code otherwise
  */
