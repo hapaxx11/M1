@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   firmware reports that an update is needed rather than failing as DNS. The
   CD3 source also accepts both factory-image names used by GitHub releases,
   including on devices with an existing `fw_sources.txt`.
+- **OTA: Native CD3 HTTP reliability** — Preserve existing Wi-Fi connections, enforce response-wide deadlines, clean up ambiguous HTTP streams, accept exact-fit chunked responses, and report SD-card close failures.
 
 ## [0.9.5.3] - 2026-10-31
 

@@ -1,1 +1,0 @@
-- **OTA: Native CD3 HTTP reliability** — Preserve existing Wi-Fi connections, enforce response-wide deadlines, clean up ambiguous HTTP streams, accept exact-fit chunked responses, and report SD-card close failures.
