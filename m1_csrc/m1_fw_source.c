@@ -356,6 +356,27 @@ bool fw_source_asset_matches_filter(const char *asset_name,
 	return true;
 }
 
+bool fw_source_asset_matches_source(const fw_source_t *source,
+                                    const char *asset_name)
+{
+	if (!source)
+		return false;
+	if (fw_source_asset_matches_filter(asset_name, source->asset_filter,
+	                                   source->exclude_filter))
+		return true;
+
+	/* CD3 brain v1.5 releases renamed the factory image. Accept both names so
+	 * existing fw_sources.txt files keep working with old and new releases. */
+	if (strcmp(source->github.owner, "bedge117") == 0 &&
+	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
+	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+	{
+		return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
+		                                      source->exclude_filter);
+	}
+	return false;
+}
+
 /*
  * Fetch releases from GitHub Releases API.
  * Parses the JSON response to extract release metadata and matching assets.
@@ -428,7 +449,7 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 				aname[0] = '\0';
 				json_get_string(ap, "name", aname, sizeof(aname));
 
-				if (aname[0] && fw_source_asset_matches_filter(aname, source->asset_filter, source->exclude_filter))
+				if (aname[0] && fw_source_asset_matches_source(source, aname))
 				{
 					strncpy(rel->asset_name, aname, FW_RELEASE_ASSET_LEN - 1);
 					rel->asset_name[FW_RELEASE_ASSET_LEN - 1] = '\0';

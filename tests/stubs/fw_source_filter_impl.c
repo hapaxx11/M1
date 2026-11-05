@@ -11,8 +11,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-
-#define FW_SOURCE_EXCLUDE_LEN 64
+#include "m1_fw_source.h"
 
 bool fw_source_asset_matches_filter(const char *asset_name,
                                      const char *include_filter,
@@ -53,4 +52,23 @@ bool fw_source_asset_matches_filter(const char *asset_name,
 	}
 
 	return true;
+}
+
+bool fw_source_asset_matches_source(const fw_source_t *source,
+                                    const char *asset_name)
+{
+	if (!source)
+		return false;
+	if (fw_source_asset_matches_filter(asset_name, source->asset_filter,
+	                                   source->exclude_filter))
+		return true;
+
+	if (strcmp(source->github.owner, "bedge117") == 0 &&
+	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
+	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+	{
+		return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
+		                                      source->exclude_filter);
+	}
+	return false;
 }

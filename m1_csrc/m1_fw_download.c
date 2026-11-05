@@ -18,6 +18,7 @@
 #include "m1_fw_download.h"
 #include "m1_fw_source.h"
 #include "m1_http_client.h"
+#include "m1_esp32_rpc.h"
 #include "m1_wifi.h"
 #include "m1_fw_update.h"
 #include "m1_fw_update_bl.h"
@@ -407,6 +408,8 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 			case HTTP_ERR_SD_OPEN_FAIL:   err_msg = "Cannot create file"; break;
 			case HTTP_ERR_REDIRECT_LOOP:  err_msg = "Too many redirects"; break;
 			case HTTP_ERR_PARSE_FAIL:     err_msg = "Bad server response"; break;
+			case HTTP_ERR_NO_MEM:         err_msg = "ESP32 out of memory"; break;
+			case HTTP_ERR_UNSUPPORTED_TRANSPORT: err_msg = "Update ESP32 firmware"; break;
 			default:                       err_msg = "Download failed"; break;
 		}
 		dl_show_message("Error:", err_msg);
@@ -440,7 +443,8 @@ void fw_download_start(void)
 	{
 		if (!m1_esp32_get_init_status())
 			m1_esp32_init();
-		if (!get_esp32_main_init_status())
+		if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC &&
+		    !get_esp32_main_init_status())
 			esp32_main_init();
 	}
 #endif

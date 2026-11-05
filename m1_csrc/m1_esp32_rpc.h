@@ -160,6 +160,11 @@ typedef enum {
     M1_ESP32_RPC_RPC_STATUS         = 0x0701,
     M1_ESP32_RPC_QMON_POLL          = 0x0702,
     M1_ESP32_RPC_QMON_RESP          = 0x0703,
+
+    /* ---- Streaming HTTP client 0x0800-0x08FF ---- */
+    M1_ESP32_RPC_NET_HTTP_OPEN      = 0x0800,
+    M1_ESP32_RPC_NET_HTTP_READ      = 0x0801,
+    M1_ESP32_RPC_NET_HTTP_CLOSE     = 0x0802,
 } m1_esp32_rpc_id_t;
 
 /* Additional message-type values beyond REQ/RESP/NAK (in m1_esp32_caps.h). */
@@ -287,6 +292,19 @@ typedef struct __attribute__((packed)) {
     uint8_t  second;  /* 0-59 */
     uint8_t  weekday; /* 0=Sun .. 6=Sat */
 } m1_esp32_rpc_time_t;
+
+#define M1_ESP32_RPC_HTTP_ACCEPT_JSON   0u
+#define M1_ESP32_RPC_HTTP_ACCEPT_BINARY 1u
+
+typedef enum {
+    M1_ESP32_RPC_HTTP_RESULT_OK = 0,
+    M1_ESP32_RPC_HTTP_RESULT_INVALID,
+    M1_ESP32_RPC_HTTP_RESULT_DNS,
+    M1_ESP32_RPC_HTTP_RESULT_CONNECT,
+    M1_ESP32_RPC_HTTP_RESULT_TIMEOUT,
+    M1_ESP32_RPC_HTTP_RESULT_REDIRECT,
+    M1_ESP32_RPC_HTTP_RESULT_NO_MEM,
+} m1_esp32_rpc_http_result_t;
 
 /* OFF_HS_START request: start EAPOL/handshake capture + optional deauth burst. */
 typedef struct __attribute__((packed)) {

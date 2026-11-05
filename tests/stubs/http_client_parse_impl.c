@@ -35,6 +35,8 @@ const char *http_status_str(http_status_t status)
 		case HTTP_ERR_CANCELLED:          return "Cancelled";
 		case HTTP_ERR_INVALID_ARG:        return "Internal request error";
 		case HTTP_ERR_PARSE_FAIL:         return "Bad response";
+		case HTTP_ERR_NO_MEM:             return "ESP32 out of memory";
+		case HTTP_ERR_UNSUPPORTED_TRANSPORT: return "ESP32 HTTP unsupported";
 		default:                          return NULL;
 	}
 }
@@ -137,6 +139,27 @@ http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool tas
 	if (!hal_init || !task_init)
 		return HTTP_ERR_ESP_NOT_READY;
 	return HTTP_OK;
+}
+
+bool http_rpc_is_ready_check(bool wifi_connected, bool hal_init, bool task_init)
+{
+	(void)task_init;
+	return wifi_connected && hal_init;
+}
+
+http_status_t http_rpc_readiness_status(bool wifi_connected, bool hal_init, bool task_init)
+{
+	(void)task_init;
+	if (!wifi_connected)
+		return HTTP_ERR_NO_WIFI;
+	if (!hal_init)
+		return HTTP_ERR_ESP_NOT_READY;
+	return HTTP_OK;
+}
+
+bool http_should_start_at_task(bool rpc_transport, bool task_init)
+{
+	return !rpc_transport && !task_init;
 }
 
 /*

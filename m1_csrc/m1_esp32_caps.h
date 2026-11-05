@@ -206,12 +206,10 @@
 #define M1_ESP32_CAP_SOFTAP         (UINT64_C(1) << 23)
 
 /* -------------------------------------------------------------------------
- * Bits 24+ are host-only (hapaxx11) capabilities that have no assignment in
- * the canonical CD3 wire header.  Current shipped firmware does not
- * self-report them, so they either fail closed or are inferred only after a
- * safer STM32-side runtime probe has confirmed the backing firmware.  They
- * live above bit 23 specifically so they can never collide with a canonical
- * CD3 capability position.
+ * Bits 24-27 are host-only (hapaxx11) capabilities. They either fail closed
+ * or are inferred only after a safer STM32-side runtime probe has confirmed
+ * the backing firmware. Canonical wire capabilities may be added above them;
+ * M1_ESP32_CAP_HTTP (bit 28) is defined separately below.
  * ------------------------------------------------------------------------- */
 
 /** ESP-NOW peer-to-peer communication (discovery, unicast, broadcast).
@@ -255,7 +253,11 @@
  * cannot answer.  esp32_feature_map.c never lists it as a gated feature. */
 #define M1_ESP32_CAP_MTKCORE        (UINT64_C(1) << 27)
 
-/* Bits 28-63 reserved for future use */
+/** Native streaming HTTP client (open/read/close RPCs). Canonical CD3 bit;
+ *  advertised only by brain firmware that dispatches NET_HTTP_OPEN/READ/CLOSE. */
+#define M1_ESP32_CAP_HTTP           (UINT64_C(1) << 28)
+
+/* Bits 29-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
