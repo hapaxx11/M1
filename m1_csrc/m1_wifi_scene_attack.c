@@ -66,7 +66,19 @@ DELEGATE(attack_evil_portal,  wifi_evil_portal)
 DELEGATE(attack_probe_flood,  wifi_probe_flood)
 DELEGATE(attack_karma,        wifi_attack_karma_with_portal)
 DELEGATE(attack_karma_portal, wifi_attack_karma_portal)
-DELEGATE(attack_pmkid_at,     wifi_target_pmkid)
+
+static void attack_pmkid_capture(void)
+{
+    if (!wifi_target_valid()) {
+        wifi_scan_ap();
+        if (!wifi_scan_ap_target_selected())
+            return;
+    }
+    if (wifi_target_valid())
+        wifi_target_pmkid();
+}
+
+DELEGATE(attack_pmkid_at,     attack_pmkid_capture)
 
 const M1SceneHandlers wifi_scene_attack_deauth_handlers      = { .on_enter = attack_deauth_on_enter      };
 const M1SceneHandlers wifi_scene_attack_beacon_handlers      = { .on_enter = attack_beacon_on_enter      };

@@ -420,7 +420,7 @@ void test_station_scan_is_capability_gated(void)
         "m1_wifi_scene_menu.c must define a capability-gated delegate macro");
 
     TEST_ASSERT_NOT_NULL_MESSAGE(
-        strstr(c, "DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)"),
+        strstr(c, "DELEGATE_RECON(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)"),
         "Station Scan delegate must be gated on ESP32_FEATURE_STA_SCAN");
 
     TEST_ASSERT_NOT_NULL_MESSAGE(

@@ -17,6 +17,9 @@
 #include <stdbool.h>
 #include "m1_compile_cfg.h"
 #include "wifi_boot_config.h"
+#include "esp32_feature_map.h"
+
+bool wifi_recon_prepare(esp32_feature_id_t fid);
 
 void menu_wifi_init(void);
 void menu_wifi_exit(void);

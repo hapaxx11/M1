@@ -71,6 +71,18 @@
         m1_esp32_rpc_foreground_release(); \
         app->running = true; m1_scene_pop(app); }
 
+#define DELEGATE_RECON(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        m1_esp32_ensure_init(); \
+        if (wifi_recon_prepare(fid) && \
+            m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
+
 /*==========================================================================*/
 /* Core / direct-tool delegates                                             */
 /*==========================================================================*/
@@ -102,12 +114,12 @@ static void scan_connect_on_enter(M1SceneApp *app) {
 #endif
     m1_scene_pop(app);
 }
-DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
-DELEGATE(survey_24g,        wifi_survey_24g)
-DELEGATE_FEATURE(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)
+DELEGATE_RECON(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
+DELEGATE_RECON(survey_24g, wifi_survey_24g, ESP32_FEATURE_WIFI_SCAN)
+DELEGATE_RECON(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)
 DELEGATE(wardrive,          wifi_wardrive)
 DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN)
-DELEGATE_FEATURE(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
+DELEGATE_RECON(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
 DELEGATE_FEATURE(zigbee, zigbee_scan, ESP32_FEATURE_802154)
 DELEGATE_FEATURE(thread, thread_scan, ESP32_FEATURE_802154)
 DELEGATE_FEATURE(flood_802154, ieee802154_flood, ESP32_FEATURE_802154)
@@ -236,12 +248,6 @@ static subghz_submenu_model_t s_recon_model;
 static void recon_menu_enter(M1SceneApp *app)
 {
     (void)app;
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-    if (!wifi_prompt_disconnect()) {
-        m1_scene_pop(app);
-        return;
-    }
-#endif
     if (s_recon_model.item_count == 0)
         subghz_submenu_model_init(&s_recon_model, RECON_ITEM_COUNT,
                                   M1_MENU_VIS(RECON_ITEM_COUNT));

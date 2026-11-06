@@ -451,22 +451,24 @@ void setting_esp32_firmware_update(void)
 
 	bool use_rpc_ota = false;
 	bool esp32_transport_acquired = false;
+	bool rom_loader_used = false;
 	old_op_mode = m1_device_stat.op_mode;
 	m1_device_stat.op_mode = M1_OPERATION_MODE_FIRMWARE_UPDATE;
 	if (uret != M1_FW_UPDATE_LOW_BATTERY &&
 	    esp32_update_status == M1_FW_UPDATE_READY &&
 	    f_info && esp32_ota_image_is_app(f_info->file_name))
 	{
-		start_address = 0x60000;
 		m1_esp32_rpc_foreground_acquire();
 		m1_esp32_ensure_init();
 		esp32_transport_acquired = true;
 		m1_esp32_caps_init();
 		use_rpc_ota = esp32_ota_use_rpc(f_info->file_name,
 		                                m1_esp32_caps_get_bitmap());
-		if (esp32_ota_legacy_task_required(use_rpc_ota) &&
-		    !get_esp32_main_init_status())
-			esp32_main_init();
+		if (!use_rpc_ota)
+		{
+			uret = M1_FW_UPDATE_FAILED;
+			esp32_update_status = uret;
+		}
 	}
 
     do
@@ -494,7 +496,10 @@ void setting_esp32_firmware_update(void)
 			if (use_rpc_ota)
 				uret = m1_fw_app_rpc(&hfile_fw);
 			else
+			{
+				rom_loader_used = true;
 				uret = m1_fw_app(&hfile_fw);
+			}
 		if ( uret != ESP_LOADER_SUCCESS )
 		{
 			uret = M1_FW_UPDATE_FAILED;
@@ -512,7 +517,7 @@ void setting_esp32_firmware_update(void)
 	if ( (uret==M1_FW_UPDATE_SUCCESS) || (uret==M1_FW_UPDATE_FAILED) )
 	{
 		m1_wdt_reset();
-		if (esp32_ota_uart_reset_required(use_rpc_ota))
+		if (rom_loader_used && esp32_ota_uart_reset_required(use_rpc_ota))
 			esp32_UART_change_baudrate(ESP32_UART_BAUDRATE); // Change to ESP32 default baud rate
 		m1_ringbuffer_reset(&esp32_rb_hdl);
 		m1_wdt_reset();
@@ -523,7 +528,7 @@ void setting_esp32_firmware_update(void)
 			(void)m1_esp32_rpc_call(M1_ESP32_RPC_SYS_RESET, &reset, sizeof(reset),
 			                        &response, sizeof(response), &response_len, 2u);
 		}
-		else if (!use_rpc_ota)
+		else if (rom_loader_used)
 		{
 			esp_loader_reset_target(); // Reset ESP32 to get the boot message
 		}

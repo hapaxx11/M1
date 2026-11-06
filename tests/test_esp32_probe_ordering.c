@@ -247,7 +247,9 @@ void test_ota_releases_transport_after_transfer(void)
 void test_native_ota_never_calls_rom_loader_reset(void)
 {
     char *content = read_file("m1_csrc/m1_esp32_fw_update.c");
-    TEST_ASSERT_NOT_NULL(strstr(content, "else if (!use_rpc_ota)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "else if (rom_loader_used)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "if (!use_rpc_ota)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "uret = M1_FW_UPDATE_FAILED;"));
     free(content);
 }
 

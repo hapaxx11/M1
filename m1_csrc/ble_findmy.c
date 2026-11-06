@@ -19,6 +19,6 @@ void ble_findmy_build(const uint8_t key[BLE_FINDMY_KEY_LEN],
     adv[29] = key[0] >> 6u;
     adv[30] = 0x00;
 
-    for (uint8_t i = 0; i < 6u; i++) addr[i] = key[i];
-    addr[0] = (addr[0] & 0x3Fu) | 0xC0u;
+    for (uint8_t i = 0; i < 6u; i++) addr[i] = key[5u - i];
+    addr[5] = (addr[5] & 0x3Fu) | 0xC0u;
 }

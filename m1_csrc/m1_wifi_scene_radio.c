@@ -64,6 +64,8 @@ static bool radio_init_feature(esp32_feature_id_t fid)
 {
     m1_esp32_rpc_foreground_acquire();
     m1_esp32_ensure_init();
+    if (!wifi_recon_prepare(fid))
+        return false;
     esp32_transport_t transport = m1_esp32_active_transport();
     if (m1_esp32_lifecycle_at_task_required(transport) &&
         !get_esp32_main_init_status())

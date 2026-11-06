@@ -18,8 +18,8 @@ static void test_findmy_layout_and_address(void)
     TEST_ASSERT_EQUAL_UINT8_ARRAY(&key[6], &adv[7], 22);
     TEST_ASSERT_EQUAL_UINT8(key[0] >> 6, adv[29]);
     TEST_ASSERT_EQUAL_UINT8(0, adv[30]);
-    TEST_ASSERT_EQUAL_UINT8(0xC0, addr[0]);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(&key[1], &addr[1], 5);
+    const uint8_t expected_addr[] = { 5, 4, 3, 2, 1, 0xC0 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_addr, addr, 6);
 }
 
 static void test_findmy_preserves_random_static_bits(void)
@@ -29,7 +29,8 @@ static void test_findmy_preserves_random_static_bits(void)
     uint8_t addr[6];
     key[0] = 0xFF;
     ble_findmy_build(key, adv, addr);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, addr[0]);
+    TEST_ASSERT_EQUAL_UINT8(0, addr[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xFF, addr[5]);
     TEST_ASSERT_EQUAL_UINT8(3, adv[29]);
 }
 

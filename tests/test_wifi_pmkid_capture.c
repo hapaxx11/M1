@@ -26,6 +26,8 @@ void setUp(void)
     uint8_t *f = rec + 16;
     f[0] = 0x08;
     const uint8_t bssid[6] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 };
+    const uint8_t station[6] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
+    memcpy(f + 4, station, 6);
     memcpy(f + 10, bssid, 6);
     uint8_t *llc = f + 24;
     const uint8_t snap[] = { 0xAA, 0xAA, 0x03, 0, 0, 0, 0x88, 0x8E };
@@ -49,24 +51,26 @@ void tearDown(void) { }
 
 static void test_extracts_standard_pmkid(void)
 {
-    uint8_t bssid[6], pmkid[16];
-    TEST_ASSERT_TRUE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, pmkid));
+    uint8_t bssid[6], station[6], pmkid[16];
+    TEST_ASSERT_TRUE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
     const uint8_t expected_bssid[] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 };
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_bssid, bssid, 6);
+    const uint8_t expected_station[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_station, station, 6);
     for (uint8_t i = 0; i < 16; i++) TEST_ASSERT_EQUAL_UINT8(0xA0 + i, pmkid[i]);
 }
 
 static void test_rejects_truncated_kde(void)
 {
-    uint8_t bssid[6], pmkid[16];
-    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len - 4, bssid, pmkid));
+    uint8_t bssid[6], station[6], pmkid[16];
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len - 4, bssid, station, pmkid));
 }
 
 static void test_rejects_non_pmkid_vendor_element(void)
 {
-    uint8_t bssid[6], pmkid[16];
+    uint8_t bssid[6], station[6], pmkid[16];
     pcap[24 + 16 + 24 + 8 + 99 + 5] = 0x01;
-    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, pmkid));
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
 }
 
 int main(void)

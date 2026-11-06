@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 from typing import Callable
+import zlib
 
 from m1_hil import BUTTONS, M1Hil, connect
 
@@ -40,6 +41,23 @@ def capture(client: M1Hil, directory: Path, name: str) -> bytes:
     if len(framebuffer) != 1024 or len(set(framebuffer)) < 2:
         raise AssertionError(f"{name}: framebuffer is missing or blank")
     return framebuffer
+
+
+def title_crc(framebuffer: bytes) -> int:
+    if len(framebuffer) != 1024:
+        raise ValueError("expected a 1024-byte framebuffer")
+    region = bytes(
+        (framebuffer[x + (y // 8) * 128] >> (y % 8)) & 1
+        for y in range(10)
+        for x in range(96)
+    )
+    return zlib.crc32(region)
+
+
+def assert_title(framebuffer: bytes, expected: int | tuple[int, ...], label: str) -> None:
+    accepted = (expected,) if isinstance(expected, int) else expected
+    if title_crc(framebuffer) not in accepted:
+        raise AssertionError(f"{label}: unexpected screen identity")
 
 
 def capture_until_change(
@@ -70,6 +88,8 @@ def exercise_scene(
     client: M1Hil,
     artifacts: Path,
     prefix: str,
+    active_title: int,
+    menu_title: int,
     enter: Callable[[], None],
     entry_timeout_s: float,
     exit_timeout_s: float = 2.0,
@@ -81,6 +101,7 @@ def exercise_scene(
         client, artifacts, f"{prefix}-active", before, entry_timeout_s
     )
     entry_ms = (time.monotonic() - started) * 1000
+    assert_title(active, active_title, f"{prefix} entry")
 
     started = time.monotonic()
     click(client, "back")
@@ -88,15 +109,18 @@ def exercise_scene(
         client, artifacts, f"{prefix}-menu", active, exit_timeout_s
     )
     exit_ms = (time.monotonic() - started) * 1000
+    assert_title(menu, menu_title, f"{prefix} exit")
 
     click(client, "ok")
     reentry = capture_until_change(
         client, artifacts, f"{prefix}-reentry", menu, entry_timeout_s
     )
+    assert_title(reentry, active_title, f"{prefix} re-entry")
     click(client, "back")
-    capture_until_change(
+    cleanup = capture_until_change(
         client, artifacts, f"{prefix}-cleanup", reentry, exit_timeout_s
     )
+    assert_title(cleanup, menu_title, f"{prefix} cleanup")
     client.info()
     return f"entry {entry_ms:.0f} ms, exit {exit_ms:.0f} ms, re-entry passed"
 
@@ -107,7 +131,8 @@ def run_wifi_airtime(client: M1Hil, artifacts: Path) -> str:
     click(client, "ok")
     click(client, "down", 2)
     return exercise_scene(
-        client, artifacts, "airtime", lambda: click(client, "ok"), 5.0
+        client, artifacts, "airtime", 0x7AA840B8, 0x04E3CD9B,
+        lambda: click(client, "ok"), 5.0
     )
 
 
@@ -115,7 +140,8 @@ def run_wifi_peer_link(client: M1Hil, artifacts: Path) -> str:
     open_wifi(client)
     click(client, "down", 5)
     return exercise_scene(
-        client, artifacts, "peer-link", lambda: click(client, "ok"), 3.0
+        client, artifacts, "peer-link", 0x711B2521, 0x95F7D22C,
+        lambda: click(client, "ok"), 3.0
     )
 
 
@@ -123,7 +149,8 @@ def run_ble_signal_finder(client: M1Hil, artifacts: Path) -> str:
     open_bluetooth(client)
     click(client, "down")
     return exercise_scene(
-        client, artifacts, "signal-finder", lambda: click(client, "ok"), 5.0
+        client, artifacts, "signal-finder", 0x61785B04, 0xCC15BF52,
+        lambda: click(client, "ok"), 5.0
     )
 
 
@@ -131,7 +158,8 @@ def run_ble_gatt_discovery(client: M1Hil, artifacts: Path) -> str:
     open_bluetooth(client)
     click(client, "down", 10)
     return exercise_scene(
-        client, artifacts, "gatt-discovery", lambda: click(client, "ok"), 8.0
+        client, artifacts, "gatt-discovery", (0x48976E86, 0xEECE126F), 0xCC15BF52,
+        lambda: click(client, "ok"), 8.0
     )
 
 
@@ -141,7 +169,8 @@ def run_ble_airtag_monitor(client: M1Hil, artifacts: Path) -> str:
     click(client, "ok")
     click(client, "down", 4)
     return exercise_scene(
-        client, artifacts, "airtag-monitor", lambda: click(client, "ok"), 10.0, 3.0
+        client, artifacts, "airtag-monitor", 0xD5605F26, 0x2F13F597,
+        lambda: click(client, "ok"), 10.0, 3.0
     )
 
 
@@ -229,9 +258,19 @@ def publish_results(pr_number: int, results: list[dict]) -> None:
         body_path.unlink(missing_ok=True)
 
 
+def recover_device(port: str, baud: int) -> None:
+    with connect(port, baud, timeout=5) as client:
+        try:
+            client.request(0x05, timeout=5)
+        except TimeoutError:
+            pass
+
+
 def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
     started = time.monotonic()
     stage = "connect"
+    status = "SKIP"
+    detail = "not run"
     artifacts = output_dir / case.test_id
     artifacts.mkdir(parents=True, exist_ok=True)
     try:
@@ -252,6 +291,13 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
     except (OSError, RuntimeError, TimeoutError, ValueError) as error:
         status = "FAIL" if stage == "test" else "SKIP"
         detail = f"{stage}: {error}"
+    finally:
+        if status != "PASS":
+            try:
+                recover_device(port, baud)
+                detail += "; recovery reboot issued"
+            except (OSError, RuntimeError, TimeoutError) as cleanup_error:
+                detail += f"; cleanup failed: {cleanup_error}"
     return {
         "id": case.test_id,
         "title": case.title,

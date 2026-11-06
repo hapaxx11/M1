@@ -35,6 +35,58 @@ class TestScreenTransitions(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "did not change"):
             hil.capture_until_change(None, pathlib.Path("."), "scene", b"same", 1.0)
 
+    def test_wrong_screen_identity_is_rejected(self):
+        framebuffer = bytearray(1024)
+        expected = hil.title_crc(framebuffer)
+        framebuffer[0] = 1
+        with self.assertRaisesRegex(AssertionError, "unexpected screen identity"):
+            hil.assert_title(framebuffer, expected, "negative case")
+
+    @mock.patch("m1_hil_test.capture", side_effect=[bytes(1024), bytes([1]) * 1024])
+    def test_failure_dialog_is_not_a_successful_entry(self, _capture):
+        with self.assertRaisesRegex(AssertionError, "entry"):
+            hil.exercise_scene(
+                None, pathlib.Path("."), "scene", 0, 0, lambda: None, 1.0
+            )
+
+
+class TestRecovery(unittest.TestCase):
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device")
+    @mock.patch("m1_hil_test.connect")
+    def test_failure_issues_bounded_recovery_reboot(self, connect, recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+
+        def fail(_client, _artifacts):
+            raise AssertionError("boom")
+
+        case = hil.HilCase("negative", "negative", fail)
+        with tempfile.TemporaryDirectory() as directory:
+            result = hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("boom", result["detail"])
+        recover.assert_called_once_with("COM3", 115200)
+
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device", side_effect=OSError("cleanup failed"))
+    @mock.patch("m1_hil_test.connect")
+    def test_cleanup_failure_does_not_hide_original_failure(self, connect, _recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+
+        def fail(_client, _artifacts):
+            raise AssertionError("original failure")
+
+        case = hil.HilCase("negative", "negative", fail)
+        with tempfile.TemporaryDirectory() as directory:
+            result = hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("original failure", result["detail"])
+        self.assertIn("cleanup failed", result["detail"])
+
 
 class TestPrReporting(unittest.TestCase):
     def test_only_pass_is_checked(self):

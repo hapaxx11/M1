@@ -79,6 +79,8 @@ static void test_all_wifi_and_bt_delegate_macros_hold_foreground_lease(void)
             assert_delegate_lifecycle(content, "#define DELEGATE(name, fn)");
         if (strstr(content, "#define DELEGATE_FEATURE(name, fn, fid)"))
             assert_delegate_lifecycle(content, "#define DELEGATE_FEATURE(name, fn, fid)");
+        if (strstr(content, "#define DELEGATE_RECON(name, fn, fid)"))
+            assert_delegate_lifecycle(content, "#define DELEGATE_RECON(name, fn, fid)");
         TEST_ASSERT_NULL_MESSAGE(strstr(content, "esp32_main_init();"), files[i]);
         free(content);
     }
@@ -202,8 +204,9 @@ static void test_native_operations_gate_legacy_task_by_transport(void)
     assert_pair(strstr(attack, "#define DELEGATE(name, fn)"),
                 "m1_esp32_rpc_foreground_acquire();",
                 "m1_esp32_ensure_init();");
-    TEST_ASSERT_NOT_NULL(strstr(attack, "DELEGATE(attack_pmkid_at,     wifi_target_pmkid)"));
-    TEST_ASSERT_NULL(strstr(attack, "DELEGATE(attack_pmkid_at,     wifi_pmkid_at)"));
+    TEST_ASSERT_NOT_NULL(strstr(attack, "DELEGATE(attack_pmkid_at,     attack_pmkid_capture)"));
+    TEST_ASSERT_NOT_NULL(strstr(attack, "wifi_scan_ap_target_selected()"));
+    TEST_ASSERT_NOT_NULL(strstr(attack, "if (wifi_target_valid())"));
     free(attack);
 }
 
@@ -222,6 +225,23 @@ static void test_gatt_and_raw_scan_use_cancellable_pending_states(void)
     free(bt);
 }
 
+static void test_csi_preserves_station_connection(void)
+{
+    char *menu = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    const char *enter = strstr(menu, "static void recon_menu_enter(");
+    TEST_ASSERT_NOT_NULL(enter);
+    const char *event = strstr(enter, "static bool recon_menu_event");
+    const char *prompt = strstr(enter, "wifi_prompt_disconnect");
+    TEST_ASSERT_NOT_NULL(event);
+    TEST_ASSERT_TRUE(prompt == NULL || prompt > event);
+    TEST_ASSERT_NOT_NULL(strstr(menu, "wifi_recon_prepare(fid)"));
+    free(menu);
+
+    char *wifi = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(strstr(wifi, "fid != ESP32_FEATURE_CSI"));
+    free(wifi);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -231,5 +251,6 @@ int main(void)
     RUN_TEST(test_native_recon_and_espnow_lifecycles);
     RUN_TEST(test_native_operations_gate_legacy_task_by_transport);
     RUN_TEST(test_gatt_and_raw_scan_use_cancellable_pending_states);
+    RUN_TEST(test_csi_preserves_station_connection);
     return UNITY_END();
 }

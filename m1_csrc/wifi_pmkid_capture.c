@@ -9,7 +9,7 @@ static uint32_t rd32(const uint8_t *p)
 }
 
 static bool extract_frame(const uint8_t *f, size_t len,
-                          uint8_t bssid[6], uint8_t pmkid[16])
+                          uint8_t bssid[6], uint8_t station[6], uint8_t pmkid[16])
 {
     if (len < 24 + 8 + 99 || (f[0] & 0x0C) != 0x08) return false;
     size_t hdrlen = 24 + ((f[0] & 0x80) ? 2 : 0);
@@ -34,6 +34,7 @@ static bool extract_frame(const uint8_t *f, size_t len,
             kd[off + 2] == 0x00 && kd[off + 3] == 0x0F &&
             kd[off + 4] == 0xAC && kd[off + 5] == 0x04) {
             memcpy(bssid, f + 10, 6);
+            memcpy(station, f + 4, 6);
             memcpy(pmkid, kd + off + 6, 16);
             return true;
         }
@@ -43,7 +44,7 @@ static bool extract_frame(const uint8_t *f, size_t len,
 }
 
 bool wifi_pmkid_pcap_extract(const uint8_t *pcap, size_t pcap_len,
-                             uint8_t bssid[6], uint8_t pmkid[16])
+                             uint8_t bssid[6], uint8_t station[6], uint8_t pmkid[16])
 {
     if (!pcap || !bssid || !pmkid || pcap_len < 24 + 16) return false;
     if (rd32(pcap) != 0xA1B2C3D4 || rd32(pcap + 20) != 105) return false;
@@ -53,7 +54,7 @@ bool wifi_pmkid_pcap_extract(const uint8_t *pcap, size_t pcap_len,
         uint32_t incl = rd32(pcap + off + 8);
         off += 16;
         if (incl == 0 || incl > pcap_len - off) return false;
-        if (extract_frame(pcap + off, incl, bssid, pmkid)) return true;
+        if (extract_frame(pcap + off, incl, bssid, station, pmkid)) return true;
         off += incl;
     }
     return false;

@@ -23,6 +23,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_esp32_hal_lifecycle.h"
 #include "m1_esp32_cmd.h"
+#include "esp32_feature_map.h"
 #include "m1_storage.h"
 #include "m1_file_browser.h"
 #include "m1_virtual_kb.h"
@@ -658,7 +659,9 @@ static bool wifi_wait_rpc_connected(const char *ssid, uint32_t *out_ip)
 		if (m1_esp32_rpc_wifi_get_status(&connected, out_ip) == M1_ESP32_RPC_OK &&
 		    connected)
 		{
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
 			wifi_set_connected_state(ssid);
+#endif
 			return true;
 		}
 		m1_wdt_reset();
@@ -6095,6 +6098,7 @@ void wifi_target_pmkid(void)
 	uint32_t started = HAL_GetTick();
 	uint32_t total = 0;
 	bool complete = false;
+	bool failed = false;
 	while (HAL_GetTick() - started < 15000u)
 	{
 		m1_wdt_reset();
@@ -6108,6 +6112,11 @@ void wifi_target_pmkid(void)
 			if (resp[0] == 2u)
 			{
 				complete = true;
+				break;
+			}
+			if (resp[0] == 3u)
+			{
+				failed = true;
 				break;
 			}
 		}
@@ -6124,6 +6133,7 @@ void wifi_target_pmkid(void)
 
 	uint8_t *pcap = NULL;
 	uint8_t bssid[6] = {0};
+	uint8_t station[6] = {0};
 	uint8_t pmkid[16] = {0};
 	if (complete && total > 24u && total <= 4096u)
 		pcap = malloc(total);
@@ -6143,10 +6153,9 @@ void wifi_target_pmkid(void)
 				break;
 			off += rlen;
 		}
-		if (off == total && wifi_pmkid_pcap_extract(pcap, total, bssid, pmkid))
+		if (off == total && wifi_pmkid_pcap_extract(pcap, total, bssid, station, pmkid))
 		{
-			static const uint8_t zero_mac[6] = {0};
-			pmkid_save_to_sd(zero_mac, bssid, pmkid);
+			pmkid_save_to_sd(station, bssid, pmkid);
 			f_mkdir("pmkid");
 			FIL fil;
 			if (f_open(&fil, "pmkid/last_capture.pcap", FA_WRITE | FA_CREATE_ALWAYS) == FR_OK)
@@ -6165,6 +6174,10 @@ void wifi_target_pmkid(void)
 	else if (complete)
 	{
 		wifi_show_message("PMKID Grab", "Capture too large", NULL);
+	}
+	else if (failed)
+	{
+		wifi_show_message("PMKID Grab", "Association failed", NULL);
 	}
 	else
 	{
@@ -6837,3 +6850,14 @@ bool wifi_require_connected(void)
 }
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */
+
+bool wifi_recon_prepare(esp32_feature_id_t fid)
+{
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	if (fid != ESP32_FEATURE_CSI)
+		return wifi_prompt_disconnect();
+#else
+	(void)fid;
+#endif
+	return true;
+}
