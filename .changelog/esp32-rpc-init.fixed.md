@@ -1,0 +1,1 @@
+**ESP32: USB RPC initialization** — Support the `ESP_INFO` initialize action so qMonstatek and native USB clients can bring up the radio and refresh capabilities without on-device CLI commands; empty status requests remain unchanged.

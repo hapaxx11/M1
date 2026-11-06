@@ -20,6 +20,7 @@
 
 #include "unity.h"
 #include "rpc_parse_impl.h"
+#include "m1_rpc_actions.h"
 #include <string.h>
 
 static RPC_ParseCtx ctx;
@@ -319,9 +320,19 @@ void test_frame_ready_cleared_on_new_sync(void)
     TEST_ASSERT_EQUAL(RPC_STATE_HEADER, ctx.state);
 }
 
+void test_esp_info_init_action(void)
+{
+    uint8_t payload[] = { 0, 1 };
+    TEST_ASSERT_FALSE(m1_rpc_esp_info_init_requested(0, NULL));
+    TEST_ASSERT_FALSE(m1_rpc_esp_info_init_requested(1, payload));
+    TEST_ASSERT_TRUE(m1_rpc_esp_info_init_requested(1, &payload[1]));
+    TEST_ASSERT_TRUE(m1_rpc_esp_info_init_requested(2, &payload[1]));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_esp_info_init_action);
     RUN_TEST(test_initial_state_idle);
     RUN_TEST(test_parse_ping_no_payload);
     RUN_TEST(test_parse_with_payload);

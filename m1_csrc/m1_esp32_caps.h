@@ -147,17 +147,11 @@
  *  CMD_BLE_GATT_START/NEXT/STOP/WRITE/SUB/NOTIF (opcodes 0x28..0x2D). */
 #define M1_ESP32_CAP_BLE_GATT       (UINT64_C(1) << 17)
 
-/** Dedicated PMKID capture — send a targeted EAPOL-1 and capture the PMKID
- *  without requiring a full four-way handshake.  Distinct from
- *  M1_ESP32_CAP_PKTMON (passive packet monitor).
- *  Reserved for CD3 (bedge117/m1-esp32-brain) via M1_RPC_OFF_PMKID_CAPTURE,
- *  but as of the 2026-07-21 source review that message ID is NOT dispatched
- *  in any shipped CD3 release (falls through to NAK ERR_UNSUPPORTED) — do
- *  not assume CD3 devices support this without confirming their self-reported
- *  cap_bitmap.  Also exposed by dag T-800 AT firmware via AT+M1PMKID (this
- *  path IS functional).  Note: the dag mapping sets CAP_PKTMON for AT+M1PMKID
- *  (legacy overlap); new callers that specifically need PMKID should gate on
- *  M1_ESP32_CAP_PMKID. */
+/** Dedicated PMKID capture — solicit and capture the PMKID without requiring
+ *  a full four-way handshake. Distinct from M1_ESP32_CAP_PKTMON (passive
+ *  packet monitor). Native brain v1.6.0 dispatches OFF_PMKID_CAPTURE/STATUS/GET/
+ *  STOP; dag T-800 exposes AT+M1PMKID (legacy CAP_PKTMON overlap). Gate new
+ *  callers on the firmware-reported M1_ESP32_CAP_PMKID bit. */
 #define M1_ESP32_CAP_PMKID          (UINT64_C(1) << 18)
 
 /** WPA handshake / EAPOL capture — deauth a station and capture the
@@ -170,14 +164,10 @@
 #define M1_ESP32_CAP_HANDSHAKE      (UINT64_C(1) << 19)
 
 /** ESP32 firmware OTA self-update — M1 can push a new ESP32 binary to the
- *  coprocessor over the SPI link without re-flashing via UART/SD card.
- *  Reserved for CD3 via M1_RPC_SYS_OTA_BEGIN/DATA/END, but as of the
- *  2026-07-21 source review these message IDs are NOT dispatched in any
- *  shipped CD3 release (fall through to NAK ERR_UNSUPPORTED) — this is a
- *  protocol placeholder only, not a working feature.  Not available in AT
- *  or SiN360 firmware.  NOTE: the shipped brain firmware deliberately does
- *  NOT advertise this bit, so it is NOT used to discriminate CD3 — see
- *  esp32_firmware_is_cd3() (HANDSHAKE + 802154_TX/BLE_SPAM) instead. */
+ *  coprocessor over the SPI link without using the ROM bootloader. Native
+ *  brain v1.6.0 dispatches SYS_OTA_BEGIN/DATA/END/ABORT and advertises this bit
+ *  only when an inactive OTA slot exists. Older and factory-only installations
+ *  omit it, so it must not be used to discriminate CD3. */
 #define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
 
 /* -------------------------------------------------------------------------
@@ -257,7 +247,18 @@
  *  advertised only by brain firmware that dispatches NET_HTTP_OPEN/READ/CLOSE. */
 #define M1_ESP32_CAP_HTTP           (UINT64_C(1) << 28)
 
-/* Bits 29-63 reserved for future use */
+/** Raw BLE advertisement payloads in both directions (scan and transmit). */
+#define M1_ESP32_CAP_BLE_RAW        (UINT64_C(1) << 29)
+/** Passive WPS-PIN exposure discovery from beacon/probe-response IEs. */
+#define M1_ESP32_CAP_WPS            (UINT64_C(1) << 30)
+/** Per-channel packet/airtime utilisation sampling. */
+#define M1_ESP32_CAP_CHANNEL_MON    (UINT64_C(1) << 31)
+/** Per-channel deauthentication/disassociation rate monitoring. */
+#define M1_ESP32_CAP_DEAUTH_MON     (UINT64_C(1) << 32)
+/** Experimental WiFi CSI motion/presence processing on the ESP32. */
+#define M1_ESP32_CAP_CSI            (UINT64_C(1) << 33)
+
+/* Bits 34-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -311,28 +312,13 @@
      M1_ESP32_CAP_PROBE_FLOOD  | \
      M1_ESP32_CAP_BLE_HID)
 
-/** CD3 native binary RPC firmware profile (bedge117/m1-esp32-brain) —
- *  reference/ASPIRATIONAL only, not what any shipped release currently
- *  self-reports.  Represents the full feature set the m1-native firmware is
- *  designed to eventually expose once all components are wired.  CD3
- *  self-reports its actual bitmap via M1_RPC_SYS_GET_STATUS; this macro is
- *  retained for unit tests and as a fallback when the GET_STATUS probe
- *  succeeds but returns an all-zero bitmap.  It includes host-owned fallback
- *  bits that the STM32 may infer only after the native CD3 M1_RPC probe
- *  succeeds.
+/** CD3 native binary RPC firmware v1.6.0 feature profile. Runtime detection
+ *  always uses GET_STATUS; this macro is a test/reference and conservative
+ *  early-firmware fallback, not a substitute for the live bitmap.
  *
- *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
- *  detected by the M1_RPC probe in m1_esp32_caps_init().  It is discriminated
- *  from SiN360/AT by esp32_firmware_is_cd3(): HANDSHAKE (bit 19) combined with
- *  a canonical CD3-only bit (802154_TX bit 22 or BLE_SPAM bit 21).  NOTE the
- *  shipped brain firmware does NOT advertise OTA (bit 20), so OTA is not part
- *  of the discriminator even though this aspirational macro still lists it.
- *  As of the 2026-07-21 source review, PMKID and OTA are reserved message IDs
- *  with no dispatch in main.c, and HANDSHAKE is dispatched and now self-reported
- *  in the firmware's M1_FW_CAPS.  See the CAP_PMKID/HANDSHAKE/OTA comments above
- *  for details before relying on this macro's bits 18-20.
- *  NETSCAN absent (no ping/ARP scanner component in v1.x).
- *  BT_MANAGE absent (no Bluetooth Classic component). */
+ *  Transport detection uses HANDSHAKE (bit 19) plus 802154_TX (bit 22) or
+ *  BLE_SPAM (bit 21). OTA is excluded because older and factory-only installs
+ *  omit it. BT_MANAGE remains absent because the C6 has no Bluetooth Classic. */
 #define M1_ESP32_CAP_PROFILE_CD3 \
     (M1_ESP32_CAP_WIFI_SCAN     | \
      M1_ESP32_CAP_WIFI_JOIN     | \
@@ -355,6 +341,12 @@
      M1_ESP32_CAP_802154_TX     | \
      M1_ESP32_CAP_SOFTAP        | \
      M1_ESP32_CAP_ESPNOW        | \
+     M1_ESP32_CAP_NETSCAN       | \
+     M1_ESP32_CAP_BLE_RAW       | \
+     M1_ESP32_CAP_WPS           | \
+     M1_ESP32_CAP_CHANNEL_MON   | \
+     M1_ESP32_CAP_DEAUTH_MON    | \
+     M1_ESP32_CAP_CSI           | \
      M1_ESP32_CAP_OTA)
 
 /**

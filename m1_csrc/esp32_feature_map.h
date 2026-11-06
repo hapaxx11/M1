@@ -134,6 +134,18 @@ typedef enum {
     /** WiFi SoftAP hotspot */
     ESP32_FEATURE_WIFI_HOTSPOT,
 
+    /* ----- Native radio tools ---------------------------------------------- */
+    /** Raw BLE advertisement scan and custom-payload transmission */
+    ESP32_FEATURE_BLE_RAW,
+    /** Passive WPS-PIN exposure audit */
+    ESP32_FEATURE_WPS,
+    /** Per-channel airtime/packet utilisation monitor */
+    ESP32_FEATURE_CHANNEL_MON,
+    /** Per-channel deauth/disassociation rate monitor */
+    ESP32_FEATURE_DEAUTH_MON,
+    /** Experimental CSI motion/presence radar */
+    ESP32_FEATURE_CSI,
+
     /* ----- Sentinel (must be last) ---------------------------------------- */
     ESP32_FEATURE_COUNT,
 } esp32_feature_id_t;
@@ -253,9 +265,9 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
  *         firmware (bedge117/m1-esp32-brain).
  *
  * Discriminator: HANDSHAKE present AND at least one of 802154_TX / BLE_SPAM.
- * HANDSHAKE is an RPC-only capability (dispatched via M1_RPC_OFF_HS_*); the
- * shipped brain firmware advertises it but deliberately omits OTA, so OTA can
- * NOT be used as a discriminator.  Requiring a second canonical CD3-only bit
+ * HANDSHAKE is an RPC-only capability (dispatched via M1_RPC_OFF_HS_*). Older
+ * and factory-only brain installations omit OTA, so OTA cannot be used as a
+ * discriminator. Requiring a second canonical CD3-only bit
  * (802.15.4 TX or BLE spam) keeps the rule from colliding with SiN360 or any
  * AT variant, none of which set this combination.
  *

@@ -41,6 +41,7 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -53,7 +54,12 @@
 
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        fn(); \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated blocking delegate — shows a "not supported" screen and
  * pops immediately when the required ESP32 capability is absent.  See
@@ -61,10 +67,13 @@
 #define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
         m1_esp32_ensure_init(); \
         if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
                                   esp32_feature_label(fid))) { fn(); } \
-        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* General delegates                                                        */
@@ -80,11 +89,13 @@ DELEGATE(gen_load_ssids,  wifi_general_load_ssids)
 DELEGATE(gen_clear_ssids, wifi_general_clear_ssids)
 static void gen_join_on_enter(M1SceneApp *app) {
     (void)app;
+    m1_esp32_rpc_foreground_acquire();
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     bool was_connected = wifi_is_connected();
 #endif
     wifi_general_join_wifi();
     m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
     app->running = true;
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     if (!was_connected && wifi_is_connected()) {

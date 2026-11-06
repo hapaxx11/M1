@@ -1,0 +1,1 @@
+**Hardware-in-the-loop: Native USB tooling** — Add a reusable Python RPC tool and agent skill for screen/button automation, ESP32 initialization, STM32 dual-bank flashing, and verified ESP32 OTA image staging without qMonstatek.

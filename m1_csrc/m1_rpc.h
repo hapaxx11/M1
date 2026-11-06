@@ -131,6 +131,8 @@
 /* ── Device Info Magic ── */
 #define RPC_DEVICE_INFO_MAGIC   0x4D314649  /* "M1FI" */
 
+#include "m1_rpc_actions.h"
+
 //************************** S T R U C T U R E S *******************************
 
 /* Parser state machine */

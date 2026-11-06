@@ -30,6 +30,9 @@
 #include "m1_power_ctl.h"
 #include "m1_display.h"
 #include "m1_wdt_hw.h"
+#include "m1_esp32_rpc.h"
+#include "esp32_ota_route.h"
+#include "esp_app_main.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -83,6 +86,7 @@ void setting_esp32_backup_flash(void);
 void setting_esp32_check_info(void);
 
 static esp_loader_error_t m1_fw_app(FIL *hfile);
+static esp_loader_error_t m1_fw_app_rpc(FIL *hfile);
 static esp_loader_error_t m1_fw_flash_binary(uint8_t *payload, size_t size);
 static uint16_t esp32_get_boot_info(uint8_t *boot_msg, uint16_t boot_msg_len, uint16_t *len);
 
@@ -445,7 +449,25 @@ void setting_esp32_firmware_update(void)
     	uret = M1_FW_UPDATE_LOW_BATTERY;
     } // if ( !m1_check_battery_level(FW_UPDATE_MIN_BATTERY_PCT) )
 
+	bool use_rpc_ota = false;
+	bool esp32_transport_acquired = false;
 	old_op_mode = m1_device_stat.op_mode;
+	m1_device_stat.op_mode = M1_OPERATION_MODE_FIRMWARE_UPDATE;
+	if (uret != M1_FW_UPDATE_LOW_BATTERY &&
+	    esp32_update_status == M1_FW_UPDATE_READY &&
+	    f_info && esp32_ota_image_is_app(f_info->file_name))
+	{
+		start_address = 0x60000;
+		m1_esp32_rpc_foreground_acquire();
+		m1_esp32_ensure_init();
+		esp32_transport_acquired = true;
+		m1_esp32_caps_init();
+		use_rpc_ota = esp32_ota_use_rpc(f_info->file_name,
+		                                m1_esp32_caps_get_bitmap());
+		if (esp32_ota_legacy_task_required(use_rpc_ota) &&
+		    !get_esp32_main_init_status())
+			esp32_main_init();
+	}
 
     do
     {
@@ -469,7 +491,10 @@ void setting_esp32_firmware_update(void)
 
         m1_wdt_reset(); /* Kick IWDG before entering the flash operation */
 		esp32_UART_deinit(); // Disable the ESP32 module first
-    	uret = m1_fw_app(&hfile_fw);
+			if (use_rpc_ota)
+				uret = m1_fw_app_rpc(&hfile_fw);
+			else
+				uret = m1_fw_app(&hfile_fw);
 		if ( uret != ESP_LOADER_SUCCESS )
 		{
 			uret = M1_FW_UPDATE_FAILED;
@@ -486,14 +511,33 @@ void setting_esp32_firmware_update(void)
 
 	if ( (uret==M1_FW_UPDATE_SUCCESS) || (uret==M1_FW_UPDATE_FAILED) )
 	{
-		esp32_UART_change_baudrate(ESP32_UART_BAUDRATE); // Change to ESP32 default baud rate
+		m1_wdt_reset();
+		if (esp32_ota_uart_reset_required(use_rpc_ota))
+			esp32_UART_change_baudrate(ESP32_UART_BAUDRATE); // Change to ESP32 default baud rate
 		m1_ringbuffer_reset(&esp32_rb_hdl);
-		esp_loader_reset_target(); // Reset ESP32 to get the boot message
+		m1_wdt_reset();
+		if (esp32_ota_reset_via_rpc(use_rpc_ota))
+		{
+			uint8_t reset = 1, response;
+			uint16_t response_len = 0;
+			(void)m1_esp32_rpc_call(M1_ESP32_RPC_SYS_RESET, &reset, sizeof(reset),
+			                        &response, sizeof(response), &response_len, 2u);
+		}
+		else if (!use_rpc_ota)
+		{
+			esp_loader_reset_target(); // Reset ESP32 to get the boot message
+		}
 
 		// Delay for skipping the boot message of the targets
 		HAL_Delay(100);
 		esp32_UART_deinit(); // Disable UART GPIO after update process is done
 	} // if ( (uret==M1_FW_UPDATE_FAILED) || (uret==M1_FW_UPDATE_SUCCESS) )
+
+	if (esp32_transport_acquired)
+	{
+		m1_esp32_deinit();
+		m1_esp32_rpc_foreground_release();
+	}
 
 	/* Restore op_mode and flush any stale queue entries before showing the
 	 * message box.  While op_mode == M1_OPERATION_MODE_FIRMWARE_UPDATE the
@@ -529,6 +573,55 @@ void setting_esp32_firmware_update(void)
 } // void setting_esp32_firmware_update(void)
 
 
+
+static esp_loader_error_t m1_fw_app_rpc(FIL *hfile)
+{
+	uint8_t buffer[ESP32_IMAGE_CHUNK_SIZE];
+	uint8_t response[8];
+	uint16_t response_len = 0;
+	uint8_t begin_req[4] = {
+		(uint8_t)image_size, (uint8_t)(image_size >> 8),
+		(uint8_t)(image_size >> 16), (uint8_t)(image_size >> 24),
+	};
+
+	f_lseek(hfile, 0);
+	if (m1_esp32_rpc_call(M1_ESP32_RPC_SYS_OTA_BEGIN, begin_req, sizeof(begin_req),
+	                      response, sizeof(response), &response_len, 5u) != M1_ESP32_RPC_OK)
+		return ESP_LOADER_ERROR_FAIL;
+
+	size_t remaining = image_size;
+	esp32_update_draw_progress_bar(remaining);
+	while (remaining)
+	{
+		m1_wdt_reset();
+		size_t count = m1_fb_read_from_file(hfile, buffer,
+			remaining > sizeof(buffer) ? sizeof(buffer) : remaining);
+		if (!count)
+			break;
+		if (m1_esp32_rpc_call(M1_ESP32_RPC_SYS_OTA_DATA, buffer, (uint16_t)count,
+		                      response, sizeof(response), &response_len, 10u) != M1_ESP32_RPC_OK)
+			break;
+		remaining -= count;
+		esp32_update_draw_progress_bar(remaining);
+	}
+
+	esp_loader_error_t result = remaining ? ESP_LOADER_ERROR_FAIL : ESP_LOADER_SUCCESS;
+	if (result == ESP_LOADER_SUCCESS)
+	{
+		uint8_t reboot = esp32_ota_end_requests_reboot() ? 1u : 0u;
+		response_len = 0;
+		if (m1_esp32_rpc_call(M1_ESP32_RPC_SYS_OTA_END, &reboot, sizeof(reboot),
+		                      response, sizeof(response), &response_len, 10u) != M1_ESP32_RPC_OK)
+			result = ESP_LOADER_ERROR_FAIL;
+	}
+	if (result != ESP_LOADER_SUCCESS)
+	{
+		response_len = 0;
+		(void)m1_esp32_rpc_call(M1_ESP32_RPC_SYS_OTA_ABORT, NULL, 0,
+		                        response, sizeof(response), &response_len, 2u);
+	}
+	return result;
+}
 
 /******************************************************************************/
 /**

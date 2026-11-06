@@ -361,10 +361,9 @@ void test_cd3_profile_has_pmkid_handshake_ota(void)
         esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_OTA));
 }
 
-void test_cd3_profile_lacks_netscan(void)
+void test_cd3_profile_supports_netscan(void)
 {
-    /* CD3 v1 does not include a ping/ARP network scanner */
-    TEST_ASSERT_FALSE(
+    TEST_ASSERT_TRUE(
         esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_NETSCAN));
 }
 
@@ -579,10 +578,24 @@ void test_is_sin360_bt_manage_only_returns_false(void)
  * Feature count sanity
  * =========================================================================*/
 
-void test_feature_count_equals_24(void)
+void test_native_radio_tools_map_to_their_caps(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_BLE_RAW,
+        esp32_feature_required_caps(ESP32_FEATURE_BLE_RAW));
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WPS,
+        esp32_feature_required_caps(ESP32_FEATURE_WPS));
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_CHANNEL_MON,
+        esp32_feature_required_caps(ESP32_FEATURE_CHANNEL_MON));
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_DEAUTH_MON,
+        esp32_feature_required_caps(ESP32_FEATURE_DEAUTH_MON));
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_CSI,
+        esp32_feature_required_caps(ESP32_FEATURE_CSI));
+}
+
+void test_feature_count_equals_29(void)
 {
     /* Update this test (and the feature table) whenever new IDs are added. */
-    TEST_ASSERT_EQUAL_INT(24, (int)ESP32_FEATURE_COUNT);
+    TEST_ASSERT_EQUAL_INT(29, (int)ESP32_FEATURE_COUNT);
 }
 
 /* =========================================================================
@@ -634,7 +647,7 @@ int main(void)
     RUN_TEST(test_sin360_profile_supports_attack_features);
 
     RUN_TEST(test_cd3_profile_has_pmkid_handshake_ota);
-    RUN_TEST(test_cd3_profile_lacks_netscan);
+    RUN_TEST(test_cd3_profile_supports_netscan);
     RUN_TEST(test_cd3_profile_supports_wifi_and_ble);
 
     RUN_TEST(test_is_sin360_zero_bitmap_returns_false);
@@ -663,7 +676,8 @@ int main(void)
     RUN_TEST(test_mtkcore_profile_supports_compat_features);
     RUN_TEST(test_mtkcore_profile_excludes_unsupported_features);
 
-    RUN_TEST(test_feature_count_equals_24);
+    RUN_TEST(test_native_radio_tools_map_to_their_caps);
+    RUN_TEST(test_feature_count_equals_29);
 
     return UNITY_END();
 }

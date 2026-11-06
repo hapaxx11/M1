@@ -210,6 +210,10 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_connect(const char *ssid,
                                                 const char *password,
                                                 uint32_t *out_ip);
 
+/** WIFI_GET_STATUS: read association state and the assigned IPv4 address. */
+m1_esp32_rpc_status_t m1_esp32_rpc_wifi_get_status(bool *connected,
+                                                   uint32_t *out_ip);
+
 /** WIFI_DISCONNECT: tear down the current station association. */
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_disconnect(void);
 
@@ -388,6 +392,25 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_stop(void);
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_start(uint8_t mode);
 /** BLE_SPAM_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_stop(void);
+
+#define M1_ESP32_RPC_BLE_ADV_MAX 31u
+
+typedef struct {
+    uint8_t addr[6];
+    uint8_t addr_type;
+    int8_t  rssi;
+    uint8_t adv_len;
+    uint8_t adv[M1_ESP32_RPC_BLE_ADV_MAX];
+} m1_esp32_rpc_ble_raw_adv_t;
+
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_raw_scan_start(uint16_t dur_s);
+/** Return true with an entry, false with out_done set when the list is exhausted. */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_raw_scan_next(m1_esp32_rpc_ble_raw_adv_t *out,
+                                                     bool *out_done);
+/** Transmit a raw legacy advertisement, optionally with an explicit random address. */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_raw(const uint8_t *adv, uint8_t adv_len,
+                                               const uint8_t addr[6],
+                                               uint16_t interval_ms);
 
 /** BLE_HID_INIT advertising as @p name (truncated to 31 bytes on the wire). */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_hid_init(const char *name);

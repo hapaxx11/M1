@@ -591,6 +591,9 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_bq25896.c
     ../../m1_csrc/m1_bq27421.c
     ../../m1_csrc/m1_bt.c
+    ../../m1_csrc/ble_findmy.c
+    ../../m1_csrc/wifi_pmkid_capture.c
+    ../../m1_csrc/esp32_ota_route.c
     ../../m1_csrc/m1_802154.c
     ../../m1_csrc/m1_buzzer.c
     ../../m1_csrc/m1_cli.c
@@ -752,6 +755,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_wifi_scene_general.c
     ../../m1_csrc/m1_wifi_scene_connect.c
     ../../m1_csrc/m1_wifi_scene_target.c
+    ../../m1_csrc/m1_wifi_scene_radio.c
     ../../m1_csrc/wifi_ap_record.c
     ../../m1_csrc/wifi_ap_cycle.c
     ../../m1_csrc/wifi_ch_analysis.c

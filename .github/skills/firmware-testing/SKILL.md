@@ -179,7 +179,41 @@ Manchester decoder, and the OTA asset filter.
    ```
    Compare output against the `paths:` list; add any new directory before committing.
 
-#### What NOT to unit test
+#### Single-device HIL tests
+
+For every new or changed hardware behavior, a self-contained single-M1 HIL test
+is **required whenever the scenario can be deterministic without an external
+fixture**. Use `scripts/m1_hil_test.py`; do not create a one-off automation
+script. The test must use native USB RPC, start from a known state, bound every
+wait, clean up active hardware, and leave the device responsive. It must not
+require a second M1, BLE peer, AP, internet service, qMonstatek, or manual intervention.
+If those constraints cannot be met, explain the omission in the PR. Do not embed
+personal ambient information from the test environment in cases, fixtures,
+assertions, logs, screenshots, result details, or PR descriptions. Use synthetic
+identifiers and generic environmental outcomes rather than real user/device
+values.
+
+Add the test's stable ID as an unchecked item between the PR's
+`M1_HIL_RESULTS` markers. Also add or update standard-library `unittest`
+coverage for reporting and pure test logic in `tests/test_m1_hil_test.py` (or a
+separate `test_*.py` file). Python unit tests run in CI; HIL itself never does.
+Missing hardware or dependencies must report `SKIP`, leave the box unchecked,
+and return success rather than blocking development or merge.
+
+Before a draft becomes ready/non-draft, strongly recommend that the user run
+the applicable HIL suite locally and update the PR with actual results. With a
+connected M1 and explicit permission to edit the PR, the command is:
+
+```bash
+python scripts/m1_hil_test.py --update-pr <PR_NUMBER>
+```
+
+Only observed `PASS` results may check boxes. `FAIL`, `SKIP`, and unexecuted
+items stay unchecked. Hardware unavailability is recorded, never treated as a
+merge-blocking failure. Read the hardware-in-the-loop skill before running or
+authoring HIL cases.
+
+### What NOT to unit test
 
 - **AT command construction** (`m1_wifi.c`, `m1_bt.c`, `m1_ble_spam.c`) — entirely
   ESP32 SPI communication, no pure logic to extract.

@@ -29,6 +29,7 @@
 #include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
 #include "m1_lib.h"
@@ -40,17 +41,25 @@
 
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        fn(); \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated blocking delegate — see m1_bt_scene_badbt.c for the
  * canonical documentation of this pattern. */
 #define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
         m1_esp32_ensure_init(); \
         if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
                                   esp32_feature_label(fid))) { fn(); } \
-        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* Sniffer delegates                                                        */
@@ -64,6 +73,7 @@ DELEGATE_FEATURE(sniff_flock,    ble_sniff_flock,    ESP32_FEATURE_BLE_SCAN)
 
 static void monitor_airtag_on_enter(M1SceneApp *app)
 {
+    m1_esp32_rpc_foreground_acquire();
     m1_esp32_ensure_init();
     if (!m1_esp32_require_cap(
             esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN),
@@ -81,6 +91,7 @@ static void monitor_airtag_on_exit(M1SceneApp *app)
 {
     ble_monitor_airtag_scene_exit(app);
     m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
 }
 
 static void monitor_airtag_draw(M1SceneApp *app)

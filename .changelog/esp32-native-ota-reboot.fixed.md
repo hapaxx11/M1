@@ -1,0 +1,1 @@
+**ESP32: Native OTA reboot and cleanup sequencing** — Finish the OTA RPC before the host performs the single controlled ESP32 reset, pause the desktop/brain relay during updates, skip the legacy AT task and ROM-only UART reinitialization on native RPC updates, and bracket 15-second ESP32 init/deinit lock waits with watchdog kicks.

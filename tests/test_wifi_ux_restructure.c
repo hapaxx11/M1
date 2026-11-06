@@ -791,6 +791,51 @@ void test_rpc_station_scan_uses_explicit_duration_and_no_restart_abort(void)
     free(c);
 }
 
+static void assert_full_page_draw(char *content, const char *function)
+{
+    const char *start = strstr(content, function);
+    TEST_ASSERT_NOT_NULL_MESSAGE(start, function);
+    const char *first = strstr(start, "m1_u8g2_firstpage();");
+    const char *next = strstr(start, "m1_u8g2_nextpage();");
+    TEST_ASSERT_NOT_NULL_MESSAGE(first, function);
+    TEST_ASSERT_NOT_NULL_MESSAGE(next, function);
+    TEST_ASSERT_TRUE_MESSAGE(first < next, function);
+}
+
+void test_wifi_delegates_hold_foreground_lease_until_after_deinit(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    const char *delegate = strstr(c, "#define DELEGATE(name, fn)");
+    TEST_ASSERT_NOT_NULL(delegate);
+    const char *acquire = strstr(delegate, "m1_esp32_rpc_foreground_acquire();");
+    const char *deinit = strstr(delegate, "m1_esp32_deinit();");
+    const char *release = strstr(delegate, "m1_esp32_rpc_foreground_release();");
+    TEST_ASSERT_NOT_NULL(acquire);
+    TEST_ASSERT_NOT_NULL(deinit);
+    TEST_ASSERT_NOT_NULL(release);
+    TEST_ASSERT_TRUE(acquire < deinit && deinit < release);
+
+    const char *feature = strstr(c, "#define DELEGATE_FEATURE(name, fn, fid)");
+    TEST_ASSERT_NOT_NULL(feature);
+    acquire = strstr(feature, "m1_esp32_rpc_foreground_acquire();");
+    deinit = strstr(feature, "m1_esp32_deinit();");
+    release = strstr(feature, "m1_esp32_rpc_foreground_release();");
+    TEST_ASSERT_NOT_NULL(acquire);
+    TEST_ASSERT_NOT_NULL(deinit);
+    TEST_ASSERT_NOT_NULL(release);
+    TEST_ASSERT_TRUE(acquire < deinit && deinit < release);
+    free(c);
+}
+
+void test_recon_custom_draws_clear_framebuffers(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_radio.c");
+    assert_full_page_draw(c, "static void wps_draw_empty(");
+    assert_full_page_draw(c, "static void channel_draw(");
+    assert_full_page_draw(c, "static void csi_draw(");
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -829,5 +874,7 @@ int main(void)
     RUN_TEST(test_hotspot_capability_hides_feature_when_absent);
     RUN_TEST(test_wifi_general_hotspot_declared);
     RUN_TEST(test_rpc_station_scan_uses_explicit_duration_and_no_restart_abort);
+    RUN_TEST(test_recon_custom_draws_clear_framebuffers);
+    RUN_TEST(test_wifi_delegates_hold_foreground_lease_until_after_deinit);
     return UNITY_END();
 }

@@ -45,6 +45,10 @@ typedef enum {
     WifiSceneWardrive,
     WifiSceneStationWardrive,
     WifiSceneSignalMonitor,
+    WifiSceneWps,
+    WifiSceneAirtime,
+    WifiSceneDeauthMon,
+    WifiSceneCsi,
 
     /* Recon sub-menu */
     WifiSceneReconMenu,
@@ -141,6 +145,10 @@ extern const M1SceneHandlers wifi_scene_mac_track_handlers;
 extern const M1SceneHandlers wifi_scene_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_station_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_signal_monitor_handlers;
+extern const M1SceneHandlers wifi_scene_wps_handlers;
+extern const M1SceneHandlers wifi_scene_airtime_handlers;
+extern const M1SceneHandlers wifi_scene_deauth_mon_handlers;
+extern const M1SceneHandlers wifi_scene_csi_handlers;
 extern const M1SceneHandlers wifi_scene_recon_menu_handlers;
 extern const M1SceneHandlers wifi_scene_wardrive_menu_handlers;
 extern const M1SceneHandlers wifi_scene_802154_menu_handlers;

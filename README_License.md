@@ -232,6 +232,53 @@ included.
 
 ---
 
+## 9. Evil-M5Project Derived Radio Tools (MIT)
+
+The native WPS-PIN parser, CSI filtering/calibration pipeline, Find My payload
+layout, ARP/TCP scanning behavior, and PMKID KDE parsing were adapted from
+Evil-M5Project.
+
+### Original Project
+
+https://github.com/7h30th3r0n3/Evil-M5Project
+
+Copyright (c) 2023 7h30th3r0n3
+
+### Related Files
+
+- `m1_csrc/ble_findmy.c`
+- `m1_csrc/wifi_pmkid_capture.c`
+- `m1_csrc/m1_wifi_scene_radio.c`
+- `m1_csrc/m1_wifi.c`
+
+The corresponding ESP32 implementations live in the `m1-esp32-brain` repository
+under `components/radio_tools/`, `components/net_scan/`, and
+`components/wifi_attack/wifi_pmkid.c`.
+
+### License
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
 ## License Copies
 
 Copies of applicable open source licenses are provided in the `LICENSES/` directory:

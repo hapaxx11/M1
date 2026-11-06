@@ -152,6 +152,36 @@ void tearDown(void)
     m1_esp32_rpc_set_transport(NULL);
 }
 
+void test_wifi_get_status_decodes_connection_and_ip(void)
+{
+    uint8_t payload[] = { 1, 10, 20, 30, 40 };
+    canned_resp(M1_ESP32_RPC_WIFI_GET_STATUS, payload, sizeof(payload));
+    bool connected = false;
+    uint32_t ip = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_wifi_get_status(&connected, &ip));
+    TEST_ASSERT_TRUE(connected);
+    TEST_ASSERT_EQUAL_HEX32(0x281E140A, ip);
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_WIFI_GET_STATUS, tx_msg_id());
+}
+
+void test_wifi_get_status_disconnected(void)
+{
+    uint8_t payload[] = { 0, 0, 0, 0, 0 };
+    canned_resp(M1_ESP32_RPC_WIFI_GET_STATUS, payload, sizeof(payload));
+    bool connected = true;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_wifi_get_status(&connected, NULL));
+    TEST_ASSERT_FALSE(connected);
+}
+
+void test_wifi_get_status_rejects_short_response(void)
+{
+    canned_resp(M1_ESP32_RPC_WIFI_GET_STATUS, NULL, 0u);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME,
+                      m1_esp32_rpc_wifi_get_status(NULL, NULL));
+}
+
 /* ================================================================== */
 /* Feature -> opcode map                                              */
 /* ================================================================== */
@@ -194,8 +224,22 @@ void test_opcode_map_unmapped_and_oob(void)
 {
     m1_esp32_rpc_id_t op = (m1_esp32_rpc_id_t)0xABCD;
 
-    TEST_ASSERT_FALSE(esp32_feature_rpc_opcode(ESP32_FEATURE_NETSCAN, &op));
-    TEST_ASSERT_FALSE(esp32_feature_rpc_opcode(ESP32_FEATURE_BLE_GATT, &op));
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_NETSCAN, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_NETSCAN_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_BLE_GATT, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_BLE_GATT_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_BLE_RAW, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_BLE_RAW_SCAN_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_WPS, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_WPS_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_CHANNEL_MON, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_CHANNEL_MON_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_DEAUTH_MON, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_CHANNEL_MON_START, op);
+    TEST_ASSERT_TRUE(esp32_feature_rpc_opcode(ESP32_FEATURE_CSI, &op));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_CSI_START, op);
+
+    op = (m1_esp32_rpc_id_t)0xABCD;
     TEST_ASSERT_FALSE(esp32_feature_rpc_opcode(ESP32_FEATURE_BT_MANAGE, &op));
     TEST_ASSERT_FALSE(esp32_feature_rpc_opcode(ESP32_FEATURE_COUNT, &op));
     /* out param untouched when no mapping */
@@ -1162,6 +1206,28 @@ void test_transaction_lock_timed_fails_fast_when_held(void)
 /* Runner                                                             */
 /* ================================================================== */
 
+void test_raw_scan_pending_is_not_completion(void)
+{
+    uint8_t pending[] = { 0xFE };
+    canned_resp(M1_ESP32_RPC_BLE_RAW_SCAN_NEXT, pending, sizeof(pending));
+    m1_esp32_rpc_ble_raw_adv_t out;
+    bool done = true;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_PENDING,
+                      m1_esp32_rpc_ble_raw_scan_next(&out, &done));
+    TEST_ASSERT_FALSE(done);
+}
+
+void test_raw_scan_done_is_completion(void)
+{
+    uint8_t complete[] = { 1 };
+    canned_resp(M1_ESP32_RPC_BLE_RAW_SCAN_NEXT, complete, sizeof(complete));
+    m1_esp32_rpc_ble_raw_adv_t out;
+    bool done = false;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_ble_raw_scan_next(&out, &done));
+    TEST_ASSERT_TRUE(done);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -1216,6 +1282,9 @@ int main(void)
     RUN_TEST(test_qmon_poll_copies_complete_frame);
     RUN_TEST(test_qmon_response_accepts_fragmentable_frame);
     RUN_TEST(test_screen_push_requires_full_framebuffer);
+    RUN_TEST(test_wifi_get_status_decodes_connection_and_ip);
+    RUN_TEST(test_wifi_get_status_disconnected);
+    RUN_TEST(test_wifi_get_status_rejects_short_response);
 
     RUN_TEST(test_wifi_scan_decodes_entries);
     RUN_TEST(test_wifi_scan_caps_to_max);
@@ -1242,6 +1311,8 @@ int main(void)
     RUN_TEST(test_sntp_sync_uses_feature_timeout);
 
     RUN_TEST(test_transaction_lock_timed_fails_fast_when_held);
+    RUN_TEST(test_raw_scan_pending_is_not_completion);
+    RUN_TEST(test_raw_scan_done_is_completion);
 
     return UNITY_END();
 }

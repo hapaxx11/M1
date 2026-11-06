@@ -23,14 +23,13 @@
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_rpc.h"
+#include "m1_esp32_hal_lifecycle.h"
 #include "espnow_peer_session.h"
 #include "espnow_rpc_parse.h"
 #include "ff.h"
 
-/* esp_app_main.h declares get_esp32_main_init_status() / esp32_main_init().
- * The CD3 M1_RPC transport rides the same half-duplex SPI-HD command protocol
- * as the AT firmware, driven by the AT RTOS task, so that task must be running
- * before any ESP-NOW frame can be exchanged. */
+/* The legacy AT task is started only for AT firmware. Native ESP-NOW RPC uses
+ * full-duplex M1 Link and never needs that task. */
 #include "esp_app_main.h"
 
 /*==========================================================================*/
@@ -114,13 +113,9 @@ static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
 
 bool m1_espnow_start(uint8_t channel)
 {
-    /* Bring up the SPI HAL and the AT/SPI-HD RTOS task that carries the CD3
-     * M1_RPC frames.  DELEGATE_FEATURE only guarantees the SPI HAL is up (via
-     * m1_esp32_ensure_init()); the transport task is otherwise started deep
-     * inside individual features, so start it here — mirroring the CD3
-     * detection probe in m1_esp32_caps_init(). */
     m1_esp32_ensure_init();
-    if (!get_esp32_main_init_status())
+    if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+        !get_esp32_main_init_status())
         esp32_main_init();
 
     s_channel = channel;

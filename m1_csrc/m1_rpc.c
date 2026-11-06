@@ -58,6 +58,8 @@
 #include "m1_settings.h"
 #include "m1_diag.h"
 #include "m1_rpc_stream_state.h"
+#include "m1_esp32_hal_lifecycle.h"
+#include "esp32_ota_route.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -2276,6 +2278,9 @@ static void rpc_handle_esp_info(const S_RPC_Frame *f)
     uint8_t resp[36];
     memset(resp, 0, sizeof(resp));
 
+    if (m1_rpc_esp_info_init_requested(f->len, f->payload))
+        m1_esp32_ensure_init();
+
     /* First byte: ESP32 ready status */
     resp[0] = m1_esp32_get_init_status();
 
@@ -2816,6 +2821,11 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f)
  * stores the exact resume tick so only suspended probe time is excluded. */
 static bool rpc_brain_relay_poll(TickType_t *supervised_start)
 {
+    if (!m1_esp32_lifecycle_relay_allowed(
+            m1_esp32_rpc_foreground_active() ? 1u : 0u,
+            m1_device_stat.op_mode == M1_OPERATION_MODE_FIRMWARE_UPDATE))
+        return false;
+
     /* The bring-up probe (m1_esp32_init + capability classification) can
      * legitimately block for many seconds when the ESP32 is absent or still
      * booting (the AT-fallback retry loop paces 20 retries at 500 ms).  Even
