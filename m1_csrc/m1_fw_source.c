@@ -82,6 +82,15 @@ static const char s_default_config[] =
 	"Category: firmware\n"
 	"Max_releases: 5\n"
 	"\n"
+	"Source: Hapax SPI Brain\n"
+	"Type: github_release\n"
+	"Owner: hapaxx11\n"
+	"Repo: m1-esp32-brain\n"
+	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
 	"Source: C3 SPI Brain\n"
 	"Type: github_release\n"
 	"Owner: bedge117\n"
@@ -158,6 +167,15 @@ static const char s_default_firmware_append[] =
 static const char s_default_esp32_append[] =
 	"\n"
 	"# Auto-added: 'esp32' category defaults\n"
+	"Source: Hapax SPI Brain\n"
+	"Type: github_release\n"
+	"Owner: hapaxx11\n"
+	"Repo: m1-esp32-brain\n"
+	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
 	"Source: C3 SPI Brain\n"
 	"Type: github_release\n"
 	"Owner: bedge117\n"
@@ -203,6 +221,30 @@ bool fw_source_append_category_defaults(const char *category)
 	f_close(&file);
 
 	return (fr == FR_OK && bw == len);
+}
+
+bool fw_source_append_hapax_brain(void)
+{
+	static const char text[] =
+		"\n"
+		"# Auto-added: preferred Hapax ESP32 source\n"
+		"Source: Hapax SPI Brain\n"
+		"Type: github_release\n"
+		"Owner: hapaxx11\n"
+		"Repo: m1-esp32-brain\n"
+		"Asset_filter: factory_m1-esp32-brain.bin\n"
+		"Exclude_filter:\n"
+		"Category: esp32\n"
+		"Max_releases: 5\n";
+	FIL file;
+	UINT bw;
+	FRESULT fr = f_open(&file, FW_SOURCES_CONFIG_PATH, FA_OPEN_APPEND | FA_WRITE);
+	if (fr != FR_OK)
+		return false;
+	uint16_t len = (uint16_t)strlen(text);
+	fr = f_write(&file, text, len, &bw);
+	f_close(&file);
+	return fr == FR_OK && bw == len;
 }
 
 /* Apply default category to a source that has none set */
@@ -282,6 +324,7 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 	fw_source_finalize(cur);
 
 	ff_close(&ff);
+	fw_source_prefer_hapax_brain(sources, count);
 	return count;
 }
 
@@ -294,6 +337,12 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 
 	memset(sources, 0, sizeof(fw_source_t) * FW_SOURCE_MAX);
 	total = fw_source_load_config(sources);
+	if (strcmp(category, "esp32") == 0 &&
+	    !fw_source_has_hapax_brain(sources, total))
+	{
+		fw_source_append_hapax_brain();
+		total = fw_source_load_config(sources);
+	}
 
 	for (uint8_t i = 0; i < total && out < FW_SOURCE_MAX; i++)
 	{

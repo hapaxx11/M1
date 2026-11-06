@@ -253,6 +253,15 @@ void test_native_ota_never_calls_rom_loader_reset(void)
     free(content);
 }
 
+void test_hapax_source_upgrade_appends_when_missing(void)
+{
+    char *content = read_file("m1_csrc/m1_fw_source.c");
+    TEST_ASSERT_NOT_NULL(strstr(content, "bool fw_source_append_hapax_brain(void)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "fw_source_append_hapax_brain();"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "fw_source_prefer_hapax_brain(sources, count);"));
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -265,5 +274,6 @@ int main(void)
     RUN_TEST(test_ota_probes_caps_before_routing);
     RUN_TEST(test_ota_releases_transport_after_transfer);
     RUN_TEST(test_native_ota_never_calls_rom_loader_reset);
+    RUN_TEST(test_hapax_source_upgrade_appends_when_missing);
     return UNITY_END();
 }

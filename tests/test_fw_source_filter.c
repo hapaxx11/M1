@@ -189,6 +189,40 @@ void test_filter_cd3_brain_alias_rejects_other_assets_and_sources(void)
 		&source, "factory_ESP32C6-SPI.bin"));
 }
 
+void test_prefer_hapax_brain_moves_to_front(void)
+{
+	fw_source_t sources[3];
+	memset(sources, 0, sizeof(sources));
+	strcpy(sources[0].github.owner, "bedge117");
+	strcpy(sources[1].github.owner, "hapaxx11");
+	strcpy(sources[2].github.owner, "neddy299");
+	strcpy(sources[0].github.repo, "m1-esp32-brain");
+	strcpy(sources[1].github.repo, "m1-esp32-brain");
+	strcpy(sources[2].github.repo, "other");
+
+	fw_source_prefer_hapax_brain(sources, 3);
+	TEST_ASSERT_TRUE(fw_source_has_hapax_brain(sources, 3));
+	TEST_ASSERT_EQUAL_STRING("hapaxx11", sources[0].github.owner);
+	TEST_ASSERT_EQUAL_STRING("m1-esp32-brain", sources[0].github.repo);
+	TEST_ASSERT_EQUAL_STRING("bedge117", sources[1].github.owner);
+	TEST_ASSERT_EQUAL_STRING("neddy299", sources[2].github.owner);
+}
+
+void test_prefer_hapax_brain_ignores_other_sources(void)
+{
+	fw_source_t sources[2];
+	memset(sources, 0, sizeof(sources));
+	strcpy(sources[0].github.owner, "bedge117");
+	strcpy(sources[1].github.owner, "neddy299");
+	strcpy(sources[0].github.repo, "m1-esp32-brain");
+	strcpy(sources[1].github.repo, "other-repo");
+
+	fw_source_prefer_hapax_brain(sources, 2);
+	TEST_ASSERT_FALSE(fw_source_has_hapax_brain(sources, 2));
+	TEST_ASSERT_EQUAL_STRING("bedge117", sources[0].github.owner);
+	TEST_ASSERT_EQUAL_STRING("neddy299", sources[1].github.owner);
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -224,6 +258,8 @@ int main(void)
 	RUN_TEST(test_filter_md5_excluded);
 	RUN_TEST(test_filter_cd3_brain_factory_name_alias);
 	RUN_TEST(test_filter_cd3_brain_alias_rejects_other_assets_and_sources);
+	RUN_TEST(test_prefer_hapax_brain_moves_to_front);
+	RUN_TEST(test_prefer_hapax_brain_ignores_other_sources);
 
 	return UNITY_END();
 }

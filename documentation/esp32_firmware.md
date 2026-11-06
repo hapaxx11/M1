@@ -247,8 +247,9 @@ library.
 1. Connect to WiFi via **WiFi → Scan + Connect**.
 2. Navigate to **Settings → ESP32 update → Download**.
 3. Select a firmware source. The built-in defaults include `C3 SPI Brain` for
-   the recommended native **CD3** `m1-esp32-brain` firmware and `Deauth ESP32
-   AT` as a **CD3-AT** alternative. Existing or custom `fw_sources.txt`
+   **Hapax SPI Brain** (`hapaxx11/m1-esp32-brain`) first as the preferred
+   source, followed by the native **CD3** `m1-esp32-brain` firmware and
+   `Deauth ESP32 AT` as a **CD3-AT** alternative. Existing or custom `fw_sources.txt`
    configurations may show older entries; manual downloads from the releases
    page remain an alternative.
 4. Select a release version.

@@ -2325,6 +2325,24 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME fw_source_filter COMMAND test_fw_source_filter)
 
+add_executable(test_fw_source_config
+    test_fw_source_config.c
+    ${M1_ROOT}/m1_csrc/m1_fw_source.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+)
+target_include_directories(test_fw_source_config PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Drivers/u8g2_csrc
+)
+target_compile_options(test_fw_source_config PRIVATE "SHELL:-ffunction-sections -include main.h -include m1_system.h")
+target_link_options(test_fw_source_config PRIVATE -Wl,--gc-sections)
+target_link_libraries(test_fw_source_config PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_source_config PRIVATE sanitizers)
+endif()
+add_test(NAME fw_source_config COMMAND test_fw_source_config)
+
 # ------------------------------------------------------------------
 # Module under test: RPC CRC-16/CCITT (frame integrity)
 # Tests the table-driven CRC-16 used by the M1 RPC binary protocol.
