@@ -1,1 +1,0 @@
-**ESP32 OTA: Hapax preferred source** — Added Hapax SPI Brain to the firmware source catalog and made the loader move it to the top of the source-selection list for both new and existing `fw_sources.txt` configurations. The source uses the merged Hapax ESP32 release factory image.

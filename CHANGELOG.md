@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5.5] - 2026-11-07
+
+### Added
+
+- **ESP32 OTA: Hapax preferred source** — Added Hapax SPI Brain to the firmware source catalog and made the loader move it to the top of the source-selection list for both new and existing `fw_sources.txt` configurations. The source uses the merged Hapax ESP32 release factory image.
+- **Hardware-in-the-loop: Native USB tooling** — Add a reusable Python RPC tool and agent skill for screen/button automation, ESP32 initialization, STM32 dual-bank flashing, and verified ESP32 OTA image staging without qMonstatek.
+- **ESP32: Native radio tool suite** — Added raw BLE scan/advertising and lab
+  Find My spoofing, active PMKID capture with PCAP export, native network
+  scanners, GATT discovery/read/write/notifications, passive WPS auditing,
+  channel airtime/deauth monitors, and experimental CSI motion/presence radar.
+- **ESP32: Dual-slot native OTA** — Added app-only self-update over M1_RPC with
+  rollback validation, while preserving HTTP release downloads and full-factory
+  ROM updates. The first v1.6.0 install requires a one-time factory migration.
+- **Testing: Single-device HIL workflow** — Added a native-USB HIL runner with repeatable WiFi/BLE lifecycle smoke tests, local artifacts, and PR checklist reporting. Suitable single-device HIL cases are now required for future hardware changes, while unavailable hardware reports an unchecked skip and never blocks CI or merge. Non-draft PRs strongly recommend local HIL execution and result updates.
+
+### Fixed
+
+- **WiFi: brain ESP32 clock synchronization** — allow the native SNTP request to finish before the RPC timeout and permit a complete retry, so connecting to WiFi sets the clock reliably.
+- **ESP32: Bluetooth Direct** — prevent a coprocessor panic when Direct is disabled before NimBLE starts, preserving WiFi connectivity and firmware downloads.
+- **ESP32: Native OTA reboot and cleanup sequencing** — Finish the OTA RPC before the host performs the single controlled ESP32 reset, pause the desktop/brain relay during updates, skip the legacy AT task and ROM-only UART reinitialization on native RPC updates, and bracket 15-second ESP32 init/deinit lock waits with watchdog kicks.
+- **ESP32: WiFi and Bluetooth lifecycle responsiveness** — Avoid unnecessary legacy AT task resets for native RPC scenes, pause background relay polling during every foreground WiFi/Bluetooth operation, enforce acquire → deinit → release ordering for all delegate macros and custom scenes, clean up Target and ESP-NOW transitions, and clear custom Recon framebuffers to prevent stale pixels and long entry stalls.
+- **ESP32: USB RPC initialization** — Support the `ESP_INFO` initialize action so qMonstatek and native USB clients can bring up the radio and refresh capabilities without on-device CLI commands; empty status requests remain unchanged.
+- **ESP32: Hapax firmware downloads** — match the released factory image name and retain compatibility with earlier Hapax source configurations.
+- Documentation: **HIL tooling** — flush and eject staged media before remounting, redact captures and public errors, enforce transition budgets, preserve unexecuted checklist entries, and keep recovery failures in test results.
+- **WiFi: Handshake capture validation** — WPA captures now complete only when
+  EAPOL M1 and M2 belong to the same station and replay-counter exchange,
+  preventing unrelated or retransmitted frames from producing false positives.
+- **WiFi: PMKID export** — validate the declared EAPOL body length before accepting a PMKID KDE, rejecting malformed or truncated captures.
+- **ESP32: Additional review hardening** — Reject app-only updates when native OTA is unavailable, preserve PMKID station addresses and provide standalone scan/selection, keep CSI station links available, correct Find My address order and feature-disabled WiFi builds, handle GATT permission/cancellation safely, replace raw association injection with a supported association attempt, and require identity-checked HIL screens with bounded failure recovery.
+- **ESP32: Review follow-up fixes** — Prime capabilities and release transport resources on every native OTA path, keep ROM loader cleanup out of native updates, make GATT discovery cancellable, distinguish pending raw BLE scans from completion, and align GATT address/subscription payloads. Companion firmware hardens boot validation, GATT procedure/notification synchronization, CSI snapshots, and WiFi monitor lifecycle behavior.
+- **ESP32: firmware source catalogs** — prevent duplicate Hapax migration at capacity, preserve custom sources, accept both factory image names in either configuration, and recommend Hapax brain v1.6.0.
+
 ## [0.9.5.4] - 2026-11-05
 
 ### Fixed
