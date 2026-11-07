@@ -1097,7 +1097,7 @@ void test_sntp_sync_propagates_nak(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_TIMEOUT, m1_esp32_rpc_sntp_sync(NULL));
 }
 
-/* Uses the generic feature timeout (2 s), not the long WiFi-scan budget. */
+/* Leaves room for the brain's 5 s SNTP wait plus transport overhead. */
 void test_sntp_sync_uses_feature_timeout(void)
 {
     uint8_t body[16];
@@ -1105,8 +1105,9 @@ void test_sntp_sync_uses_feature_timeout(void)
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
     m1_esp32_rpc_sntp_sync(NULL);
-    TEST_ASSERT_EQUAL_UINT32(M1_ESP32_RPC_FEATURE_TIMEOUT_S * 1000u,
+    TEST_ASSERT_EQUAL_UINT32(M1_ESP32_RPC_SNTP_TIMEOUT_S * 1000u,
                              g_last_timeout_ms);
+    TEST_ASSERT_GREATER_THAN_INT(5, M1_ESP32_RPC_SNTP_TIMEOUT_S);
     TEST_ASSERT_LESS_THAN_INT(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S,
                                (int)(g_last_timeout_ms / 1000u));
 }

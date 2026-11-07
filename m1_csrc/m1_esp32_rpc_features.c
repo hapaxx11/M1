@@ -992,7 +992,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out)
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_SYS_SNTP_SYNC, NULL, 0u,
                           (uint8_t *)&wire, sizeof(wire), &rlen,
-                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+                          M1_ESP32_RPC_SNTP_TIMEOUT_S);
     if (st != M1_ESP32_RPC_OK)
         return st;
 

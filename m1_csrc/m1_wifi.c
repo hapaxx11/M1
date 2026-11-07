@@ -66,6 +66,7 @@
 
 #define WIFI_CMD_TIMEOUT_MS	15000  /* Scan can take up to 15 seconds */
 #define WIFI_NEXT_TIMEOUT_MS 1000
+#define WIFI_SNTP_SYNC_TIMEOUT_MS 15000
 
 #define M1_GUI_ROW_SPACING	1
 
@@ -6325,14 +6326,13 @@ uint8_t wifi_sync_rtc(void)
 		return 1;
 
 	/* brain CD3 (binary M1_RPC): use SYS_SNTP_SYNC opcode.
-	 * The brain firmware fetches the time from pool.ntp.org internally;
-	 * poll with 500 ms retries for up to 5 s to allow NTP convergence on
-	 * slow connections, matching the AT firmware poll budget below. */
+	 * The brain can wait 5 s for each NTP response. Allow two attempts with
+	 * transport margin instead of timing out the RPC before the first reply. */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
 		start_ms  = HAL_GetTick();
 		first_poll = true;
-		while ((HAL_GetTick() - start_ms) < 5000u)
+		while ((HAL_GetTick() - start_ms) < WIFI_SNTP_SYNC_TIMEOUT_MS)
 		{
 			if (!first_poll)
 				vTaskDelay(pdMS_TO_TICKS(500));

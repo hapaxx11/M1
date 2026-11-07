@@ -488,14 +488,15 @@ typedef struct {
     uint8_t  weekday; /**< 0=Sun … 6=Sat */
 } m1_esp32_rpc_utctime_t;
 
+#define M1_ESP32_RPC_SNTP_TIMEOUT_S 7u
+
 /**
  * SYS_SNTP_SYNC: request the brain firmware to fetch the current time from
  * the NTP pool and return it.
  *
  * The brain issues a pool.ntp.org query and replies with the UTC time once
  * synchronized (or returns an error if no IP connectivity is available).
- * The call uses M1_ESP32_RPC_FEATURE_TIMEOUT_S (2 s) because the firmware
- * is already associated when this is called (after a successful WIFI_CONNECT).
+ * Its handler can wait 5 s, so the RPC timeout includes transport margin.
  *
  * @param out  [out] receives the decoded UTC time on success; may be NULL to
  *             merely trigger synchronization without reading back the time.
