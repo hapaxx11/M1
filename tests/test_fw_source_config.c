@@ -97,10 +97,91 @@ static void test_missing_file_defaults_prefer_hapax(void)
     TEST_ASSERT_EQUAL_STRING("Deauth ESP32 AT", sources[2].name);
 }
 
+static void write_custom_sources(uint8_t count, bool hapax_last)
+{
+    char text[8192] = {0};
+    for (uint8_t i = 0; i < count; i++) {
+        char block[384];
+        if (hapax_last && i == count - 1) {
+            snprintf(block, sizeof(block),
+                "Source: Hapax SPI Brain\n"
+                "Type: github_release\n"
+                "Owner: hapaxx11\n"
+                "Repo: m1-esp32-brain\n"
+                "Asset_filter: factory_m1-esp32-brain.bin\n"
+                "Category: esp32\n"
+                "Max_releases: 5\n\n");
+        } else {
+            snprintf(block, sizeof(block),
+                "Source: Custom %u\n"
+                "Type: github_release\n"
+                "Owner: custom-owner\n"
+                "Repo: custom-repo\n"
+                "Asset_filter: .bin\n"
+                "Category: esp32\n"
+                "Max_releases: 5\n\n", i);
+        }
+        strncat(text, block, sizeof(text) - strlen(text) - 1);
+    }
+    write_config(text);
+}
+
+static void assert_source_occurrences(const char *name, int expected)
+{
+    FILE *fp = fopen(FW_SOURCES_CONFIG_PATH, "rb");
+    TEST_ASSERT_NOT_NULL(fp);
+    char text[8192];
+    size_t len = fread(text, 1, sizeof(text) - 1, fp);
+    fclose(fp);
+    text[len] = '\0';
+    int count = 0;
+    for (const char *p = text; (p = strstr(p, name)) != NULL; p++) count++;
+    TEST_ASSERT_EQUAL_INT(expected, count);
+}
+
+static void test_seven_sources_migrate_only_once(void)
+{
+    write_custom_sources(7, false);
+    for (int pass = 0; pass < 2; pass++) {
+        fw_source_t sources[FW_SOURCE_MAX];
+        uint8_t loaded = fw_source_load_config_filtered(sources, "esp32");
+        TEST_ASSERT_EQUAL_UINT8(8, loaded);
+        TEST_ASSERT_EQUAL_STRING("Hapax SPI Brain", sources[0].name);
+        assert_source_occurrences("Source: Hapax SPI Brain", 1);
+        assert_source_occurrences("Source: Custom ", 7);
+    }
+}
+
+static void test_full_custom_catalog_is_not_discarded_or_duplicated(void)
+{
+    write_custom_sources(8, false);
+    for (int pass = 0; pass < 2; pass++) {
+        fw_source_t sources[FW_SOURCE_MAX];
+        TEST_ASSERT_EQUAL_UINT8(8, fw_source_load_config_filtered(sources, "esp32"));
+        assert_source_occurrences("Source: Hapax SPI Brain", 0);
+        assert_source_occurrences("Source: Custom ", 8);
+    }
+}
+
+static void test_full_catalog_detects_hapax_beyond_loaded_sources(void)
+{
+    write_custom_sources(9, true);
+    for (int pass = 0; pass < 2; pass++) {
+        fw_source_t sources[FW_SOURCE_MAX];
+        TEST_ASSERT_EQUAL_UINT8(8, fw_source_load_config_filtered(sources, "esp32"));
+        TEST_ASSERT_EQUAL_STRING("Custom 0", sources[0].name);
+        assert_source_occurrences("Source: Hapax SPI Brain", 1);
+        assert_source_occurrences("Source: Custom ", 8);
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_existing_sources_gain_hapax_and_prefer_it);
     RUN_TEST(test_missing_file_defaults_prefer_hapax);
+    RUN_TEST(test_seven_sources_migrate_only_once);
+    RUN_TEST(test_full_custom_catalog_is_not_discarded_or_duplicated);
+    RUN_TEST(test_full_catalog_detects_hapax_beyond_loaded_sources);
     return UNITY_END();
 }

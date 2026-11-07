@@ -275,7 +275,7 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 	if (!ff_open(&ff, FW_SOURCES_CONFIG_PATH))
 		return 0;
 
-	while (ff_read_line(&ff) && count < FW_SOURCE_MAX)
+	while (ff_read_line(&ff))
 	{
 		if (!ff_parse_kv(&ff))
 			continue;
@@ -287,12 +287,18 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 		{
 			/* Finalize previous source: default category if empty */
 			fw_source_finalize(cur);
-			/* Start a new source entry */
-			cur = &sources[count];
-			memset(cur, 0, sizeof(fw_source_t));
-			strncpy(cur->name, val, FW_SOURCE_NAME_LEN - 1);
-			cur->max_releases = FW_RELEASE_MAX;
-			count++;
+			/* Start a new source entry only when it fits, but keep parsing
+			 * every remaining line so the last in-capacity entry is complete. */
+			if (count < FW_SOURCE_MAX)
+			{
+				cur = &sources[count];
+				memset(cur, 0, sizeof(fw_source_t));
+				strncpy(cur->name, val, FW_SOURCE_NAME_LEN - 1);
+				cur->max_releases = FW_RELEASE_MAX;
+				count++;
+			}
+			else
+				cur = NULL;
 		}
 		else if (cur)
 		{
@@ -328,6 +334,45 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 	return count;
 }
 
+static bool fw_source_file_has_hapax_brain(void)
+{
+	flipper_file_t ff;
+	bool has_hapax = false;
+	bool owner_match = false;
+	bool repo_match = false;
+
+	if (!ff_open(&ff, FW_SOURCES_CONFIG_PATH))
+		return false;
+
+	while (ff_read_line(&ff))
+	{
+		if (!ff_parse_kv(&ff))
+			continue;
+
+		const char *key = ff_get_key(&ff);
+		const char *val = ff_get_value(&ff);
+		if (strcmp(key, "Source") == 0)
+		{
+			if (owner_match && repo_match)
+			{
+				has_hapax = true;
+				break;
+			}
+			owner_match = false;
+			repo_match = false;
+		}
+		else if (strcmp(key, "Owner") == 0)
+			owner_match = strcmp(val, "hapaxx11") == 0;
+		else if (strcmp(key, "Repo") == 0)
+			repo_match = strcmp(val, "m1-esp32-brain") == 0;
+	}
+
+	if (owner_match && repo_match)
+		has_hapax = true;
+	ff_close(&ff);
+	return has_hapax;
+}
+
 uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *category)
 {
 	uint8_t total, out = 0;
@@ -338,7 +383,8 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 	memset(sources, 0, sizeof(fw_source_t) * FW_SOURCE_MAX);
 	total = fw_source_load_config(sources);
 	if (strcmp(category, "esp32") == 0 &&
-	    !fw_source_has_hapax_brain(sources, total))
+	    !fw_source_file_has_hapax_brain() &&
+	    total < FW_SOURCE_MAX)
 	{
 		fw_source_append_hapax_brain();
 		total = fw_source_load_config(sources);
@@ -414,15 +460,18 @@ bool fw_source_asset_matches_source(const fw_source_t *source,
 	                                   source->exclude_filter))
 		return true;
 
-	/* Brain releases renamed the factory image. Accept both names so existing
-	 * fw_sources.txt files keep working with old and new releases. */
+	/* Brain releases renamed the factory image. Accept both names with either
+	 * configured filter so old and new catalogs work with every release. */
 	if ((strcmp(source->github.owner, "bedge117") == 0 ||
 	     strcmp(source->github.owner, "hapaxx11") == 0) &&
-	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
-	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+	    strcmp(source->github.repo, "m1-esp32-brain") == 0)
 	{
-		return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
-		                                      source->exclude_filter);
+		if (strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+			return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
+			                                      source->exclude_filter);
+		if (strcmp(source->asset_filter, "factory_ESP32C6-SPI.bin") == 0)
+			return fw_source_asset_matches_filter(asset_name, "factory_m1-esp32-brain.bin",
+			                                      source->exclude_filter);
 	}
 	return false;
 }

@@ -175,12 +175,22 @@ void test_filter_cd3_brain_factory_name_alias(void)
 		&source, "factory_ESP32C6-SPI.bin"));
 	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
 		&source, "factory_m1-esp32-brain.bin"));
+	strcpy(source.asset_filter, "factory_ESP32C6-SPI.bin");
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_ESP32C6-SPI.bin"));
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_m1-esp32-brain.bin"));
 }
 
 void test_filter_hapax_brain_factory_name_alias(void)
 {
 	fw_source_t source = brain_source();
 	strcpy(source.github.owner, "hapaxx11");
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_ESP32C6-SPI.bin"));
+	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
+		&source, "factory_m1-esp32-brain.bin"));
+	strcpy(source.asset_filter, "factory_ESP32C6-SPI.bin");
 	TEST_ASSERT_TRUE(fw_source_asset_matches_source(
 		&source, "factory_ESP32C6-SPI.bin"));
 	TEST_ASSERT_TRUE(fw_source_asset_matches_source(

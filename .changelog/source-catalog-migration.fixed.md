@@ -1,0 +1,1 @@
+**ESP32: firmware source catalogs** — prevent duplicate Hapax migration at capacity, preserve custom sources, accept both factory image names in either configuration, and recommend Hapax brain v1.6.0.

@@ -14,10 +14,10 @@ Espressif's stock AT firmware downloads are **UART-only** and will **NOT** work
 with the M1.  A custom SPI-configured build is required.
 
 > **Recommended firmware — native CD3 brain:** For most users, use
-> [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) as the
+> [`hapaxx11/m1-esp32-brain`](https://github.com/hapaxx11/m1-esp32-brain) as the
 > primary ESP32 firmware. It provides the broadest integrated M1 feature set
-> across WiFi, BLE, and 802.15.4, plus ESP-NOW peer link and GPIO support. Version
-> 1.7 adds PMKID capture, network scanning, raw BLE, GATT, WPS/channel/CSI
+> across WiFi, BLE, and 802.15.4, plus ESP-NOW peer link and GPIO support. Hapax
+> v1.6.0 adds PMKID capture, network scanning, raw BLE, GATT, WPS/channel/CSI
 > monitoring, and dual-slot OTA self-update. Bluetooth Classic management remains
 > unavailable because the C6 is BLE-only. See the capability matrix below and
 > check the connected firmware's reported capabilities.
@@ -54,7 +54,8 @@ with the M1.  A custom SPI-configured build is required.
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | CD3-AT fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
 | [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | CD3-AT fork (dag / T-800) — additional AT command extensions |
 | [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | CD3-AT fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
-| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC (recommended primary)** — separate codebase, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
+| [hapaxx11/m1-esp32-brain](https://github.com/hapaxx11/m1-esp32-brain) | **CD3 native binary RPC (recommended primary)** — Hapax v1.6.0, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
+| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | Upstream CD3 reference — separate codebase with the same native RPC architecture |
 
 All AT-based repos above are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
