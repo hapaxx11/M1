@@ -33,6 +33,10 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneWardrive]         = &wifi_scene_wardrive_handlers,
     [WifiSceneStationWardrive]  = &wifi_scene_station_wardrive_handlers,
     [WifiSceneSignalMonitor]    = &wifi_scene_signal_monitor_handlers,
+    [WifiSceneWps]              = &wifi_scene_wps_handlers,
+    [WifiSceneAirtime]          = &wifi_scene_airtime_handlers,
+    [WifiSceneDeauthMon]        = &wifi_scene_deauth_mon_handlers,
+    [WifiSceneCsi]              = &wifi_scene_csi_handlers,
 
     [WifiSceneReconMenu]        = &wifi_scene_recon_menu_handlers,
 

@@ -96,8 +96,9 @@ void test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop(void)
 
     assert_contains(wifi, "#include \"m1_esp32_hal.h\"");
     assert_contains(bt, "#include \"m1_esp32_hal.h\"");
-    assert_ordered(wifi, "fn(); m1_esp32_deinit();", "m1_scene_pop(app);");
-    assert_ordered(bt, "fn(); m1_esp32_deinit();", "m1_scene_pop(app);");
+    assert_ordered(wifi, "m1_esp32_deinit();", "m1_esp32_rpc_foreground_release();");
+    assert_ordered(wifi, "m1_esp32_rpc_foreground_release();", "m1_scene_pop(app);");
+    assert_ordered(bt, "m1_esp32_deinit();", "m1_scene_pop(app);");
 
     free(wifi);
     free(bt);

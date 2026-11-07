@@ -82,11 +82,20 @@ static const char s_default_config[] =
 	"Category: firmware\n"
 	"Max_releases: 5\n"
 	"\n"
+	"Source: Hapax SPI Brain\n"
+	"Type: github_release\n"
+	"Owner: hapaxx11\n"
+	"Repo: m1-esp32-brain\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
 	"Source: C3 SPI Brain\n"
 	"Type: github_release\n"
 	"Owner: bedge117\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -158,11 +167,20 @@ static const char s_default_firmware_append[] =
 static const char s_default_esp32_append[] =
 	"\n"
 	"# Auto-added: 'esp32' category defaults\n"
+	"Source: Hapax SPI Brain\n"
+	"Type: github_release\n"
+	"Owner: hapaxx11\n"
+	"Repo: m1-esp32-brain\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
 	"Source: C3 SPI Brain\n"
 	"Type: github_release\n"
 	"Owner: bedge117\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -205,6 +223,30 @@ bool fw_source_append_category_defaults(const char *category)
 	return (fr == FR_OK && bw == len);
 }
 
+bool fw_source_append_hapax_brain(void)
+{
+	static const char text[] =
+		"\n"
+		"# Auto-added: preferred Hapax ESP32 source\n"
+		"Source: Hapax SPI Brain\n"
+		"Type: github_release\n"
+		"Owner: hapaxx11\n"
+		"Repo: m1-esp32-brain\n"
+		"Asset_filter: factory_ESP32C6-SPI.bin\n"
+		"Exclude_filter:\n"
+		"Category: esp32\n"
+		"Max_releases: 5\n";
+	FIL file;
+	UINT bw;
+	FRESULT fr = f_open(&file, FW_SOURCES_CONFIG_PATH, FA_OPEN_APPEND | FA_WRITE);
+	if (fr != FR_OK)
+		return false;
+	uint16_t len = (uint16_t)strlen(text);
+	fr = f_write(&file, text, len, &bw);
+	f_close(&file);
+	return fr == FR_OK && bw == len;
+}
+
 /* Apply default category to a source that has none set */
 static void fw_source_finalize(fw_source_t *src)
 {
@@ -233,7 +275,7 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 	if (!ff_open(&ff, FW_SOURCES_CONFIG_PATH))
 		return 0;
 
-	while (ff_read_line(&ff) && count < FW_SOURCE_MAX)
+	while (ff_read_line(&ff))
 	{
 		if (!ff_parse_kv(&ff))
 			continue;
@@ -245,12 +287,18 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 		{
 			/* Finalize previous source: default category if empty */
 			fw_source_finalize(cur);
-			/* Start a new source entry */
-			cur = &sources[count];
-			memset(cur, 0, sizeof(fw_source_t));
-			strncpy(cur->name, val, FW_SOURCE_NAME_LEN - 1);
-			cur->max_releases = FW_RELEASE_MAX;
-			count++;
+			/* Start a new source entry only when it fits, but keep parsing
+			 * every remaining line so the last in-capacity entry is complete. */
+			if (count < FW_SOURCE_MAX)
+			{
+				cur = &sources[count];
+				memset(cur, 0, sizeof(fw_source_t));
+				strncpy(cur->name, val, FW_SOURCE_NAME_LEN - 1);
+				cur->max_releases = FW_RELEASE_MAX;
+				count++;
+			}
+			else
+				cur = NULL;
 		}
 		else if (cur)
 		{
@@ -282,7 +330,47 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 	fw_source_finalize(cur);
 
 	ff_close(&ff);
+	fw_source_prefer_hapax_brain(sources, count);
 	return count;
+}
+
+static bool fw_source_file_has_hapax_brain(void)
+{
+	flipper_file_t ff;
+	bool has_hapax = false;
+	bool owner_match = false;
+	bool repo_match = false;
+
+	if (!ff_open(&ff, FW_SOURCES_CONFIG_PATH))
+		return false;
+
+	while (ff_read_line(&ff))
+	{
+		if (!ff_parse_kv(&ff))
+			continue;
+
+		const char *key = ff_get_key(&ff);
+		const char *val = ff_get_value(&ff);
+		if (strcmp(key, "Source") == 0)
+		{
+			if (owner_match && repo_match)
+			{
+				has_hapax = true;
+				break;
+			}
+			owner_match = false;
+			repo_match = false;
+		}
+		else if (strcmp(key, "Owner") == 0)
+			owner_match = strcmp(val, "hapaxx11") == 0;
+		else if (strcmp(key, "Repo") == 0)
+			repo_match = strcmp(val, "m1-esp32-brain") == 0;
+	}
+
+	if (owner_match && repo_match)
+		has_hapax = true;
+	ff_close(&ff);
+	return has_hapax;
 }
 
 uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *category)
@@ -294,6 +382,13 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 
 	memset(sources, 0, sizeof(fw_source_t) * FW_SOURCE_MAX);
 	total = fw_source_load_config(sources);
+	if (strcmp(category, "esp32") == 0 &&
+	    !fw_source_file_has_hapax_brain() &&
+	    total < FW_SOURCE_MAX)
+	{
+		fw_source_append_hapax_brain();
+		total = fw_source_load_config(sources);
+	}
 
 	for (uint8_t i = 0; i < total && out < FW_SOURCE_MAX; i++)
 	{
@@ -365,14 +460,18 @@ bool fw_source_asset_matches_source(const fw_source_t *source,
 	                                   source->exclude_filter))
 		return true;
 
-	/* CD3 brain v1.5 releases renamed the factory image. Accept both names so
-	 * existing fw_sources.txt files keep working with old and new releases. */
-	if (strcmp(source->github.owner, "bedge117") == 0 &&
-	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
-	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+	/* Brain releases renamed the factory image. Accept both names with either
+	 * configured filter so old and new catalogs work with every release. */
+	if ((strcmp(source->github.owner, "bedge117") == 0 ||
+	     strcmp(source->github.owner, "hapaxx11") == 0) &&
+	    strcmp(source->github.repo, "m1-esp32-brain") == 0)
 	{
-		return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
-		                                      source->exclude_filter);
+		if (strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
+			return fw_source_asset_matches_filter(asset_name, "factory_ESP32C6-SPI.bin",
+			                                      source->exclude_filter);
+		if (strcmp(source->asset_filter, "factory_ESP32C6-SPI.bin") == 0)
+			return fw_source_asset_matches_filter(asset_name, "factory_m1-esp32-brain.bin",
+			                                      source->exclude_filter);
 	}
 	return false;
 }

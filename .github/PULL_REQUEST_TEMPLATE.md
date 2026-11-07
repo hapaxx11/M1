@@ -30,6 +30,29 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Test A
 - [ ] Test B
 
+## Single-device HIL (recommended, never a merge blocker)
+Agents must add an unchecked item for every new or changed hardware behavior
+that can be tested deterministically on one M1. Document why any unsuitable
+scenario was omitted. Do not check an item unless it actually passed on-device.
+
+Local agents with a connected M1 and permission to edit this PR can run all
+applicable tests and update this section automatically:
+
+```bash
+python scripts/m1_hil_test.py --update-pr <PR_NUMBER>
+```
+
+Cloud CI does not run HIL. Missing hardware produces an unchecked `SKIP` and
+must not block this PR. Results are also written to `build/hil-results/`.
+
+<!-- M1_HIL_RESULTS:START -->
+- [ ] `wifi-airtime` — NOT RUN
+- [ ] `wifi-peer-link` — NOT RUN
+- [ ] `ble-signal-finder` — NOT RUN
+- [ ] `ble-gatt-discovery` — NOT RUN
+- [ ] `ble-airtag-monitor` — NOT RUN
+<!-- M1_HIL_RESULTS:END -->
+
 ## Checklist:
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code

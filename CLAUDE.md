@@ -27,6 +27,7 @@ from the relevant skills.
 | Any scene, menu, button bar, font, saved-item UI, post-connection navigation | [`ui-scene-architecture`](.github/skills/ui-scene-architecture/SKILL.md) |
 | Adding tests, extracting pure logic, refactors, the phase-checklist workflow | [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) |
 | Radio / ESP32 / NFC / IR / Read Raw / backlight lifecycle & async RTOS flows | [`hardware-state-mgmt`](.github/skills/hardware-state-mgmt/SKILL.md) |
+| Real M1 validation, USB RPC automation, COM ports, STM32/ESP32 flashing | [`hardware-in-the-loop`](.github/skills/hardware-in-the-loop/SKILL.md) |
 | `malloc`/heap/FreeRTOS/ISR allocation, heap-redirect checklist, adding a new static/global buffer | [`memory-heap`](.github/skills/memory-heap/SKILL.md) |
 | Updating vendored libs (u8g2, FreeRTOS, FatFs, IRMP) | [`vendored-deps`](.github/skills/vendored-deps/SKILL.md) |
 | Any change needing a changelog entry or documentation update | [`docs-changelog`](.github/skills/docs-changelog/SKILL.md) |
@@ -70,6 +71,24 @@ Terminology used when communicating with the agent about the M1 UI.
 - **NEVER** fork, share, or distribute any project files without explicit permission
 - Treat all project content as private/confidential by default
 
+### 4. NEVER Emit Personal Ambient Information
+- **NEVER repeat, publish, commit, or otherwise emit personal ambient information**
+  observed in the user's environment, conversation, documents, device screens,
+  logs, captures, or test output. This applies to chat responses, code, tests,
+  fixtures, documentation, commit messages, issues, PR descriptions, screenshots,
+  HIL artifacts, and any other output.
+- Personal ambient information includes network names/addresses/credentials,
+  nearby device identifiers, real names, locations, account or usernames,
+  personal paths, hostnames, serial numbers, private filenames/messages, and any
+  other incidental information that can identify a person, place, device, or
+  account. It is not limited to WiFi information.
+- Read only the minimum needed for the task and do not echo values back for
+  confirmation. Use generic descriptions or synthetic placeholders in examples
+  and tests. Redact captures, logs, reports, and PR content before sharing them.
+- If exposure is discovered, remove it promptly from current content without
+  repeating the value, and tell the user that redaction occurred. Never assume
+  information is safe to share merely because it was visible during testing.
+
 ---
 
 ## Git Commit Rules
@@ -107,6 +126,23 @@ Terminology used when communicating with the agent about the M1 UI.
 
 > **More on testing, modularization, and the phase checklist:** read the
 > [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill.
+
+- **Single-device HIL tests are required for new or changed hardware behavior
+  whenever the scenario can be self-contained on one M1** — add the test to
+  `scripts/m1_hil_test.py` and its PR checklist. Tests must have bounded timing,
+  deterministic setup and cleanup, and no second M1, peer device, AP, internet
+  service, qMonstatek, or other external fixture. If a scenario cannot meet
+  those constraints, document why in the PR instead of adding a flaky test.
+- **HIL never runs in cloud CI and is never a merge blocker.** Missing hardware
+  or dependencies must produce `SKIP`, remain unchecked, and exit successfully.
+  Only an observed on-device `PASS` may check a HIL box. Keep draft and non-draft
+  PR descriptions updated with specific unchecked HIL items between the
+  `M1_HIL_RESULTS` markers. Before marking a PR ready/non-draft, strongly
+  recommend that the user run `python scripts/m1_hil_test.py --update-pr <PR>`
+  locally with their connected M1 and permission to edit the PR. If hardware is
+  unavailable, record that fact and proceed without treating it as a failure.
+  See the [`hardware-in-the-loop`](.github/skills/hardware-in-the-loop/SKILL.md)
+  skill for the reporting and test-authoring workflow.
 
 - **Never delete working capability on the strength of an unverified claim** — a
   claim that some capability is unnecessary ("no weather protocol uses FSK", "no
@@ -180,9 +216,10 @@ Terminology used when communicating with the agent about the M1 UI.
 ## Hardware Notes
 
 - **MCU**: STM32H573VIT (Cortex-M33, 250MHz, 2MB flash dual-bank, 640KB RAM)
-- **WiFi**: ESP32-C6 coprocessor via SPI AT commands (NOT UART — see ESP32 section below)
+- **WiFi**: ESP32-C6 coprocessor via SPI3 for native RPC, AT, or binary-SPI runtime protocols; ROM flashing uses UART
 - **USB**: CDC + MSC composite — COM port drops during power cycle
 - **Serial**: COM3 at 115200 baud
+- **Native USB HIL/flashing**: use `scripts/m1_hil.py` and read the [`hardware-in-the-loop`](.github/skills/hardware-in-the-loop/SKILL.md) skill; close qMonstatek first
 - **Debugger**: ST-Link / J-Link available for flashing
 - **Flash registers**: STM32H5 uses `FLASH->NSSR` (not `FLASH->SR`), BSY bit is `FLASH_SR_BSY`
 
@@ -194,6 +231,7 @@ These invariants apply codebase-wide. Deeper, subsystem-specific architecture
 rules live in the skills (see the Skill Index).
 
 - **S_M1_FW_CONFIG_t** struct is EXACTLY 20 bytes — NEVER modify it
+- **ESP32 WiFi/Bluetooth scene lifecycle**: native RPC must not start the legacy AT task; every ESP32-backed scene must acquire foreground ownership before init and release it only after deinit. Follow and update `tests/test_esp32_scene_lifecycle.c` and the [`hardware-state-mgmt`](.github/skills/hardware-state-mgmt/SKILL.md) skill.
 - CRC extension data lives at fixed offsets AFTER the struct (offset 20+)
 - All Flipper file parsers use stack allocation (avoid heap where possible)
 - FreeRTOS headers must be included before stream_buffer.h / queue.h

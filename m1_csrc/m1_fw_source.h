@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "m1_http_client.h"
 
 /* Maximum number of configured sources */
@@ -91,6 +92,33 @@ uint8_t fw_source_load_config(fw_source_t *sources);
  */
 uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *category);
 
+static inline bool fw_source_has_hapax_brain(const fw_source_t *sources, uint8_t count)
+{
+    if (!sources) return false;
+    for (uint8_t i = 0; i < count; i++) {
+        if (strcmp(sources[i].github.owner, "hapaxx11") == 0 &&
+            strcmp(sources[i].github.repo, "m1-esp32-brain") == 0)
+            return true;
+    }
+    return false;
+}
+
+static inline void fw_source_prefer_hapax_brain(fw_source_t *sources, uint8_t count)
+{
+    if (!sources) return;
+    for (uint8_t i = 0; i < count; i++) {
+        if (strcmp(sources[i].github.owner, "hapaxx11") == 0 &&
+            strcmp(sources[i].github.repo, "m1-esp32-brain") == 0) {
+            fw_source_t preferred = sources[i];
+            if (i > 0) {
+                memmove(&sources[1], &sources[0], (size_t)i * sizeof(fw_source_t));
+                sources[0] = preferred;
+            }
+            return;
+        }
+    }
+}
+
 /*
  * Create the default source configuration file on SD card.
  * Called automatically by fw_source_load_config if file is missing.
@@ -109,6 +137,7 @@ bool fw_source_create_defaults(void);
  * Returns:  true if the entries were written successfully, false otherwise.
  */
 bool fw_source_append_category_defaults(const char *category);
+bool fw_source_append_hapax_brain(void);
 
 /*
  * Check if an asset name matches the include/exclude filter criteria.

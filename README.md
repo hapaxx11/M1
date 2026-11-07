@@ -160,7 +160,8 @@ project discussion, and related project resources:
 - Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal, PMKID Grab
 
 **Recon:**
-- Station Scan, 2.4G Survey, MAC Track, Wardrive, Station Wardrive, Signal Monitor
+- Station Scan, 2.4G Survey, Channel Airtime, Deauth Monitor, passive WPS Auditor,
+  experimental CSI Radar, MAC Track, Wardrive, Station Wardrive, Signal Monitor
 
 **Network Scanners:**
 - Ping, ARP, SSH, Telnet, Port Scan
@@ -191,6 +192,9 @@ project discussion, and related project resources:
 **BLE Spam:** BLE Spam (unified All/Apple/Google/Microsoft), Sour Apple, SwiftPair, Samsung, Flipper, All, AirTag Spoof
 
 **BLE Detectors:** Skimmers, Flock, Meta
+
+**BLE GATT:** Service/characteristic/descriptor discovery, reads, writes, and
+notification subscriptions with CSV export
 
 **BLE Config:** Advertise, BLE settings
 
@@ -314,7 +318,7 @@ Hapax runs automated quality checks through GitHub Actions:
 |------|-------------|-------|------|
 | **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
 | **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
-| **Unity + ASan/UBSan** | `tests.yml` | 202 C test files, 3,600+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
+| **Unity + ASan/UBSan** | `tests.yml` | 241 C test files, 3,600+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
 | **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
 ## Flashing

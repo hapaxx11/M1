@@ -238,82 +238,88 @@ load + config reset, restoring the radio to a known good state.
 > subsequent ESP32 operations from other modules.
 
 **Background.** The ESP32-C6 coprocessor communicates with the STM32 via SPI.
-Two initialization layers exist:
+Two initialization layers exist, but they are not both required by every
+firmware variant:
 
 1. `m1_esp32_init()` — HAL-level SPI peripheral + GPIO + interrupt setup
-   (in `m1_esp32_hal.c`).  Sets `esp32_init_done = TRUE`.
-2. `esp32_main_init()` — Creates the `spi_trans_control_task` RTOS task
-   and sets `esp32_main_init_done = true` (in `esp_app_main.c`).  The task
-   persists across init/deinit cycles — the flag prevents duplicate creation.
+   (in `m1_esp32_hal.c`). Sets `esp32_init_done = TRUE` and is required by all
+   transports.
+2. `esp32_main_init()` — Creates the legacy AT `spi_trans_control_task` and
+   resets the coprocessor. This is required only for
+   `ESP32_TRANSPORT_AT`. Native RPC and SiN360 must not pay this reset/task
+   startup cost.
 
-`m1_esp32_deinit()` tears down the SPI peripheral, disables interrupts, and
-resets `esp32_init_done`.  The SPI control task remains alive but dormant
-(blocked on a queue with no interrupts firing).
+`m1_esp32_deinit()` tears down the SPI peripheral and interrupts. When the
+legacy AT task exists, it is signalled, joined with a bounded wait, and its
+RTOS objects are released. The next AT session recreates it on demand.
+Background owners for persistent WiFi station, hotspot, and Bluetooth Direct
+sessions can keep the transport alive across an otherwise routine deinit.
 
 **The pattern for ESP32-using blocking delegates:**
 
 ```c
 void my_esp32_operation(void)
 {
-    /* Init ESP32 if needed */
-    if (!m1_esp32_get_init_status())
-        m1_esp32_init();
-    if (!get_esp32_main_init_status())
+    m1_esp32_rpc_foreground_acquire();
+    m1_esp32_ensure_init();
+    esp32_transport_t transport = m1_esp32_active_transport();
+    if (m1_esp32_lifecycle_at_task_required(transport) &&
+        !get_esp32_main_init_status())
         esp32_main_init();
-
-    if (!get_esp32_main_init_status())
-    {
-        show_error("ESP32 not ready!");
-        m1_esp32_deinit();   /* ← REQUIRED even on failure */
-        return;
-    }
 
     /* ... do work ... */
 
-    m1_esp32_deinit();       /* ← REQUIRED on every exit path */
+    m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
 }
 ```
 
-**Modules that follow this pattern:**
-- WiFi: `wifi_scan_ap()`, `wifi_show_status()`, `wifi_disconnect()`,
-  `wifi_ntp_sync()`
-- Bluetooth: `bluetooth_scan()`, `bluetooth_advertise()`
-- 802.15.4: `ieee802154_scan()` (Zigbee/Thread)
-- BLE Spam: `ble_spam_*()` functions in `m1_bt.c` (SiN360 binary SPI path)
-- Bad-BT: `badbt_run()` — calls `badbt_spi_hid_stop()` (SiN360) or `ble_hid_deinit()` (AT) before ESP32 deinit
-
 **Rules for new code:**
-- If you call `m1_esp32_init()` or `esp32_main_init()`, you MUST call
-  `m1_esp32_deinit()` on every return path — including error early returns.
+- Match that cleanup order on every return path: acquire before init, deinit,
+  then release foreground ownership. Do not release ownership before SPI
+  teardown, because the background relay can immediately race the deinit.
 - `m1_esp32_deinit()` is safe to call even if init was not fully successful
-  (it checks `esp32_init_done` internally).
+  (it checks `esp32_init_done` internally). Keep cleanup in one exit path;
+  do not deinit once in an error branch and again in the scene's `on_exit`.
 - **Never leave the ESP32 SPI transport initialized after a blocking
-  delegate returns** — the caller's scene does not know which ESP32 mode
-  was active and cannot clean up for you.
-- **`m1_esp32_ensure_init()` is NOT sufficient for capability-dispatching
-  code.**  `m1_esp32_ensure_init()` calls only `m1_esp32_init()` (HAL-level
-  SPI hardware).  The capability probe (`AT+CMD?` and `CMD_GET_STATUS`) runs
-  inside the RTOS SPI-AT task, which is created by `esp32_main_init()`.
-  If `esp32_main_init()` has not been called, `m1_esp32_has_cap()` and the
-  entire capability bitmap return zero/false for every bit — including
-  `M1_ESP32_CAP_WIFI_JOIN`, `M1_ESP32_CAP_BLE_HID`, etc.  Any code that
-  dispatches on firmware type (AT vs SiN360 vs unknown future firmware) will
-  silently take the binary-SPI fallback path and fail.
+  delegate returns** unless a documented persistent background owner holds it.
+- **Native RPC does not use the AT task.** The native PING/GET_STATUS probe
+  runs over full-duplex M1 Link without `esp32_main_init()`. Only the AT
+  fallback in `m1_esp32_caps_init()` starts the legacy task for AT detection.
+  Starting it unconditionally resets native firmware and can also contend
+  with its full-duplex traffic.
+- **BLE stop paths must be safe before NimBLE starts.** The brain initializes
+  NimBLE lazily, and its function table is NULL beforehand. Never call GAP/host
+  APIs directly without checking host initialization; use `ble_extadv_stop()`,
+  which no-ops until `ble_host_ensure_started()` has succeeded. This includes
+  background Bluetooth Direct disable synchronization, not just active scenes.
+  Validate a disabled-Direct boot and a subsequent WiFi request on real hardware.
+- **Every ESP32-backed WiFi or Bluetooth scene pauses the qMonstatek/brain
+  relay.** The reference-counted `m1_esp32_rpc_foreground_acquire()/release()`
+  lease suppresses relay polling across the complete foreground operation,
+  preventing repeated background RPC calls from starving lifecycle mutexes. It
+  is not a transaction lock: each feature RPC still uses the normal bounded
+  per-call transaction mutex. This applies to all delegate macros and to custom
+  scenes, including Scan & Connect, Target actions, General/Net/Sniff/Attack
+  tools, ESP-NOW Peer Link, Signal Finder, and AirTag Monitor.
+- **Active asynchronous scenes hold the lease until `on_exit`.** A blocking
+  delegate releases after its function returns; a scene that remains active
+  and polls the coprocessor releases only after scene cleanup and SPI deinit.
+- **Do not start `esp32_main_init()` merely to read a capability bitmap.**
+  Select it with `m1_esp32_lifecycle_at_task_required(transport)` so only
+  `ESP32_TRANSPORT_AT` receives the legacy reset/task path. Other transports
+  retain their existing behavior.
+- **Keep the scene-wide test in sync.** `tests/test_esp32_scene_lifecycle.c`
+  checks all WiFi/Bluetooth delegate macros and custom lifecycle paths for the
+  correct order. Add new delegate files and custom scenes to that test rather
+  than introducing an unleased one-off implementation.
 
-  **Rule:** Any function that reads capability bits — via `m1_esp32_has_cap()`,
-  `m1_esp32_require_cap()`, `esp32_firmware_is_sin360()`, or any check on the
-  cap bitmap — MUST call both init layers before the first capability read:
-  ```c
-  if (!m1_esp32_get_init_status())
-      m1_esp32_init();
-  if (!get_esp32_main_init_status())
-      esp32_main_init();
-  /* Now m1_esp32_has_cap() / m1_esp32_caps_probe() return correct values */
-  ```
-  This applies to ALL firmware variants — SiN360, dag T-800, stock AT, and any
-  firmware type introduced in the future.  The two-probe architecture
-  (CMD_GET_STATUS → AT+CMD? fallback) is designed to handle unknown firmware
-  gracefully, but it can only run when the RTOS task is alive.
+Modules following the transport-specific lifecycle include every WiFi blocking
+delegate, native Recon WPS/channel/deauth/CSI, Target actions, ESP-NOW Peer
+Link, and Bluetooth Signal Finder/AirTag Monitor. The generic `m1_scene_pop()`
+error path invokes the scene's `on_exit`, which is the single cleanup owner for
+active scenes. Target menu exit also deinitializes unconditionally so a selected
+network cannot leave a hidden transport behind.
 
 ### NFC Worker State Management — `Q_EVENT_NFC_*` Events
 

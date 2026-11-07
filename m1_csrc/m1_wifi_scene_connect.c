@@ -35,6 +35,7 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 
@@ -48,9 +49,11 @@ static void saved_on_enter(M1SceneApp *app)
 {
     (void)app;
     bool was_connected = wifi_is_connected();
+    m1_esp32_rpc_foreground_acquire();
     m1_esp32_ensure_init();
     wifi_saved_networks();
     m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
     app->running = true;
     if (!was_connected && wifi_is_connected()) {
         m1_scene_replace(app, WifiSceneConnectedMenu);
@@ -74,9 +77,11 @@ static void status_on_enter(M1SceneApp *app)
 static void disconnect_on_enter(M1SceneApp *app)
 {
     (void)app;
+    m1_esp32_rpc_foreground_acquire();
     m1_esp32_ensure_init();
     wifi_disconnect();
     m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
     app->running = true;
     m1_scene_pop(app);
 }

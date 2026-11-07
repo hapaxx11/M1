@@ -21,7 +21,9 @@
 #include "main.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_hal_lifecycle.h"
 #include "m1_esp32_cmd.h"
+#include "esp32_feature_map.h"
 #include "m1_storage.h"
 #include "m1_file_browser.h"
 #include "m1_virtual_kb.h"
@@ -56,6 +58,7 @@
 #include "m1_settings.h"
 #include "m1_wdt_hw.h"
 #include "wifi_boot_config.h"
+#include "wifi_pmkid_capture.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -63,6 +66,7 @@
 
 #define WIFI_CMD_TIMEOUT_MS	15000  /* Scan can take up to 15 seconds */
 #define WIFI_NEXT_TIMEOUT_MS 1000
+#define WIFI_SNTP_SYNC_TIMEOUT_MS 15000
 
 #define M1_GUI_ROW_SPACING	1
 
@@ -293,13 +297,11 @@ static uint16_t wifi_do_scan(void)
 	if (!m1_esp32_caps_is_queried() && m1_esp32_get_init_status())
 		m1_esp32_caps_init();
 
-	/* Start the host AT RTOS task only when the detected transport actually
-	 * needs it (AT or Unknown fallback).  Brain CD3 (M1_RPC) never uses
-	 * the AT task, so skip esp32_main_init() for that path entirely. */
-	if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC) {
-		if (!get_esp32_main_init_status())
-			esp32_main_init();
-	}
+	/* Start the host AT RTOS task only for AT firmware. Native RPC and
+	 * SiN360 use their own direct transports and must not be reset here. */
+	if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+	    !get_esp32_main_init_status())
+		esp32_main_init();
 
 	/* brain CD3 (binary M1_RPC): use WIFI_SCAN opcode via async worker so
 	 * the calling task is not blocked for the full 10 s scan window. */
@@ -649,6 +651,26 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 }
 
 
+static bool wifi_wait_rpc_connected(const char *ssid, uint32_t *out_ip)
+{
+	uint32_t started = HAL_GetTick();
+	while ((HAL_GetTick() - started) < 20000u)
+	{
+		bool connected = false;
+		if (m1_esp32_rpc_wifi_get_status(&connected, out_ip) == M1_ESP32_RPC_OK &&
+		    connected)
+		{
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+			wifi_set_connected_state(ssid);
+#endif
+			return true;
+		}
+		m1_wdt_reset();
+		vTaskDelay(pdMS_TO_TICKS(250));
+	}
+	return false;
+}
+
 /*============================================================================*/
 /**
   * @brief Attempt to connect to the currently-selected AP.
@@ -715,6 +737,12 @@ static void wifi_connect_selected_ap(void)
 		{
 			memset(password, 0, sizeof(password));
 			wifi_show_message("Connect", "Connect failed", "Check password");
+			return;
+		}
+		if (!wifi_wait_rpc_connected(ap_list[ap_view_idx].ssid, &assigned_ip))
+		{
+			memset(password, 0, sizeof(password));
+			wifi_show_message("Connect", "Connect failed", "Association timeout");
 			return;
 		}
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
@@ -872,10 +900,9 @@ void wifi_scan_ap(void)
 		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 
-	/* For capability probing on AT-based firmware, ensure the SPI-AT RTOS task
-	 * is running so AT+CMD? can be issued. No-op only when the task is already
-	 * running (e.g. repeated entry). */
-	if (!get_esp32_main_init_status())
+	/* Only AT firmware needs the legacy task for capability probing. */
+	if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+	    !get_esp32_main_init_status())
 		esp32_main_init();
 
 	/* Show scanning status */
@@ -2456,21 +2483,48 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 	cmd.payload[1] = (mode == NETSCAN_MODE_PING || mode == NETSCAN_MODE_ARP) ? 150 : 80;
 	cmd.payload_len = 2;
 
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	bool use_rpc = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
+	if (use_rpc)
 	{
-		wifi_show_message(title, "Start failed", "Join WiFi or update FW");
-		return;
+		uint8_t rpc_resp[16];
+		uint16_t rlen = 0;
+		m1_esp32_rpc_status_t st = m1_esp32_rpc_call(
+			M1_ESP32_RPC_NETSCAN_START, cmd.payload, 2,
+			rpc_resp, sizeof(rpc_resp), &rlen, 2u);
+		if (st != M1_ESP32_RPC_OK)
+		{
+			snprintf(ln, sizeof(ln), "Start failed (%u)", (unsigned)st);
+			wifi_show_message(title, ln, "Join WiFi or update FW");
+			return;
+		}
+		if (rlen >= 4) memcpy(base_ip, rpc_resp, 4);
 	}
-
-	if (resp.payload_len >= 4)
+	else
 	{
-		memcpy(base_ip, resp.payload, 4);
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message(title, "Start failed", "Join WiFi or update FW");
+			return;
+		}
+		if (resp.payload_len >= 4) memcpy(base_ip, resp.payload, 4);
 	}
 
 	while (1)
 	{
-		spi_ret = m1_esp32_simple_cmd(CMD_NETSCAN_NEXT, &resp, 1000);
+		if (use_rpc)
+		{
+			uint16_t rlen = 0;
+			spi_ret = m1_esp32_rpc_call(M1_ESP32_RPC_NETSCAN_NEXT, NULL, 0,
+			                            resp.payload, sizeof(resp.payload), &rlen, 1u) ==
+			          M1_ESP32_RPC_OK ? 0 : -1;
+			resp.payload_len = rlen;
+			resp.status = RESP_OK;
+		}
+		else
+		{
+			spi_ret = m1_esp32_simple_cmd(CMD_NETSCAN_NEXT, &resp, 1000);
+		}
 		if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 1)
 		{
 			if (resp.payload[0] == 1 && resp.payload_len >= 9)
@@ -2565,7 +2619,16 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_NETSCAN_STOP, &resp, 1000);
+				if (use_rpc)
+				{
+					uint16_t rlen = 0;
+					(void)m1_esp32_rpc_call(M1_ESP32_RPC_NETSCAN_STOP, NULL, 0,
+					                        resp.payload, sizeof(resp.payload), &rlen, 1u);
+				}
+				else
+				{
+					m1_esp32_simple_cmd(CMD_NETSCAN_STOP, &resp, 1000);
+				}
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -6004,7 +6067,128 @@ void wifi_target_beacon(void)
 /* Target group: PMKID capture. */
 void wifi_target_pmkid(void)
 {
-	wifi_pmkid_at();
+	if (!wifi_target_valid())
+		return;
+	if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
+	{
+		wifi_pmkid_at();
+		return;
+	}
+	if (!m1_esp32_has_cap(M1_ESP32_CAP_PMKID))
+	{
+		wifi_show_message("PMKID Grab", "Update ESP32 FW", NULL);
+		return;
+	}
+
+	uint8_t start_req[8 + 32];
+	memcpy(start_req, ap_list[ap_view_idx].bssid, 6);
+	start_req[6] = ap_list[ap_view_idx].channel;
+	uint8_t ssid_len = (uint8_t)strnlen(ap_list[ap_view_idx].ssid, 32);
+	start_req[7] = ssid_len;
+	memcpy(&start_req[8], ap_list[ap_view_idx].ssid, ssid_len);
+	uint8_t resp[502];
+	uint16_t rlen = 0;
+	if (m1_esp32_rpc_call(M1_ESP32_RPC_OFF_PMKID_CAPTURE,
+	                      start_req, (uint16_t)(8 + ssid_len),
+	                      resp, sizeof(resp), &rlen, 2u) != M1_ESP32_RPC_OK)
+	{
+		wifi_show_message("PMKID Grab", "Start failed", NULL);
+		return;
+	}
+
+	uint32_t started = HAL_GetTick();
+	uint32_t total = 0;
+	bool complete = false;
+	bool failed = false;
+	while (HAL_GetTick() - started < 15000u)
+	{
+		m1_wdt_reset();
+		wifi_draw_message("PMKID Grab", "Probing AP...", "BACK cancel");
+		rlen = 0;
+		if (m1_esp32_rpc_call(M1_ESP32_RPC_OFF_PMKID_STATUS, NULL, 0,
+		                      resp, 5, &rlen, 2u) == M1_ESP32_RPC_OK && rlen == 5)
+		{
+			total = (uint32_t)resp[1] | ((uint32_t)resp[2] << 8) |
+			        ((uint32_t)resp[3] << 16) | ((uint32_t)resp[4] << 24);
+			if (resp[0] == 2u)
+			{
+				complete = true;
+				break;
+			}
+			if (resp[0] == 3u)
+			{
+				failed = true;
+				break;
+			}
+		}
+		S_M1_Main_Q_t q_item;
+		S_M1_Buttons_Status btn;
+		if (xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(400)) == pdTRUE &&
+		    q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				break;
+		}
+	}
+
+	uint8_t *pcap = NULL;
+	uint8_t bssid[6] = {0};
+	uint8_t station[6] = {0};
+	uint8_t pmkid[16] = {0};
+	if (complete && total > 24u && total <= 4096u)
+		pcap = malloc(total);
+	if (pcap)
+	{
+		uint32_t off = 0;
+		while (off < total)
+		{
+			uint16_t want = (total - off > 502u) ? 502u : (uint16_t)(total - off);
+			uint8_t req[6] = {
+				(uint8_t)off, (uint8_t)(off >> 8), (uint8_t)(off >> 16),
+				(uint8_t)(off >> 24), (uint8_t)want, (uint8_t)(want >> 8),
+			};
+			rlen = 0;
+			if (m1_esp32_rpc_call(M1_ESP32_RPC_OFF_PMKID_GET, req, sizeof(req),
+			                      pcap + off, want, &rlen, 2u) != M1_ESP32_RPC_OK || rlen == 0)
+				break;
+			off += rlen;
+		}
+		if (off == total && wifi_pmkid_pcap_extract(pcap, total, bssid, station, pmkid))
+		{
+			pmkid_save_to_sd(station, bssid, pmkid);
+			f_mkdir("pmkid");
+			FIL fil;
+			if (f_open(&fil, "pmkid/last_capture.pcap", FA_WRITE | FA_CREATE_ALWAYS) == FR_OK)
+			{
+				UINT bw = 0;
+				f_write(&fil, pcap, total, &bw);
+				f_close(&fil);
+			}
+			wifi_show_message("PMKID Grab", "PMKID + PCAP saved", "pmkid/captures.22000");
+		}
+		else
+		{
+			wifi_show_message("PMKID Grab", "Invalid capture", NULL);
+		}
+	}
+	else if (complete)
+	{
+		wifi_show_message("PMKID Grab", "Capture too large", NULL);
+	}
+	else if (failed)
+	{
+		wifi_show_message("PMKID Grab", "Association failed", NULL);
+	}
+	else
+	{
+		wifi_show_message("PMKID Grab", "No PMKID received", "AP unsupported?");
+	}
+	free(pcap);
+	rlen = 0;
+	(void)m1_esp32_rpc_call(M1_ESP32_RPC_OFF_PMKID_STOP, NULL, 0,
+	                        resp, sizeof(resp), &rlen, 2u);
+	xQueueReset(main_q_hdl);
 }
 
 /* Target group: advance the highlighted AP to the next BSSID of the same
@@ -6142,14 +6326,13 @@ uint8_t wifi_sync_rtc(void)
 		return 1;
 
 	/* brain CD3 (binary M1_RPC): use SYS_SNTP_SYNC opcode.
-	 * The brain firmware fetches the time from pool.ntp.org internally;
-	 * poll with 500 ms retries for up to 5 s to allow NTP convergence on
-	 * slow connections, matching the AT firmware poll budget below. */
+	 * The brain can wait 5 s for each NTP response. Allow two attempts with
+	 * transport margin instead of timing out the RPC before the first reply. */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
 		start_ms  = HAL_GetTick();
 		first_poll = true;
-		while ((HAL_GetTick() - start_ms) < 5000u)
+		while ((HAL_GetTick() - start_ms) < WIFI_SNTP_SYNC_TIMEOUT_MS)
 		{
 			if (!first_poll)
 				vTaskDelay(pdMS_TO_TICKS(500));
@@ -6278,19 +6461,9 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 
 	ensure_esp32_ready();
 
-	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
-	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
-	{
-		m1_resp_t ping_resp;
-		const bool is_binary_spi =
-		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
-		     ping_resp.status == RESP_OK &&
-		     ping_resp.payload_len == 4 &&
-		     memcmp(ping_resp.payload, "PONG", 4) == 0);
-
-		if (!is_binary_spi && !get_esp32_main_init_status())
-			esp32_main_init();
-	}
+	if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+	    !get_esp32_main_init_status())
+		esp32_main_init();
 
 	/* ---- brain CD3 M1_RPC path ---- */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
@@ -6306,7 +6479,12 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 				wifi_show_message("Connect", "Connect failed", "Check password");
 			return false;
 		}
-		wifi_set_connected_state(cred->ssid);
+		if (!wifi_wait_rpc_connected(cred->ssid, &assigned_ip))
+		{
+			if (show_status)
+				wifi_show_message("Connect", "Connect failed", "Association timeout");
+			return false;
+		}
 		if (show_status)
 			wifi_show_message("Connect", "Connected!", cred->ssid);
 		if (sync_clock)
@@ -6619,19 +6797,9 @@ void wifi_disconnect(void)
 {
 	m1_resp_t resp;
 
-	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
-	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
-	{
-		m1_resp_t ping_resp;
-		const bool is_binary_spi =
-		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
-		     ping_resp.status == RESP_OK &&
-		     ping_resp.payload_len == 4 &&
-		     memcmp(ping_resp.payload, "PONG", 4) == 0);
-
-		if (!is_binary_spi && !get_esp32_main_init_status())
-			esp32_main_init();
-	}
+	if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+	    !get_esp32_main_init_status())
+		esp32_main_init();
 
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
@@ -6682,3 +6850,14 @@ bool wifi_require_connected(void)
 }
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */
+
+bool wifi_recon_prepare(esp32_feature_id_t fid)
+{
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	if (fid != ESP32_FEATURE_CSI)
+		return wifi_prompt_disconnect();
+#else
+	(void)fid;
+#endif
+	return true;
+}

@@ -296,7 +296,7 @@ void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
                                             "m1_esp32_rpc_call_unlocked(")
                                    : NULL;
     const char *deinit_lock =
-        deinit ? strstr(deinit, "m1_esp32_rpc_transaction_lock_timed(") : NULL;
+        deinit ? strstr(deinit, "m1_esp32_lifecycle_lock_with_wdt(") : NULL;
     const char *spi_deinit =
         deinit ? strstr(deinit, "HAL_SPI_DeInit(&hspi_esp)") : NULL;
     int has_transaction_mutex =

@@ -109,6 +109,7 @@ static inline FRESULT f_closedir(DIR *dp)
 #define FA_WRITE         0x02
 #define FA_CREATE_ALWAYS 0x08
 #define FA_OPEN_EXISTING 0x00
+#define FA_OPEN_APPEND   0x10
 
 static inline FRESULT f_open(FIL *fp, const char *path, unsigned char mode)
 {
@@ -116,7 +117,8 @@ static inline FRESULT f_open(FIL *fp, const char *path, unsigned char mode)
 	/* Use binary mode so f_read / f_write work correctly for binary files.
 	 * On Linux, "rb"/"wb" and "r"/"w" are identical, so existing text-mode
 	 * tests are unaffected. */
-	const char *m = ((mode & FA_WRITE) || (mode & FA_CREATE_ALWAYS)) ? "wb" : "rb";
+	const char *m = (mode & FA_OPEN_APPEND) ? "ab" :
+	                (((mode & FA_WRITE) || (mode & FA_CREATE_ALWAYS)) ? "wb" : "rb");
 	fp->f = fopen(path, m);
 	return fp->f ? FR_OK : FR_DISK_ERR;
 }

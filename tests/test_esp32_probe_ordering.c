@@ -206,12 +206,59 @@ void test_wifi_do_scan_skips_at_task_for_rpc_transport(void)
 {
     char *content = read_file("m1_csrc/m1_wifi.c");
 
-    /* esp32_main_init() must be guarded by an ESP32_TRANSPORT_RPC check so
-     * that the AT task is not started for brain-CD3 firmware. */
-    assert_contains(content, "ESP32_TRANSPORT_RPC");
-    assert_ordered(content, "ESP32_TRANSPORT_RPC",
+    /* esp32_main_init() must be guarded by the transport lifecycle helper so
+     * that the AT task is not started for native RPC or SiN360 firmware. */
+    assert_contains(content, "m1_esp32_lifecycle_at_task_required");
+    assert_ordered(content, "m1_esp32_lifecycle_at_task_required",
                    "esp32_main_init();");
 
+    free(content);
+}
+
+void test_ota_probes_caps_before_routing(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_fw_update.c");
+    const char *fn = strstr(content, "void setting_esp32_firmware_update(void)");
+    TEST_ASSERT_NOT_NULL(fn);
+    const char *probe = strstr(fn, "m1_esp32_caps_init();");
+    const char *route = strstr(fn, "esp32_ota_use_rpc(");
+    TEST_ASSERT_NOT_NULL(probe);
+    TEST_ASSERT_NOT_NULL(route);
+    TEST_ASSERT_TRUE(probe < route);
+    free(content);
+}
+
+void test_ota_releases_transport_after_transfer(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_fw_update.c");
+    const char *fn = strstr(content, "void setting_esp32_firmware_update(void)");
+    TEST_ASSERT_NOT_NULL(fn);
+    const char *transfer = strstr(fn, "m1_fw_app_rpc(&hfile_fw)");
+    const char *deinit = strstr(fn, "m1_esp32_deinit();");
+    const char *release = strstr(fn, "m1_esp32_rpc_foreground_release();");
+    TEST_ASSERT_NOT_NULL(transfer);
+    TEST_ASSERT_NOT_NULL(deinit);
+    TEST_ASSERT_NOT_NULL(release);
+    TEST_ASSERT_TRUE(transfer < deinit && deinit < release);
+    TEST_ASSERT_NOT_NULL(strstr(fn, "esp32_update_status == M1_FW_UPDATE_READY"));
+    free(content);
+}
+
+void test_native_ota_never_calls_rom_loader_reset(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_fw_update.c");
+    TEST_ASSERT_NOT_NULL(strstr(content, "else if (rom_loader_used)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "if (!use_rpc_ota)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "uret = M1_FW_UPDATE_FAILED;"));
+    free(content);
+}
+
+void test_hapax_source_upgrade_appends_when_missing(void)
+{
+    char *content = read_file("m1_csrc/m1_fw_source.c");
+    TEST_ASSERT_NOT_NULL(strstr(content, "bool fw_source_append_hapax_brain(void)"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "fw_source_append_hapax_brain();"));
+    TEST_ASSERT_NOT_NULL(strstr(content, "fw_source_prefer_hapax_brain(sources, count);"));
     free(content);
 }
 
@@ -224,5 +271,9 @@ int main(void)
     RUN_TEST(test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence);
     RUN_TEST(test_wifi_do_scan_classifies_before_starting_at_task);
     RUN_TEST(test_wifi_do_scan_skips_at_task_for_rpc_transport);
+    RUN_TEST(test_ota_probes_caps_before_routing);
+    RUN_TEST(test_ota_releases_transport_after_transfer);
+    RUN_TEST(test_native_ota_never_calls_rom_loader_reset);
+    RUN_TEST(test_hapax_source_upgrade_appends_when_missing);
     return UNITY_END();
 }

@@ -53,9 +53,14 @@ bool esp32_feature_rpc_opcode(esp32_feature_id_t fid, m1_esp32_rpc_id_t *out_op)
     case ESP32_FEATURE_ESPNOW:         op = M1_ESP32_RPC_NOW_START;          break;
     case ESP32_FEATURE_WIFI_HOTSPOT:   op = M1_ESP32_RPC_SOFTAP_START;       break;
 
-    /* No settled native brain-CD3 opcode: host-composed or AT/binary-only. */
-    case ESP32_FEATURE_NETSCAN:
-    case ESP32_FEATURE_BLE_GATT:
+    case ESP32_FEATURE_NETSCAN:        op = M1_ESP32_RPC_NETSCAN_START;       break;
+    case ESP32_FEATURE_BLE_GATT:       op = M1_ESP32_RPC_BLE_GATT_START;      break;
+    case ESP32_FEATURE_BLE_RAW:        op = M1_ESP32_RPC_BLE_RAW_SCAN_START;  break;
+    case ESP32_FEATURE_WPS:            op = M1_ESP32_RPC_WPS_START;           break;
+    case ESP32_FEATURE_CHANNEL_MON:
+    case ESP32_FEATURE_DEAUTH_MON:     op = M1_ESP32_RPC_CHANNEL_MON_START;   break;
+    case ESP32_FEATURE_CSI:            op = M1_ESP32_RPC_CSI_START;           break;
+
     case ESP32_FEATURE_BT_MANAGE:
     default:
         return false;
@@ -271,6 +276,20 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_connect(const char *ssid,
     /* RESP: [status:1][ipv4:4 LE] */
     if (out_ip && rlen >= 5u)
         memcpy(out_ip, &resp[1], 4u);
+    return M1_ESP32_RPC_OK;
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_wifi_get_status(bool *connected,
+                                                   uint32_t *out_ip)
+{
+    uint8_t resp[5];
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st = m1_esp32_rpc_call(
+        M1_ESP32_RPC_WIFI_GET_STATUS, NULL, 0u, resp, sizeof(resp), &rlen, 2u);
+    if (st != M1_ESP32_RPC_OK) return st;
+    if (rlen < 1u) return M1_ESP32_RPC_ERR_BAD_FRAME;
+    if (connected) *connected = resp[0] != 0u;
+    if (out_ip && rlen >= 5u) memcpy(out_ip, &resp[1], 4u);
     return M1_ESP32_RPC_OK;
 }
 
@@ -708,6 +727,59 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_stop(void)
     return rpc_trigger(M1_ESP32_RPC_BLE_SPAM_STOP);
 }
 
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_raw_scan_start(uint16_t dur_s)
+{
+    uint8_t req[2] = { (uint8_t)dur_s, (uint8_t)(dur_s >> 8u) };
+    return rpc_do(M1_ESP32_RPC_BLE_RAW_SCAN_START, req, sizeof(req));
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_raw_scan_next(m1_esp32_rpc_ble_raw_adv_t *out,
+                                                     bool *out_done)
+{
+    if (!out || !out_done) return M1_ESP32_RPC_ERR_INVALID;
+    memset(out, 0, sizeof(*out));
+    *out_done = false;
+    uint8_t resp[10u + M1_ESP32_RPC_BLE_ADV_MAX];
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st = m1_esp32_rpc_call(
+        M1_ESP32_RPC_BLE_RAW_SCAN_NEXT, NULL, 0u, resp, sizeof(resp), &rlen, 2u);
+    if (st != M1_ESP32_RPC_OK) return st;
+    if (rlen == 1u && resp[0] == 1u) {
+        *out_done = true;
+        return M1_ESP32_RPC_OK;
+    }
+    if (rlen == 1u && resp[0] == 0xFEu)
+        return M1_ESP32_RPC_PENDING;
+    if (rlen < 10u || resp[0] != 0u || resp[9] > M1_ESP32_RPC_BLE_ADV_MAX ||
+        rlen < (uint16_t)(10u + resp[9]))
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+    out->rssi = (int8_t)resp[1];
+    out->addr_type = resp[2];
+    memcpy(out->addr, &resp[3], 6u);
+    out->adv_len = resp[9];
+    memcpy(out->adv, &resp[10], out->adv_len);
+    return M1_ESP32_RPC_OK;
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_raw(const uint8_t *adv, uint8_t adv_len,
+                                               const uint8_t addr[6],
+                                               uint16_t interval_ms)
+{
+    if (!adv || adv_len == 0u || adv_len > M1_ESP32_RPC_BLE_ADV_MAX)
+        return M1_ESP32_RPC_ERR_INVALID;
+    uint8_t req[3u + 6u + M1_ESP32_RPC_BLE_ADV_MAX];
+    req[0] = addr ? 1u : 0u;
+    req[1] = (uint8_t)interval_ms;
+    req[2] = (uint8_t)(interval_ms >> 8u);
+    uint16_t off = 3u;
+    if (addr) {
+        memcpy(&req[3], addr, 6u);
+        off += 6u;
+    }
+    memcpy(&req[off], adv, adv_len);
+    return rpc_do(M1_ESP32_RPC_BLE_ADV_RAW, req, (uint16_t)(off + adv_len));
+}
+
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_hid_init(const char *name)
 {
     uint8_t payload[31];
@@ -920,7 +992,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out)
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_SYS_SNTP_SYNC, NULL, 0u,
                           (uint8_t *)&wire, sizeof(wire), &rlen,
-                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+                          M1_ESP32_RPC_SNTP_TIMEOUT_S);
     if (st != M1_ESP32_RPC_OK)
         return st;
 

@@ -228,9 +228,12 @@ void test_esp32_init_deinit_use_bounded_transaction_lock(void)
     TEST_ASSERT_EQUAL_size_t_MESSAGE(0u,
         count_occurrences(content, "m1_esp32_rpc_transaction_lock()"),
         "(de)init must not use the unbounded transaction lock");
-    TEST_ASSERT_GREATER_THAN_size_t_MESSAGE(1u,
-        count_occurrences(content, "m1_esp32_rpc_transaction_lock_timed("),
+    TEST_ASSERT_GREATER_THAN_size_t_MESSAGE(0u,
+        count_occurrences(content, "m1_esp32_rpc_transaction_lock_timed"),
         "(de)init must use the bounded transaction lock variant");
+    TEST_ASSERT_GREATER_THAN_size_t_MESSAGE(1u,
+        count_occurrences(content, "m1_esp32_lifecycle_lock_with_wdt("),
+        "(de)init must bracket bounded lock waits with watchdog kicks");
 
     free(content);
 }

@@ -39,6 +39,7 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -52,11 +53,14 @@
 static void target_connect_on_enter(M1SceneApp *app)
 {
     (void)app;
+    m1_esp32_rpc_foreground_acquire();
+    m1_esp32_ensure_init();
     wifi_target_connect();
+    m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
     app->running = true;
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     if (wifi_is_connected()) {
-        m1_esp32_deinit();
         m1_scene_replace(app, WifiSceneConnectedMenu);
         return;
     }
@@ -68,7 +72,13 @@ static void target_connect_on_enter(M1SceneApp *app)
  * menu (which redraws its title from the currently highlighted AP). */
 #define TARGET_DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); app->running = true; m1_scene_pop(app); }
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        m1_esp32_ensure_init(); \
+        fn(); \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 TARGET_DELEGATE(target_deauth,    wifi_target_deauth)
 TARGET_DELEGATE(target_handshake, wifi_target_handshake)
@@ -128,6 +138,14 @@ static bool target_menu_event(M1SceneApp *app, M1SceneEvent ev)
     return m1_submenu_event(app, ev, &s_target_model, target_targets);
 }
 
+static void target_menu_exit(M1SceneApp *app)
+{
+    (void)app;
+    m1_esp32_rpc_foreground_acquire();
+    m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
+}
+
 static void target_menu_draw(M1SceneApp *app)
 {
     (void)app;
@@ -140,6 +158,6 @@ static void target_menu_draw(M1SceneApp *app)
 const M1SceneHandlers wifi_scene_target_menu_handlers = {
     .on_enter = target_menu_enter,
     .on_event = target_menu_event,
-    .on_exit  = NULL,
+    .on_exit  = target_menu_exit,
     .draw     = target_menu_draw,
 };

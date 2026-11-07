@@ -23,6 +23,8 @@
 #include "esp32_idle.h"
 #include "m1_esp32_caps.h"
 #include "m1_http_client.h"
+#include "m1_wdt_hw.h"
+#include "m1_esp32_hal_lifecycle.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
 #include "esp_app_main.h"
@@ -72,6 +74,32 @@ EXTI_HandleTypeDef esp32_exti_dataready;
 static uint8_t esp32_init_done = FALSE;
 static uint8_t esp32_uart_init_done = FALSE;
 static volatile uint8_t esp32_background_owners;
+static volatile uint8_t esp32_foreground_users;
+
+void m1_esp32_rpc_foreground_acquire(void)
+{
+	taskENTER_CRITICAL();
+	esp32_foreground_users =
+		m1_esp32_lifecycle_foreground_update(esp32_foreground_users, true);
+	taskEXIT_CRITICAL();
+}
+
+void m1_esp32_rpc_foreground_release(void)
+{
+	taskENTER_CRITICAL();
+	esp32_foreground_users =
+		m1_esp32_lifecycle_foreground_update(esp32_foreground_users, false);
+	taskEXIT_CRITICAL();
+}
+
+bool m1_esp32_rpc_foreground_active(void)
+{
+	bool active;
+	taskENTER_CRITICAL();
+	active = esp32_foreground_users != 0u;
+	taskEXIT_CRITICAL();
+	return active;
+}
 
 /* Idle auto power-off: cut ESP32-C6 power after it has been powered but unused
  * (transport not initialised) for ESP32_IDLE_POWER_OFF_MS.  m1_esp32_deinit()
@@ -119,7 +147,9 @@ void m1_esp32_init(void)
 
 	/* Bound the wait: a transaction holder stuck past the longest legitimate
 	 * operation (WiFi scan, ~10 s) must not wedge (de)init forever. */
-	if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(15000u)))
+	if (!m1_esp32_lifecycle_lock_with_wdt(
+			m1_esp32_rpc_transaction_lock_timed, m1_wdt_reset,
+			pdMS_TO_TICKS(15000u)))
 		return;
 
 	if ( !esp32_init_done )
@@ -447,7 +477,9 @@ void m1_esp32_deinit(void)
 
 	/* Bound the wait: a transaction holder stuck past the longest legitimate
 	 * operation (WiFi scan, ~10 s) must not wedge (de)init forever. */
-	if (!m1_esp32_rpc_transaction_lock_timed(pdMS_TO_TICKS(15000u)))
+	if (!m1_esp32_lifecycle_lock_with_wdt(
+			m1_esp32_rpc_transaction_lock_timed, m1_wdt_reset,
+			pdMS_TO_TICKS(15000u)))
 		return;
 
 	taskENTER_CRITICAL();

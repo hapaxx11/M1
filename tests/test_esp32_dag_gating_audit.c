@@ -89,13 +89,13 @@ void test_wifi_sniffers_capability_gated(void)
 {
     const char *path = "m1_csrc/m1_wifi_scene_sniff.c";
 
-    expect_gated(path, "DELEGATE_FEATURE(sniff_all,        wifi_sniff_all,        ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_beacon,     wifi_sniff_beacon,     ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_probe,      wifi_sniff_probe,      ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_deauth,     wifi_sniff_deauth,     ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_eapol,      wifi_sniff_eapol,      ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_pwnagotchi, wifi_sniff_pwnagotchi, ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(sniff_sae,        wifi_sniff_sae,        ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_all,        wifi_sniff_all,        ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_beacon,     wifi_sniff_beacon,     ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_probe,      wifi_sniff_probe,      ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_deauth,     wifi_sniff_deauth,     ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_eapol,      wifi_sniff_eapol,      ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_pwnagotchi, wifi_sniff_pwnagotchi, ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(sniff_sae,        wifi_sniff_sae,        ESP32_FEATURE_PKTMON)");
 }
 
 /*--------------------------------------------------------------------------*/
@@ -106,8 +106,8 @@ void test_wifi_mac_track_and_signal_monitor_capability_gated(void)
 {
     const char *path = "m1_csrc/m1_wifi_scene_menu.c";
 
-    expect_gated(path, "DELEGATE_FEATURE(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)");
-    expect_gated(path, "DELEGATE_FEATURE(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)");
+    expect_gated(path, "DELEGATE_RECON(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)");
 
     expect_not_present(path, "DELEGATE(mac_track,");
     expect_not_present(path, "DELEGATE(signal_monitor,");

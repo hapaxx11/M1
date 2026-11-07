@@ -14,14 +14,13 @@ Espressif's stock AT firmware downloads are **UART-only** and will **NOT** work
 with the M1.  A custom SPI-configured build is required.
 
 > **Recommended firmware — native CD3 brain:** For most users, use
-> [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) as the
+> [`hapaxx11/m1-esp32-brain`](https://github.com/hapaxx11/m1-esp32-brain) as the
 > primary ESP32 firmware. It provides the broadest integrated M1 feature set
-> across WiFi, BLE, and 802.15.4, plus ESP-NOW peer link and GPIO support. Other
-> firmware variants remain supported and may be preferable when you specifically
-> need a capability CD3 does not currently provide; for example, CD3 does not
-> currently implement PMKID capture, ESP32 OTA self-update, network scanning, or
-> Bluetooth Classic management. See the capability matrix below and check the
-> connected firmware's reported capabilities.
+> across WiFi, BLE, and 802.15.4, plus ESP-NOW peer link and GPIO support. Hapax
+> v1.6.0 adds PMKID capture, network scanning, raw BLE, GATT, WPS/channel/CSI
+> monitoring, and dual-slot OTA self-update. Bluetooth Classic management remains
+> unavailable because the C6 is BLE-only. See the capability matrix below and
+> check the connected firmware's reported capabilities.
 
 > **Naming note — two unrelated bedge117 ESP32 firmwares:** bedge117 has
 > authored **two separate, non-interoperable** ESP32-C6 coprocessor firmwares
@@ -55,7 +54,8 @@ with the M1.  A custom SPI-configured build is required.
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | CD3-AT fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
 | [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | CD3-AT fork (dag / T-800) — additional AT command extensions |
 | [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | CD3-AT fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
-| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC (recommended primary)** — separate codebase, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
+| [hapaxx11/m1-esp32-brain](https://github.com/hapaxx11/m1-esp32-brain) | **CD3 native binary RPC (recommended primary)** — Hapax v1.6.0, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
+| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | Upstream CD3 reference — separate codebase with the same native RPC architecture |
 
 All AT-based repos above are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
@@ -248,13 +248,92 @@ library.
 1. Connect to WiFi via **WiFi → Scan + Connect**.
 2. Navigate to **Settings → ESP32 update → Download**.
 3. Select a firmware source. The built-in defaults include `C3 SPI Brain` for
-   the recommended native **CD3** `m1-esp32-brain` firmware and `Deauth ESP32
-   AT` as a **CD3-AT** alternative. Existing or custom `fw_sources.txt`
+   **Hapax SPI Brain** (`hapaxx11/m1-esp32-brain`) first as the preferred
+   source, followed by the native **CD3** `m1-esp32-brain` firmware and
+   `Deauth ESP32 AT` as a **CD3-AT** alternative. Existing or custom `fw_sources.txt`
    configurations may show older entries; manual downloads from the releases
    page remain an alternative.
 4. Select a release version.
 5. The firmware `.bin` and `.md5` are downloaded to `0:/ESP32_FW/` on SD card.
 6. Return to **ESP32 update → Image File** to select and flash.
+
+### Native dual-slot self-update (brain v1.6.0+)
+
+The first v1.6.0 installation must use a full factory image so the device receives
+the `otadata`, `ota_0`, and `ota_1` layout. After that migration, select an
+`app_*.bin` (or `m1-esp32-brain.bin`) downloaded by Method 2 and choose **Firmware
+Update**. If `M1_CAP_OTA` is present, the M1 streams the image to the inactive
+slot using `SYS_OTA_BEGIN/DATA/END`; otherwise use a full factory image for ROM
+recovery rather than writing an app to a fixed slot, because either OTA slot may
+be boot-selected. `SYS_OTA_ABORT` discards a partial transfer on failure. New images
+are validated only after the SPI link, WiFi, RPC server, and dispatch task start;
+an unvalidated image rolls back automatically. Full `factory_*.bin` images always
+continue to use the ROM path and remain the recovery/migration route.
+
+### Native USB automation (no qMonstatek required)
+
+`scripts/m1_hil.py` is the maintained hardware-in-the-loop tool. It speaks the
+M1 USB RPC protocol directly using Python and `pyserial`; it does not depend on
+qMonstatek. The default connection is `COM3` at 115200 baud. Override it with
+`--port` or `M1_PORT`, and close qMonstatek/other serial clients before flashing
+or OTA so they cannot hold the port or reconnect during the operation.
+
+```bash
+python -m pip install pyserial
+python scripts/m1_hil.py info
+python scripts/m1_hil.py init-esp32
+python scripts/m1_hil.py capture hil-screen.png
+python scripts/m1_hil.py click down --count 2
+python scripts/m1_hil.py click ok
+```
+
+`init-esp32` sends `ESP_INFO` (`0x50`) with payload `01`, which calls the same
+initialization and capability-refresh path as the on-device menu. An empty
+`ESP_INFO` payload is still a status query. Use
+`python scripts/m1_hil.py cli mtest 70 0` only as the legacy recovery fallback.
+Screen captures should be inspected after scene-changing button sequences;
+`capture` writes both a PNG and the raw framebuffer.
+
+#### Flash the STM32 host over USB
+
+Build first, then pass the CRC-augmented image (not the plain linker binary):
+
+```bash
+python scripts/m1_hil.py flash-host build/M1_Hapax_v<VERSION>_wCRC.bin
+```
+
+The tool erases the inactive bank with `FW_UPDATE_START` (`0x42`), writes
+sequential 1024-byte chunks with `FW_UPDATE_DATA` (`0x43`), verifies the embedded
+CRC with `FW_UPDATE_FINISH` (`0x44`), and activates it with `FW_BANK_SWAP`
+(`0x45`). If the first data chunk times out after erase, do not send `FINISH` or
+retry random offsets. Run `python scripts/m1_hil.py reboot`, wait for a clean USB
+RPC session, and restart the complete flash operation.
+
+#### Stage an ESP32 app image over USB mass storage
+
+```bash
+python scripts/m1_hil.py stage-esp32 ../m1-esp32-brain/build/m1-esp32-brain.bin
+```
+
+The standard input filename is staged as `app_m1-esp32-brain.bin` at the SD root;
+the `app_` prefix selects native app-slot OTA. `--drive` changes the default
+`D:/` mass-storage location and `--name` sets another plain `.bin` filename.
+The tool sends `SD_UNMOUNT` (`0x3B`), closes the serial port, copies and reads
+back the image, writes its MD5 sidecar as exactly 32 uppercase hexadecimal bytes
+with no newline, verifies the sidecar, and sends `SD_MOUNT` (`0x3C`) from a new
+RPC session. A timeout waiting for the unmount ACK is expected when the USB
+composite device disconnects into mass-storage mode.
+
+After staging, select the image through **Settings → ESP32 update → Image File**,
+confirm **Image loaded!**, and select **Firmware Update**. Directories appear
+before files in the browser, so verify the highlighted filename with a capture
+rather than relying on a fixed button count. Native OTA finishes its final RPC
+before the host sends one `SYS_RESET`; the ROM UART reset path is only for
+factory/legacy images. If the ESP32 remains offline after the normal update
+wait, reboot the M1 once and run `init-esp32` before diagnosing the new image.
+
+See the [hardware-in-the-loop skill](../.github/skills/hardware-in-the-loop/SKILL.md)
+for recovery and validation rules.
 
 ### Method 3: Via esptool (External, USB/UART)
 
@@ -319,13 +398,11 @@ of three wire transports via `esp32_firmware_transport(cap_bitmap)`
 | unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
 
 > **Why not `OTA`?** Earlier revisions keyed CD3 detection off `HANDSHAKE && OTA`,
-> but the shipped brain firmware's `M1_FW_CAPS` advertises `HANDSHAKE` while
-> **deliberately omitting `OTA`** ("intentionally omitted until implemented"), so
-> the whole class of brain devices was misclassified as AT and every ESP32
-> feature failed (AP scan failed, 2.4G survey found nothing, Signal Monitor fell
-> back to "Unknown"). Detection now keys off `HANDSHAKE` combined with a
-> CD3-unique bit (`802154_TX` or `BLE_SPAM`) that the SiN360 and AT profiles
-> never advertise.
+> but older brain releases omitted `OTA`, and v1.6.0 factory-only installations
+> still omit it until the dual-slot migration. Keying detection off `HANDSHAKE`
+> combined with a CD3-unique bit (`802154_TX` or `BLE_SPAM`) therefore remains
+> required: an `OTA` gate would misclassify those devices as AT and disable every
+> ESP32 feature.
 
 The native brain CD3 is an ESP-IDF **full-duplex `spi_slave`** device — **not**
 the ESP-AT half-duplex `spi_slave_hd` command slave. Every SPI transaction
@@ -444,8 +521,9 @@ feature layer built on top of it. It provides two things every WiFi / BLE /
 - `esp32_feature_rpc_opcode(feature_id, &op)` — the authoritative
   feature → `m1_esp32_rpc_id_t` map (e.g. `ESP32_FEATURE_WIFI_SCAN` →
   `M1_ESP32_RPC_WIFI_SCAN`, `ESP32_FEATURE_DEAUTH` →
-  `M1_ESP32_RPC_OFF_DEAUTH_START`). Host-composed features with no single
-  native opcode (`NETSCAN`, `BLE_GATT`, `BT_MANAGE`) return `false`.
+  `M1_ESP32_RPC_OFF_DEAUTH_START`). `NETSCAN`, `BLE_GATT`, `BLE_RAW`,
+  `WPS`, `CHANNEL_MON`, `DEAUTH_MON`, and `CSI` also map to native opcodes;
+  only `BT_MANAGE` remains unmapped.
 - One small action wrapper per feature action that builds the canonical
   little-endian payload, dispatches via `m1_esp32_rpc_call()`, and decodes the
   reply into a neutral out-struct — e.g. `m1_esp32_rpc_wifi_scan()`,
@@ -517,38 +595,41 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 | 15 | `M1_ESP32_CAP_BT_MANAGE` | AT BT device management |
 | 16 | `M1_ESP32_CAP_802154` | AT IEEE 802.15.4 / Zigbee / Thread |
 | 17 | `M1_ESP32_CAP_BLE_GATT` | `CMD_BLE_GATT_*` client operations |
-| 18 | `M1_ESP32_CAP_PMKID` | Dedicated PMKID capture — reserved `M1_RPC_OFF_PMKID_CAPTURE` msg ID; **not yet dispatched** in current CD3 (`bedge117/m1-esp32-brain`) releases as of the 2026-07 review — see note below |
-| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap — `M1_RPC_OFF_HS_START/STATUS/GET/STOP`; **dispatched and advertised** in current CD3 releases (`M1_FW_CAPS` sets this bit) |
-| 20 | `M1_ESP32_CAP_OTA` | ESP32 firmware OTA self-update — reserved `M1_RPC_SYS_OTA_BEGIN/DATA/END` msg IDs; **not yet dispatched** in current CD3 releases — see note below |
+| 18 | `M1_ESP32_CAP_PMKID` | Active PMKID capture with PCAP — `M1_RPC_OFF_PMKID_CAPTURE/STATUS/GET/STOP` |
+| 19 | `M1_ESP32_CAP_HANDSHAKE` | Validated WPA handshake / EAPOL capture with pcap — `M1_RPC_OFF_HS_START/STATUS/GET/STOP` |
+| 20 | `M1_ESP32_CAP_OTA` | Dual-slot ESP32 OTA — `M1_RPC_SYS_OTA_BEGIN/DATA/END/ABORT`; advertised only when an inactive OTA target exists |
 | 21 | `M1_ESP32_CAP_BLE_SPAM` | BLE advertisement spam — `M1_RPC_BLE_SPAM_START/STOP`. **Canonical CD3 wire bit** (`M1_CAP_BLE_SPAM`) — must match `m1_rpc.h` |
 | 22 | `M1_ESP32_CAP_802154_TX` | IEEE 802.15.4 raw TX / flood / inject — `M1_RPC_ZB_FLOOD_START` / `M1_RPC_ZB_INJECT`. **Canonical CD3 wire bit** (`M1_CAP_802154_TX`) |
 | 23 | `M1_ESP32_CAP_SOFTAP` | WiFi SoftAP hotspot — `M1_RPC_SOFTAP_START/STOP`. **Canonical CD3 wire bit** (`M1_CAP_SOFTAP`) |
-| 24 | `M1_ESP32_CAP_ESPNOW` | ESP-NOW peer link — `M1_RPC_NOW_*` (host-only bit; **not** in the canonical CD3 header, not self-reported by any firmware) |
+| 24 | `M1_ESP32_CAP_ESPNOW` | ESP-NOW peer link — `M1_RPC_NOW_*` |
 | 25 | `M1_ESP32_CAP_WIFI_HOTSPOT` | Legacy AT `AT+CWMODE=2` SoftAP path (host-only; not used for the CD3 native SoftAP gate) |
-| 26-63 | — | Reserved for future use |
+| 26 | `M1_ESP32_CAP_WIFI_DISCONNECT` | WiFi station disconnect/shutdown |
+| 27 | `M1_ESP32_CAP_MTKCORE` | Host-only MtkCore transport classifier, never sent on the wire |
+| 28 | `M1_ESP32_CAP_HTTP` | Streaming HTTP open/read/close |
+| 29 | `M1_ESP32_CAP_BLE_RAW` | Raw advertisement scan and custom-payload transmit |
+| 30 | `M1_ESP32_CAP_WPS` | Passive WPS-PIN exposure discovery |
+| 31 | `M1_ESP32_CAP_CHANNEL_MON` | Per-channel airtime/packet utilisation |
+| 32 | `M1_ESP32_CAP_DEAUTH_MON` | Per-channel deauth/disassociation rate |
+| 33 | `M1_ESP32_CAP_CSI` | Experimental ESP-side CSI motion/presence processing |
+| 34-63 | — | Reserved for future use |
 
 > **Bits 21-23 are owned by the canonical CD3 wire header**
 > (`bedge117/m1-esp32-brain`, `components/m1_rpc/include/m1_rpc.h`:
 > `M1_CAP_BLE_SPAM` / `M1_CAP_802154_TX` / `M1_CAP_SOFTAP`).  `m1_esp32_caps.h`
 > must keep these bit positions identical, because CD3 serialises its
-> `M1_FW_CAPS` bitmap using them in the `GET_STATUS` response.  Host-only
-> capabilities (`ESPNOW`, `WIFI_HOTSPOT`) therefore start at bit 24 so they can
-> never collide with a CD3-reported capability.
+> `M1_FW_CAPS` bitmap using them in the `GET_STATUS` response.
 
-> **CD3 (`bedge117/m1-esp32-brain`) capability status:** the `M1_RPC` wire
-> protocol (`components/m1_rpc/include/m1_rpc.h`) *reserves* message IDs for
-> PMKID capture and OTA self-update, and `m1_csrc/m1_esp32_caps.h` defines
-> corresponding `M1_ESP32_CAP_PMKID`/`M1_ESP32_CAP_OTA` bits for when they
-> ship. `main/main.c`'s `dispatch_request()` has **no case** for
-> `M1_RPC_OFF_PMKID_CAPTURE` or any `M1_RPC_SYS_OTA_*` message — both fall
-> through to the `default:` handler and are NAK'd with `M1_RPC_ERR_UNSUPPORTED`.
-> The firmware's advertised capability bitmap (`M1_FW_CAPS` in `main.c`) is
-> `WIFI_SCAN | WIFI_JOIN | DEAUTH | PKTMON | STA_SCAN | BEACON | PORTAL |
-> HANDSHAKE | 802154 | BLE_SCAN | BLE_ADV | BLE_HID | BLE_SPAM | 802154_TX |
-> PROBE_FLOOD | KARMA | SOFTAP` — it does **not** set `PMKID` or `OTA`. Do not
-> build UI/menu entries that assume PMKID or OTA are usable against CD3 today;
-> re-verify against the firmware's self-reported `cap_bitmap` (not this table)
-> before relying on bits 18 and 20.
+> **CD3 capability status:** v1.6.0 dispatches PMKID, network scanning, raw BLE,
+> GATT, WPS, channel/deauth monitors, and CSI. OTA is a runtime-conditional
+> capability: the first v1.6.0 installation must use a full factory image to install
+> the dual-slot layout; factory-only installations do not advertise it. Always
+> rely on the connected device's `GET_STATUS` bitmap rather than assuming that
+> every v1.6.0 device supports every feature.
+
+> **CSI build requirement:** the ESP32 brain must set
+> `CONFIG_ESP_WIFI_CSI_ENABLED=y` before `esp_wifi_init()`. The option defaults
+> off in ESP-IDF; without it, CSI configuration and callback registration can
+> succeed but `esp_wifi_set_csi(true)` fails at runtime.
 
 ### Capability matrix by firmware variant
 
@@ -570,15 +651,15 @@ self-reports (see the capability-status note above the wire-bits table).
 | Probe flood | ✅ | — | — | ✅ |
 | Karma | ✅ | — | — | ✅ |
 | Portal | ✅ | — | — | ✅ |
-| Network scanners | ✅ | — | — | — |
+| Network scanners | ✅ | — | — | ✅ |
 | WiFi join/disconnect | — | ✅ | ✅ | ✅ |
 | BLE scan / advertise | ✅ | — | — | ✅ |
 | **BLE HID (Bad-BT)** | — | ✅ | ✅ | ✅ |
 | **IEEE 802.15.4** | — | ✅ | ✅ | ✅ |
 | Classic BT management | — | — | — | — |
-| **PMKID capture** | — | — | — | 🚧 reserved, not dispatched |
-| **Handshake capture** | — | — | — | ✅ (dispatched; cap bit not yet self-reported) |
-| **OTA self-update** | — | — | — | 🚧 reserved, not dispatched |
+| **PMKID capture** | — | — | — | ✅ |
+| **Handshake capture** | — | — | — | ✅ |
+| **OTA self-update** | — | — | — | ✅ after one-time dual-slot factory migration |
 
 AT capability mapping audit (tracked firmware set): the AT commands currently
 mapped to capability bits by the runtime `AT+CMD?` probe are `AT+CWJAP`
@@ -1008,20 +1089,14 @@ The discriminator is a four-way check applied in priority order:
 
 | Priority | Discriminator | Profile | BSS estimate | Free heap estimate |
 |----------|--------------|---------|-------------|---------------------|
-| 1 | `HANDSHAKE` **and** `OTA` both set | **CD3** native (bedge117/m1-esp32-brain) | ≈ 185 KB (est.) | ≈ 175 KB (est.) |
+| 1 | `HANDSHAKE` **and** (`802154_TX` or `BLE_SPAM`) set | **CD3** native (bedge117/m1-esp32-brain) | ≈ 185 KB (est.) | ≈ 175 KB (est.) |
 | 2 | `WIFI_JOIN` **and** `BEACON` both set | **dag T-800** AT | ≈ 290 KB | ≈ 105 KB |
 | 3 | `WIFI_JOIN` set, `BEACON` absent | **CD3-AT** (bedge117/neddy299) | ≈ 284 KB | ≈ 112 KB |
 | 4 | `WIFI_JOIN` absent | **SiN360** binary-SPI | ≈ 200 KB | ≈ 160 KB |
 
-> **Caveat:** priority 1 assumes a CD3 build that self-reports both
-> `HANDSHAKE` and `OTA`.  As of the 2026-07-21 source review, no published
-> CD3 release sets either bit (see the capability-status note in
-> [Runtime Capability Detection](#wire-bits--cap_bitmap) above), so in
-> practice CD3 devices detected via the M1_RPC probe currently fall back to
-> `M1_ESP32_CAP_PROFILE_CD3` (applied when M1_RPC PING succeeds but
-> GET_STATUS does not, or as a manual override) rather than matching this
-> discriminator row from a real `cap_bitmap`.  The row remains correct for
-> whenever a CD3 release starts self-reporting those bits.
+> **Caveat:** `OTA` is intentionally excluded from priority 1. Older releases
+> omitted it, and v1.6.0 factory-only installations omit it until the dual-slot
+> migration, so requiring it would break transport detection on supported devices.
 
 CD3 figures are estimates pending actual hardware measurement (native ESP-IDF
 WiFi/BLE/802.15.4 without AT overhead has lower BSS and higher available heap

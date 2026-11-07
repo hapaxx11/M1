@@ -14,7 +14,7 @@
  *   WifiSceneAttackProbeFlood   — Probe Flood delegate
  *   WifiSceneAttackKarma        — Karma delegate (with portal-toggle prompt, §3.7)
  *   WifiSceneAttackKarmaPortal  — retained in registry (append-only), not in menu
- *   WifiSceneAttackPmkidAt      — PMKID Grab (dag T-800 AT path)
+ *   WifiSceneAttackPmkidAt      — PMKID Grab (native RPC or dag T-800 AT path)
  *
  * Phase 4 change: 'Karma+Portal' item removed from the menu.  "Karma" now
  * prompts "Serve portal? [Yes] [No]" via wifi_attack_karma_with_portal(),
@@ -35,6 +35,7 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -45,7 +46,13 @@
 
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        m1_esp32_ensure_init(); \
+        fn(); \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* Attack delegates                                                         */
@@ -59,7 +66,19 @@ DELEGATE(attack_evil_portal,  wifi_evil_portal)
 DELEGATE(attack_probe_flood,  wifi_probe_flood)
 DELEGATE(attack_karma,        wifi_attack_karma_with_portal)
 DELEGATE(attack_karma_portal, wifi_attack_karma_portal)
-DELEGATE(attack_pmkid_at,     wifi_pmkid_at)
+
+static void attack_pmkid_capture(void)
+{
+    if (!wifi_target_valid()) {
+        wifi_scan_ap();
+        if (!wifi_scan_ap_target_selected())
+            return;
+    }
+    if (wifi_target_valid())
+        wifi_target_pmkid();
+}
+
+DELEGATE(attack_pmkid_at,     attack_pmkid_capture)
 
 const M1SceneHandlers wifi_scene_attack_deauth_handlers      = { .on_enter = attack_deauth_on_enter      };
 const M1SceneHandlers wifi_scene_attack_beacon_handlers      = { .on_enter = attack_beacon_on_enter      };

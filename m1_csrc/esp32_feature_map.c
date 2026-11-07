@@ -80,6 +80,16 @@ static const esp32_feature_entry_t s_feature_table[ESP32_FEATURE_COUNT] = {
     { M1_ESP32_CAP_ESPNOW,       "ESP-NOW Peer Link"},
     /* ESP32_FEATURE_WIFI_HOTSPOT */
     { M1_ESP32_CAP_SOFTAP,       "WiFi Hotspot"     },
+    /* ESP32_FEATURE_BLE_RAW */
+    { M1_ESP32_CAP_BLE_RAW,      "Raw BLE Adv"      },
+    /* ESP32_FEATURE_WPS */
+    { M1_ESP32_CAP_WPS,          "WPS Auditor"      },
+    /* ESP32_FEATURE_CHANNEL_MON */
+    { M1_ESP32_CAP_CHANNEL_MON,  "Channel Monitor"  },
+    /* ESP32_FEATURE_DEAUTH_MON */
+    { M1_ESP32_CAP_DEAUTH_MON,   "Deauth Monitor"   },
+    /* ESP32_FEATURE_CSI */
+    { M1_ESP32_CAP_CSI,          "CSI Radar"        },
 };
 
 /* Compile-time assertion: table length matches enum count */

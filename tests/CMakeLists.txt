@@ -442,6 +442,45 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME ble_detector COMMAND test_ble_detector)
 
+add_executable(test_ble_findmy
+    test_ble_findmy.c
+    ${M1_ROOT}/m1_csrc/ble_findmy.c
+)
+target_include_directories(test_ble_findmy PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ble_findmy PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ble_findmy PRIVATE sanitizers)
+endif()
+add_test(NAME ble_findmy COMMAND test_ble_findmy)
+
+add_executable(test_wifi_pmkid_capture
+    test_wifi_pmkid_capture.c
+    ${M1_ROOT}/m1_csrc/wifi_pmkid_capture.c
+)
+target_include_directories(test_wifi_pmkid_capture PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_pmkid_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_pmkid_capture PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_pmkid_capture COMMAND test_wifi_pmkid_capture)
+
+add_executable(test_esp32_ota_route
+    test_esp32_ota_route.c
+    ${M1_ROOT}/m1_csrc/esp32_ota_route.c
+)
+target_include_directories(test_esp32_ota_route PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_ota_route PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_ota_route PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_ota_route COMMAND test_esp32_ota_route)
+
 # ------------------------------------------------------------------
 # Module under test: bq27421_init pure-logic helpers
 #
@@ -2286,6 +2325,24 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME fw_source_filter COMMAND test_fw_source_filter)
 
+add_executable(test_fw_source_config
+    test_fw_source_config.c
+    ${M1_ROOT}/m1_csrc/m1_fw_source.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+)
+target_include_directories(test_fw_source_config PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Drivers/u8g2_csrc
+)
+target_compile_options(test_fw_source_config PRIVATE "SHELL:-ffunction-sections -include main.h -include m1_system.h")
+target_link_options(test_fw_source_config PRIVATE -Wl,--gc-sections)
+target_link_libraries(test_fw_source_config PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_source_config PRIVATE sanitizers)
+endif()
+add_test(NAME fw_source_config COMMAND test_fw_source_config)
+
 # ------------------------------------------------------------------
 # Module under test: RPC CRC-16/CCITT (frame integrity)
 # Tests the table-driven CRC-16 used by the M1 RPC binary protocol.
@@ -2318,6 +2375,7 @@ add_executable(test_rpc_parse
 )
 target_include_directories(test_rpc_parse PRIVATE
     ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_rpc_parse PRIVATE unity)
 if(TARGET sanitizers)
@@ -4640,3 +4698,30 @@ if(TARGET sanitizers)
     target_link_libraries(test_meshtastic_review_wiring PRIVATE sanitizers)
 endif()
 add_test(NAME meshtastic_review_wiring COMMAND test_meshtastic_review_wiring)
+
+
+# ESP32 lifecycle lock waits must bracket long bounded waits with WDT kicks.
+add_executable(test_esp32_hal_lifecycle
+    test_esp32_hal_lifecycle.c
+)
+target_include_directories(test_esp32_hal_lifecycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_hal_lifecycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_hal_lifecycle PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_hal_lifecycle COMMAND test_esp32_hal_lifecycle)
+
+add_executable(test_esp32_scene_lifecycle
+    test_esp32_scene_lifecycle.c
+)
+target_include_directories(test_esp32_scene_lifecycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_scene_lifecycle PRIVATE unity)
+target_compile_definitions(test_esp32_scene_lifecycle PRIVATE M1_ROOT="${M1_ROOT}")
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_scene_lifecycle PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_scene_lifecycle COMMAND test_esp32_scene_lifecycle)

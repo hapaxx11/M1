@@ -40,14 +40,13 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - Pre-built binaries on the Releases page
 - **Recommended primary firmware** for most M1 users: broad WiFi, BLE, and 802.15.4 support plus ESP-NOW peer link and GPIO.
 - **Architecture**: **full-duplex `spi_slave`** (NOT ESP-AT `spi_slave_hd`), M1_RPC binary protocol (magic `0x4D31` "M1"), fixed **512-byte** (`M1_ESP32_M1LINK_MTU`) transactions in both directions, same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required. The slave pipelines its reply onto a **later** transaction, so the host must poll with IDLE filler frames.
-- **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan), NimBLE (scan, adv, HID, GATT), 802.15.4, M1-to-M1 peer link over ESP-NOW, GPIO API, streaming HTTPS for OTA release listings and SD-card downloads (`NET_HTTP_OPEN/READ/CLOSE`, advertised as `M1_CAP_HTTP` bit 28)
-- **Reserved, NOT yet implemented in shipped releases** (verified against public source, 2026-07-21): **PMKID capture** (`M1_ESP32_CAP_PMKID` / `M1_RPC_OFF_PMKID_CAPTURE`) and **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA` / `M1_RPC_SYS_OTA_BEGIN/DATA/END`) — message IDs exist in the shared `m1_rpc.h` but have no dispatch case in `main.c`, so they NAK with `ERR_UNSUPPORTED`. **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`) is dispatched and functional and is advertised by current brain firmware capability bitmaps.
-- **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
-- **Known gaps:** shipped releases do not yet implement PMKID capture or ESP32 OTA self-update. Use another variant when one of its specific capabilities is needed.
+- **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan, PMKID and validated WPA capture, NETSCAN, passive WPS audit, channel airtime/deauth monitors, experimental CSI radar), NimBLE (raw/normal scan and advertise, HID, GATT discovery/read/write/notify), 802.15.4, M1-to-M1 peer link over ESP-NOW, GPIO API, and streaming HTTPS for OTA release listings and SD-card downloads (`NET_HTTP_OPEN/READ/CLOSE`, advertised as `M1_CAP_HTTP` bit 28).
+- **ESP32 OTA:** v1.6.0 adds dual `ota_0`/`ota_1` application slots and native `SYS_OTA_BEGIN/DATA/END/ABORT` self-update. `M1_CAP_OTA` is advertised only when booted from an OTA slot with a valid update target. The first OTA-capable install requires a full factory flash to migrate the old single-factory partition layout; subsequent app-only updates can stream over M1_RPC with boot-time validation and automatic rollback of unvalidated images.
+- **Does NOT include:** Bluetooth Classic management (the C6 is BLE-only).
 - Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
 - Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response — a **bare identifier with no dotted version**. The real semver is fetched via the separate `M1_RPC SYS_GET_FW_VERSION` (0x0003) opcode and folded into the cached name as `"m1-native X.Y.Z[ <hash>]"` (`caps_cd3_fetch_fw_version()` + the pure `m1_esp32_rpc_format_fw_version()` helper). **This versioned string is required for qMonstatek compatibility**: the desktop app keys "compatible" off a parseable `X.Y.Z` in the device-info `esp32_version` (its `parseVerNums()`), so the bare `"m1-native"` reported as "incompatible firmware". Mirrors the C3 reference's `esp_fw_status_str()` ("m1_link X.Y.Z <hash>").
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
-- Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE` set AND a CD3-unique bit (`802154_TX` or `BLE_SPAM`) set. **Do NOT key off `OTA`** — the shipped brain firmware advertises `HANDSHAKE` but intentionally omits `OTA` (see the OTA/PMKID note above), so an `OTA`-gated discriminator misclassified every brain device as AT and broke all ESP32 features. The real `M1_FW_CAPS` (HANDSHAKE set, OTA clear, 802154_TX/BLE_SPAM set) now resolves to `ESP32_TRANSPORT_RPC`.
+- Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE` set AND a CD3-unique bit (`802154_TX` or `BLE_SPAM`) set. **Do NOT key off `OTA`** — older brain releases intentionally omitted it, and factory-only v1.6.0 installations still omit it until the dual-slot migration. An `OTA`-gated discriminator therefore misclassifies those devices as AT and disables every ESP32 feature.
 
 ### Transport compatibility layer (host side)
 
@@ -357,3 +356,28 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 - **MD5 file must be UPPERCASE hex, exactly 32 bytes, no newline** — M1 uses uppercase in `mh_hexify()`
 - Factory image at offset 0x000000 (contains bootloader + partition table + app)
 - Recovery files: `D:\M1Projects\esp32_recovery\`
+
+### Real M1 HIL and native USB deployment
+
+Use `scripts/m1_hil.py` instead of automating qMonstatek. It can read device
+info, capture the screen, click buttons, initialize the ESP32 with native
+`ESP_INFO` payload `01`, flash the STM32's inactive bank, and stage an ESP32 app
+image over USB mass storage. The default is COM3 at 115200 baud; close
+qMonstatek before use to avoid COM contention.
+
+```bash
+python scripts/m1_hil.py init-esp32
+python scripts/m1_hil.py flash-host build/M1_Hapax_v<VERSION>_wCRC.bin
+python scripts/m1_hil.py stage-esp32 ../m1-esp32-brain/build/m1-esp32-brain.bin
+```
+
+The staging command verifies the image byte-for-byte and creates the required
+32-byte MD5 sidecar. Use an `app_*.bin` filename for dual-slot native OTA and a
+full `factory_*.bin` only for partition migration or ROM recovery. After native
+OTA, the host finishes the OTA RPC before issuing `SYS_RESET`. If the radio stays
+offline after the normal update wait, reboot the M1 once and retry native RPC
+initialization before reflashing.
+
+Read the [hardware-in-the-loop skill](../hardware-in-the-loop/SKILL.md) before
+real-device work. Its recovery steps, COM-contention rules, and validation
+requirements are part of the flashing procedure.

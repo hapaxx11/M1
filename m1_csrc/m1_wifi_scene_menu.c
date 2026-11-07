@@ -34,6 +34,7 @@
 #include "m1_wifi.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
 #include "m1_espnow_scene.h"
@@ -47,7 +48,12 @@
 
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        fn(); \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated blocking delegate — shows a "not supported" screen and
  * pops immediately when the required ESP32 capability is absent, instead of
@@ -57,10 +63,25 @@
 #define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
         m1_esp32_ensure_init(); \
         if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
                                   esp32_feature_label(fid))) { fn(); } \
-        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
+
+#define DELEGATE_RECON(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_rpc_foreground_acquire(); \
+        m1_esp32_ensure_init(); \
+        if (wifi_recon_prepare(fid) && \
+            m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); \
+        m1_esp32_rpc_foreground_release(); \
+        app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* Core / direct-tool delegates                                             */
@@ -68,21 +89,23 @@
 
 static void scan_connect_on_enter(M1SceneApp *app) {
     (void)app;
+    m1_esp32_rpc_foreground_acquire();
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     bool was_connected = wifi_is_connected();
 #endif
     wifi_scan_ap();
+    m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
     app->running = true;
 
     /* The user selected a network in the scan list → open the selected-network
-     * Target context (Target + Connect groups, plan §3.2).  Keep the ESP32
-     * initialised; the Target action delegates manage its lifecycle. */
+     * Target context (Target + Connect groups, plan §3.2). Target action
+     * delegates acquire and release the ESP32 for each operation. */
     if (wifi_scan_ap_target_selected() && wifi_target_valid()) {
         m1_scene_replace(app, WifiSceneTargetMenu);
         return;
     }
 
-    m1_esp32_deinit();
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     if (!was_connected && wifi_is_connected()) {
         m1_scene_replace(app, WifiSceneConnectedMenu);
@@ -91,12 +114,12 @@ static void scan_connect_on_enter(M1SceneApp *app) {
 #endif
     m1_scene_pop(app);
 }
-DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
-DELEGATE(survey_24g,        wifi_survey_24g)
-DELEGATE_FEATURE(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)
+DELEGATE_RECON(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
+DELEGATE_RECON(survey_24g, wifi_survey_24g, ESP32_FEATURE_WIFI_SCAN)
+DELEGATE_RECON(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)
 DELEGATE(wardrive,          wifi_wardrive)
 DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN)
-DELEGATE_FEATURE(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
+DELEGATE_RECON(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
 DELEGATE_FEATURE(zigbee, zigbee_scan, ESP32_FEATURE_802154)
 DELEGATE_FEATURE(thread, thread_scan, ESP32_FEATURE_802154)
 DELEGATE_FEATURE(flood_802154, ieee802154_flood, ESP32_FEATURE_802154)
@@ -182,11 +205,15 @@ const M1SceneHandlers wifi_scene_menu_handlers = {
 /* Recon sub-menu (11 items — passive discovery + merged sniffers)          */
 /*==========================================================================*/
 
-#define RECON_ITEM_COUNT  11
+#define RECON_ITEM_COUNT  15
 
 static const char *const recon_labels[RECON_ITEM_COUNT] = {
     "Station Scan",
     "2.4G Survey",
+    "Channel Airtime",
+    "Deauth Monitor",
+    "WPS Auditor",
+    "CSI Radar (exp)",
     "Signal Monitor",
     "MAC Track",
     "Packet Monitor",
@@ -201,6 +228,10 @@ static const char *const recon_labels[RECON_ITEM_COUNT] = {
 static const uint8_t recon_targets[RECON_ITEM_COUNT] = {
     WifiSceneStationScan,
     WifiSceneSurvey24g,
+    WifiSceneAirtime,
+    WifiSceneDeauthMon,
+    WifiSceneWps,
+    WifiSceneCsi,
     WifiSceneSignalMonitor,
     WifiSceneMacTrack,
     WifiSceneSniffAll,
@@ -217,12 +248,6 @@ static subghz_submenu_model_t s_recon_model;
 static void recon_menu_enter(M1SceneApp *app)
 {
     (void)app;
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-    if (!wifi_prompt_disconnect()) {
-        m1_scene_pop(app);
-        return;
-    }
-#endif
     if (s_recon_model.item_count == 0)
         subghz_submenu_model_init(&s_recon_model, RECON_ITEM_COUNT,
                                   M1_MENU_VIS(RECON_ITEM_COUNT));

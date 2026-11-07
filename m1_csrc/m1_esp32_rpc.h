@@ -74,6 +74,7 @@ typedef enum {
     M1_ESP32_RPC_SYS_OTA_DATA       = 0x0007,
     M1_ESP32_RPC_SYS_OTA_END        = 0x0008,
     M1_ESP32_RPC_SYS_SNTP_SYNC      = 0x0009,
+    M1_ESP32_RPC_SYS_OTA_ABORT      = 0x000A,
 
     /* ---- WiFi station 0x0100-0x01FF ---- */
     M1_ESP32_RPC_WIFI_GET_MODE      = 0x0100,
@@ -116,6 +117,18 @@ typedef enum {
     M1_ESP32_RPC_OFF_CAPTIVE_STOP   = 0x0317,
     M1_ESP32_RPC_OFF_CAPTIVE_CREDS  = 0x0318,
     M1_ESP32_RPC_OFF_CAPTIVE_DIAG   = 0x0319,
+    M1_ESP32_RPC_OFF_PMKID_STATUS   = 0x031A,
+    M1_ESP32_RPC_OFF_PMKID_GET      = 0x031B,
+    M1_ESP32_RPC_OFF_PMKID_STOP     = 0x031C,
+    M1_ESP32_RPC_WPS_START          = 0x0320,
+    M1_ESP32_RPC_WPS_NEXT           = 0x0321,
+    M1_ESP32_RPC_WPS_STOP           = 0x0322,
+    M1_ESP32_RPC_CHANNEL_MON_START  = 0x0323,
+    M1_ESP32_RPC_CHANNEL_MON_STATS  = 0x0324,
+    M1_ESP32_RPC_CHANNEL_MON_STOP   = 0x0325,
+    M1_ESP32_RPC_CSI_START          = 0x0326,
+    M1_ESP32_RPC_CSI_STATUS         = 0x0327,
+    M1_ESP32_RPC_CSI_STOP           = 0x0328,
 
     /* ---- BLE 0x0400-0x04FF ---- */
     M1_ESP32_RPC_BLE_INIT           = 0x0400,
@@ -135,6 +148,17 @@ typedef enum {
     M1_ESP32_RPC_BLE_SPAM_STOP      = 0x040E,
     M1_ESP32_RPC_BLE_RPC_ADV        = 0x040F,
     M1_ESP32_RPC_BLE_STATE          = 0x0410,
+    M1_ESP32_RPC_BLE_BEACON_START   = 0x0411,
+    M1_ESP32_RPC_BLE_BEACON_STOP    = 0x0412,
+    M1_ESP32_RPC_BLE_RAW_SCAN_START = 0x0413,
+    M1_ESP32_RPC_BLE_RAW_SCAN_NEXT  = 0x0414,
+    M1_ESP32_RPC_BLE_ADV_RAW        = 0x0415,
+    M1_ESP32_RPC_BLE_GATT_START     = 0x0416,
+    M1_ESP32_RPC_BLE_GATT_NEXT      = 0x0417,
+    M1_ESP32_RPC_BLE_GATT_STOP      = 0x0418,
+    M1_ESP32_RPC_BLE_GATT_WRITE     = 0x0419,
+    M1_ESP32_RPC_BLE_GATT_SUB       = 0x041A,
+    M1_ESP32_RPC_BLE_GATT_NOTIF     = 0x041B,
 
     /* ---- Zigbee / 802.15.4 0x0500-0x05FF ---- */
     M1_ESP32_RPC_ZB_INIT            = 0x0500,
@@ -165,6 +189,11 @@ typedef enum {
     M1_ESP32_RPC_NET_HTTP_OPEN      = 0x0800,
     M1_ESP32_RPC_NET_HTTP_READ      = 0x0801,
     M1_ESP32_RPC_NET_HTTP_CLOSE     = 0x0802,
+
+    /* ---- Network scanners 0x0900-0x09FF ---- */
+    M1_ESP32_RPC_NETSCAN_START      = 0x0900,
+    M1_ESP32_RPC_NETSCAN_NEXT       = 0x0901,
+    M1_ESP32_RPC_NETSCAN_STOP       = 0x0902,
 } m1_esp32_rpc_id_t;
 
 /* Additional message-type values beyond REQ/RESP/NAK (in m1_esp32_caps.h). */
@@ -752,6 +781,10 @@ bool m1_esp32_rpc_transaction_lock(void);
 bool m1_esp32_rpc_transaction_lock_timed(TickType_t timeout_ticks);
 bool m1_esp32_rpc_transaction_try_lock(void);
 void m1_esp32_rpc_transaction_unlock(void);
+
+void m1_esp32_rpc_foreground_acquire(void);
+void m1_esp32_rpc_foreground_release(void);
+bool m1_esp32_rpc_foreground_active(void);
 
 /* =========================================================================
  * Public client API

@@ -34,6 +34,8 @@
 #include "ble_signal_finder.h"
 #include "ble_scan_state.h"
 #include "ble_detector.h"
+#include "ble_findmy.h"
+#include "m1_rng.h"
 #include "m1_tasks.h"
 
 /*************************** D E F I N E S ************************************/
@@ -773,10 +775,110 @@ static void ble_gatt_export(const ble_dev_t *dev)
     f_close(&fil);
 }
 
+static bool s_gatt_rpc_pending;
+static uint32_t s_gatt_rpc_started;
+static const ble_dev_t *s_gatt_rpc_dev;
+
 static void ble_gatt_disconnect(void)
 {
-    m1_resp_t resp;
-    m1_esp32_simple_cmd(CMD_BLE_GATT_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+    s_gatt_rpc_pending = false;
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+        uint8_t resp;
+        uint16_t rlen = 0;
+        (void)m1_esp32_rpc_call(M1_ESP32_RPC_BLE_GATT_STOP, NULL, 0,
+                                &resp, sizeof(resp), &rlen, 2u);
+    } else {
+        m1_resp_t resp;
+        m1_esp32_simple_cmd(CMD_BLE_GATT_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+    }
+}
+
+static uint16_t ble_gatt_fetch_rpc(const ble_dev_t *dev)
+{
+    uint8_t req[7];
+    memcpy(req, dev->addr, 6);
+    req[6] = dev->addr_type;
+    uint8_t resp[40];
+    uint16_t rlen = 0;
+    s_gatt_rpc_dev = dev;
+    if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_GATT_START, req, sizeof(req),
+                          resp, sizeof(resp), &rlen, 2u) != M1_ESP32_RPC_OK) {
+        s_gatt_rpc_pending = false;
+        ble_show_pending("GATT Discovery", "Connect/disc failed", "Try another device");
+        return 0;
+    }
+    s_gatt_rpc_started = HAL_GetTick();
+    s_gatt_rpc_pending = true;
+    return 0;
+}
+
+static bool ble_gatt_poll_rpc(void)
+{
+    if (!s_gatt_rpc_pending)
+        return true;
+
+    uint8_t resp[40];
+    uint16_t rlen = 0;
+    if (HAL_GetTick() - s_gatt_rpc_started > 30000u) {
+        s_gatt_rpc_pending = false;
+        ble_gatt_count = 0;
+    } else {
+        m1_esp32_rpc_status_t st = m1_esp32_rpc_call(
+            M1_ESP32_RPC_BLE_GATT_NEXT, NULL, 0, resp, sizeof(resp), &rlen, 2u);
+        if (st != M1_ESP32_RPC_OK || rlen < 1) {
+            s_gatt_rpc_pending = false;
+            ble_gatt_count = 0;
+        } else if (resp[0] == 0xFE) {
+            return false;
+        } else if (resp[0] == 0xFD || resp[0] == 0) {
+            s_gatt_rpc_pending = false;
+            if (resp[0] == 0xFD)
+                ble_gatt_count = 0;
+        } else if (rlen < 8) {
+            s_gatt_rpc_pending = false;
+            ble_gatt_count = 0;
+        } else {
+            ble_gatt_entry_t *e = &ble_gatt_list[ble_gatt_count];
+            memset(e, 0, sizeof(*e));
+            e->type = resp[0];
+            e->handle1 = resp[1] | ((uint16_t)resp[2] << 8);
+            e->handle2 = resp[3] | ((uint16_t)resp[4] << 8);
+            e->props = resp[5];
+            e->uuid_len = resp[6] > 16 ? 16 : resp[6];
+            if (rlen < 7 + e->uuid_len) {
+                s_gatt_rpc_pending = false;
+                ble_gatt_count = 0;
+            } else {
+                memcpy(e->uuid, &resp[7], e->uuid_len);
+                uint8_t pos = 7 + e->uuid_len;
+                if (rlen > pos) {
+                    e->value_len = resp[pos++];
+                    if (e->value_len > sizeof(e->value)) e->value_len = sizeof(e->value);
+                    if (rlen < pos + e->value_len) {
+                        s_gatt_rpc_pending = false;
+                        ble_gatt_count = 0;
+                    } else {
+                        memcpy(e->value, &resp[pos], e->value_len);
+                    }
+                }
+                if (s_gatt_rpc_pending) {
+                    ble_gatt_count++;
+                    if (ble_gatt_count >= BLE_GATT_MAX)
+                        s_gatt_rpc_pending = false;
+                }
+            }
+        }
+    }
+
+    if (s_gatt_rpc_pending)
+        return false;
+
+    ble_gatt_export(s_gatt_rpc_dev);
+    if (ble_gatt_count == 0) {
+        ble_gatt_disconnect();
+        ble_show_pending("GATT Discovery", "Connect/disc failed", "Try another device");
+    }
+    return true;
 }
 
 static uint16_t ble_gatt_fetch(const ble_dev_t *dev)
@@ -788,8 +890,11 @@ static uint16_t ble_gatt_fetch(const ble_dev_t *dev)
 
     ble_gatt_count = 0;
     ble_gatt_view_idx = 0;
+    s_gatt_rpc_pending = false;
 
     if (!dev) return 0;
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+        return ble_gatt_fetch_rpc(dev);
 
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -873,6 +978,13 @@ static bool ble_gatt_write_value(uint16_t handle, uint8_t flags,
     memcpy(&cmd.payload[4], value, value_len);
     cmd.payload_len = 4 + value_len;
 
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+        uint8_t rpc_resp;
+        uint16_t rlen = 0;
+        return m1_esp32_rpc_call(M1_ESP32_RPC_BLE_GATT_WRITE,
+                                 cmd.payload, cmd.payload_len,
+                                 &rpc_resp, sizeof(rpc_resp), &rlen, 6u) == M1_ESP32_RPC_OK;
+    }
     return m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS + 3000) == 0 &&
         resp.status == RESP_OK;
 }
@@ -893,6 +1005,16 @@ static bool ble_gatt_subscribe_handle(uint16_t handle, bool enable, uint8_t mode
     cmd.payload[3] = mode;
     cmd.payload_len = 4;
 
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+        uint8_t rpc_req[3] = {
+            (uint8_t)handle, (uint8_t)(handle >> 8), enable ? mode : 0,
+        };
+        uint8_t rpc_resp;
+        uint16_t rlen = 0;
+        return m1_esp32_rpc_call(M1_ESP32_RPC_BLE_GATT_SUB,
+                                 rpc_req, sizeof(rpc_req),
+                                 &rpc_resp, sizeof(rpc_resp), &rlen, 6u) == M1_ESP32_RPC_OK;
+    }
     return m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS + 2000) == 0 &&
         resp.status == RESP_OK;
 }
@@ -904,7 +1026,14 @@ static bool ble_gatt_notify_next(ble_gatt_notify_t *notif)
     if (!notif) return false;
     memset(notif, 0, sizeof(*notif));
 
-    if (m1_esp32_simple_cmd(CMD_BLE_GATT_NOTIF, &resp, BLE_NEXT_TIMEOUT_MS) != 0 ||
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+        uint16_t rlen = 0;
+        if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_GATT_NOTIF, NULL, 0,
+                              resp.payload, sizeof(resp.payload), &rlen, 2u) != M1_ESP32_RPC_OK ||
+            rlen < 1 || resp.payload[0] == 0)
+            return false;
+        resp.payload_len = rlen;
+    } else if (m1_esp32_simple_cmd(CMD_BLE_GATT_NOTIF, &resp, BLE_NEXT_TIMEOUT_MS) != 0 ||
         resp.status != RESP_OK || resp.payload_len < 1 || resp.payload[0] == 0)
     {
         return false;
@@ -1306,13 +1435,21 @@ void ble_gatt_discovery(void)
 
     while (1)
     {
-        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (s_gatt_rpc_pending && ble_gatt_poll_rpc() && ble_gatt_count > 0)
+        {
+            showing_gatt = true;
+            ble_gatt_view_idx = 1;
+            ble_gatt_print(true);
+        }
+
+        TickType_t wait_ticks = s_gatt_rpc_pending ? pdMS_TO_TICKS(100) : portMAX_DELAY;
+        ret = xQueueReceive(main_q_hdl, &q_item, wait_ticks);
         if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
 
         xQueueReceive(button_events_q_hdl, &btn, 0);
         if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            if (showing_gatt)
+            if (showing_gatt || s_gatt_rpc_pending)
             {
                 ble_gatt_disconnect();
             }
@@ -1330,7 +1467,8 @@ void ble_gatt_discovery(void)
             if (showing_gatt) ble_gatt_print(false);
             else ble_list_print(false);
         }
-        else if (!showing_gatt && btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        else if (!showing_gatt && !s_gatt_rpc_pending &&
+                 btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
         {
             if (ble_gatt_fetch(&ble_list[ble_view_idx]) > 0)
             {
@@ -1483,8 +1621,11 @@ static ble_detector_scan_route_t ble_detector_current_route(bool prefer_raw,
                                                              bool require_raw)
 {
     esp32_transport_t transport = m1_esp32_active_transport();
-    bool raw_supported = transport == ESP32_TRANSPORT_BINARY_SPI;
-    bool names_supported = raw_supported || transport == ESP32_TRANSPORT_RPC;
+    bool raw_supported = transport == ESP32_TRANSPORT_BINARY_SPI ||
+                         (transport == ESP32_TRANSPORT_RPC &&
+                          m1_esp32_has_cap(M1_ESP32_CAP_BLE_RAW));
+    bool names_supported = transport == ESP32_TRANSPORT_BINARY_SPI ||
+                           transport == ESP32_TRANSPORT_RPC;
 
     return ble_detector_select_scan_route(raw_supported, names_supported,
                                           prefer_raw, require_raw);
@@ -1498,33 +1639,68 @@ static bool ble_raw_scan_collect(ble_raw_mode_t mode,
     uint16_t expected;
     int ret;
     char name[30];
+    bool use_rpc = m1_esp32_active_transport() == ESP32_TRANSPORT_RPC;
 
     if (!scan) return false;
     memset(scan, 0, sizeof(*scan));
-    ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
-    if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2u)
-        return false;
+    if (use_rpc) {
+        if (!m1_esp32_has_cap(M1_ESP32_CAP_BLE_RAW) ||
+            m1_esp32_rpc_ble_raw_scan_start(5u) != M1_ESP32_RPC_OK)
+            return false;
+        expected = BLE_DEV_MAX;
+    } else {
+        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
+        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2u)
+            return false;
+        expected = (uint16_t)resp.payload[0] |
+                   ((uint16_t)resp.payload[1] << 8u);
+        if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
+    }
     if (ble_scan_cancelled(cancel_requested))
         return false;
 
-    expected = (uint16_t)resp.payload[0] |
-               ((uint16_t)resp.payload[1] << 8u);
-    if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
-
+    uint32_t scan_started = HAL_GetTick();
     for (uint16_t i = 0u; i < expected; i++) {
         if (ble_scan_cancelled(cancel_requested))
             return false;
-        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp,
-                                  BLE_NEXT_TIMEOUT_MS);
-        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9u)
-            break;
+
+        uint8_t adv_len;
+        const uint8_t *adv;
+        const uint8_t *adv_addr;
+        int8_t adv_rssi;
+        m1_esp32_rpc_ble_raw_adv_t raw;
+        if (use_rpc) {
+            bool done = false;
+            m1_esp32_rpc_status_t scan_status =
+                m1_esp32_rpc_ble_raw_scan_next(&raw, &done);
+            if (scan_status == M1_ESP32_RPC_PENDING) {
+                if (HAL_GetTick() - scan_started > 7000u)
+                    break;
+                i--;
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;
+            }
+            if (scan_status != M1_ESP32_RPC_OK || done)
+                break;
+            adv_len = raw.adv_len;
+            adv = raw.adv;
+            adv_addr = raw.addr;
+            adv_rssi = raw.rssi;
+        } else {
+            ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp,
+                                      BLE_NEXT_TIMEOUT_MS);
+            if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9u)
+                break;
+            adv_len = resp.payload[8];
+            if (adv_len > resp.payload_len - 9u)
+                adv_len = (uint8_t)(resp.payload_len - 9u);
+            adv = &resp.payload[9];
+            adv_addr = &resp.payload[2];
+            adv_rssi = (int8_t)resp.payload[0];
+        }
         if (ble_scan_cancelled(cancel_requested))
             return false;
 
-        uint8_t adv_len = resp.payload[8];
-        if (adv_len > resp.payload_len - 9u)
-            adv_len = (uint8_t)(resp.payload_len - 9u);
-        const uint8_t *adv = &resp.payload[9];
         bool has_name = ble_adv_get_name(adv, adv_len, name, sizeof(name));
         bool is_airtag = ble_detector_advertisement_matches(
             adv, adv_len, BLE_DETECTOR_AIRTAG);
@@ -1546,9 +1722,9 @@ static bool ble_raw_scan_collect(ble_raw_mode_t mode,
         if (scan->first_addr[0] == '\0') {
             snprintf(scan->first_addr, sizeof(scan->first_addr),
                      "%02X:%02X:%02X:%02X:%02X:%02X",
-                     resp.payload[2], resp.payload[3], resp.payload[4],
-                     resp.payload[5], resp.payload[6], resp.payload[7]);
-            scan->first_rssi = (int8_t)resp.payload[0];
+                     adv_addr[0], adv_addr[1], adv_addr[2],
+                     adv_addr[3], adv_addr[4], adv_addr[5]);
+            scan->first_rssi = adv_rssi;
             if (has_name) {
                 strncpy(scan->first_name, name, sizeof(scan->first_name) - 1u);
                 scan->first_name[sizeof(scan->first_name) - 1u] = '\0';
@@ -2995,7 +3171,53 @@ void ble_detect_meta(void)
 
 void ble_spoof_airtag(void)
 {
-    ble_show_pending("SPOOF AIRTAG", "Needs Find My payload", "not raw name adv");
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    uint8_t key[BLE_FINDMY_KEY_LEN];
+    uint8_t adv[BLE_FINDMY_ADV_LEN];
+    uint8_t addr[6];
+
+    ble_ensure_esp32_ready();
+    if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC ||
+        !m1_esp32_has_cap(M1_ESP32_CAP_BLE_RAW)) {
+        ble_show_pending("SPOOF AIRTAG", "Requires native raw BLE", "Update ESP32 FW");
+        return;
+    }
+    if (!m1_crypto_random_bytes(key, sizeof(key))) {
+        ble_show_pending("SPOOF AIRTAG", "Secure RNG failed", NULL);
+        return;
+    }
+    ble_findmy_build(key, adv, addr);
+    if (m1_esp32_rpc_ble_adv_raw(adv, sizeof(adv), addr, 200u) != M1_ESP32_RPC_OK) {
+        ble_show_pending("SPOOF AIRTAG", "Start failed", "Check ESP32 FW");
+        return;
+    }
+
+    bool running = true;
+    while (running) {
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, "AirTag Lab Spoof");
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 25, "Find My ADV active");
+        u8g2_DrawStr(&m1_u8g2, 2, 37, "Random lab key");
+        u8g2_DrawStr(&m1_u8g2, 2, 49, "Not a trackable tag");
+        m1_u8g2_nextpage();
+
+        if (xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(400)) == pdTRUE &&
+            q_item.q_evt_type == Q_EVENT_KEYPAD) {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+                uint8_t response;
+                uint16_t response_len = 0;
+                (void)m1_esp32_rpc_call(M1_ESP32_RPC_BLE_BEACON_STOP, NULL, 0,
+                                        &response, sizeof(response), &response_len, 2u);
+                xQueueReset(main_q_hdl);
+                running = false;
+            }
+        }
+    }
 }
 
 

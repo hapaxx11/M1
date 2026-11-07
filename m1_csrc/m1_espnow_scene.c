@@ -21,6 +21,7 @@
 #include "m1_espnow_hal.h"
 #include "m1_scene.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "m1_tasks.h"
 
 /*==========================================================================*/
@@ -29,6 +30,7 @@
 
 static void espnow_hw_init(void)
 {
+    m1_esp32_rpc_foreground_acquire();
     m1_espnow_scene_ctx_reset();
     m1_esp32_ensure_init();
 }
@@ -37,6 +39,7 @@ static void espnow_hw_deinit(void)
 {
     m1_espnow_stop();
     m1_esp32_deinit();
+    m1_esp32_rpc_foreground_release();
 }
 
 /*==========================================================================*/
