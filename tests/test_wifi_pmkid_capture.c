@@ -34,6 +34,7 @@ void setUp(void)
     memcpy(llc, snap, 8);
     uint8_t *eapol = llc + 8;
     eapol[1] = 3;
+    eapol[3] = 117;
     eapol[6] = 0x80;
     eapol[98] = 22;
     uint8_t *kd = eapol + 99;
@@ -73,11 +74,43 @@ static void test_rejects_non_pmkid_vendor_element(void)
     TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
 }
 
+static void test_rejects_zero_length_eapol_body(void)
+{
+    uint8_t bssid[6], station[6], pmkid[16];
+    pcap[24 + 16 + 24 + 8 + 3] = 0;
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
+}
+
+static void test_rejects_body_shorter_than_fixed_fields(void)
+{
+    uint8_t bssid[6], station[6], pmkid[16];
+    pcap[24 + 16 + 24 + 8 + 3] = 94;
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
+}
+
+static void test_rejects_body_longer_than_capture(void)
+{
+    uint8_t bssid[6], station[6], pmkid[16];
+    pcap[24 + 16 + 24 + 8 + 3] = 118;
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
+}
+
+static void test_rejects_kde_outside_declared_body(void)
+{
+    uint8_t bssid[6], station[6], pmkid[16];
+    pcap[24 + 16 + 24 + 8 + 3] = 100;
+    TEST_ASSERT_FALSE(wifi_pmkid_pcap_extract(pcap, pcap_len, bssid, station, pmkid));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_extracts_standard_pmkid);
     RUN_TEST(test_rejects_truncated_kde);
     RUN_TEST(test_rejects_non_pmkid_vendor_element);
+    RUN_TEST(test_rejects_zero_length_eapol_body);
+    RUN_TEST(test_rejects_body_shorter_than_fixed_fields);
+    RUN_TEST(test_rejects_body_longer_than_capture);
+    RUN_TEST(test_rejects_kde_outside_declared_body);
     return UNITY_END();
 }

@@ -21,10 +21,12 @@ static bool extract_frame(const uint8_t *f, size_t len,
     const uint8_t *eapol = llc + 8;
     size_t avail = len - hdrlen - 8;
     if (eapol[1] != 3) return false;
+    uint16_t body_len = ((uint16_t)eapol[2] << 8) | eapol[3];
+    if (body_len < 95u || (size_t)body_len + 4u > avail) return false;
     uint16_t key_info = ((uint16_t)eapol[5] << 8) | eapol[6];
     if (!(key_info & 0x0080) || (key_info & 0x0100)) return false;
     uint16_t kd_len = ((uint16_t)eapol[97] << 8) | eapol[98];
-    if (kd_len > avail - 99) return false;
+    if (kd_len > body_len - 95u || kd_len > avail - 99u) return false;
 
     const uint8_t *kd = eapol + 99;
     for (uint16_t off = 0; off + 2 <= kd_len;) {
