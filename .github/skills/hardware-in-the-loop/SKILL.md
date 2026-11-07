@@ -30,10 +30,11 @@ python scripts/m1_hil.py click down --count 2
 python scripts/m1_hil.py click ok
 ```
 
-`capture` writes both the PNG and its raw 1024-byte framebuffer. Inspect the PNG
-after navigation that changes scenes or selections; do not assume a button
-sequence reached its intended screen. Generated captures are validation
-artifacts and must not be committed.
+`capture` writes both the PNG and its raw 1024-byte framebuffer. The automated
+suite keeps raw frames only in memory and writes redacted artifacts that retain
+only the title region. Inspect the PNG after navigation that changes scenes or
+selections; do not assume a button sequence reached its intended screen.
+Generated captures are validation artifacts and must not be committed.
 
 Initialize the ESP32 without qMonstatek or the on-device menu:
 
@@ -80,10 +81,12 @@ The tool:
 
 1. Sends `SD_UNMOUNT` (`0x3B`) and closes the serial port. USB disconnect at this
    point is expected; a timeout waiting for its ACK is tolerated.
-2. Copies the image through USB mass storage and reads it back byte-for-byte.
+2. Copies the image through USB mass storage, flushes it with `fsync`, and reads
+   it back byte-for-byte.
 3. Writes an MD5 sidecar containing exactly 32 uppercase hexadecimal bytes with
-   no trailing newline, then verifies the sidecar.
-4. Sends `SD_MOUNT` (`0x3C`) from a fresh RPC session.
+   no trailing newline, then flushes and verifies the sidecar.
+4. Dismounts the host volume without forcing it, then sends `SD_MOUNT` (`0x3C`)
+   from a fresh RPC session and waits for acknowledgment before reporting success.
 
 On the M1, choose **Settings → ESP32 update → Image File**, select the staged
 `.bin`, confirm **Image loaded!**, then choose **Firmware Update**. File browsers

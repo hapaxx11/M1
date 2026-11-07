@@ -13,15 +13,15 @@
 
 ### Phase 2 — PMKID validation
 - **Description**: Bound PMKID KDE parsing by the declared EAPOL body length and add malformed-packet regression coverage.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Validate EAPOL body before PMKID export`
 
 ### Phase 3 — HIL and staging robustness
 - **Description**: Preserve recovery results, flush/eject staged media, redact captures and public errors, enforce transition budgets, and retain unexecuted PR checklist entries.
-- **Status**: 🔲 Not started
+- **Status**: ✅ Complete
 - **Commit**: `Harden HIL staging and result reporting`
 
 ### Phase 4 — Final validation and cleanup
 - **Description**: Run full host suites and applicable real-device validation, review the final diff, and remove this checklist from the PR.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

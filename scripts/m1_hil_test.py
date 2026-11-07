@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,7 +17,7 @@ import time
 from typing import Callable
 import zlib
 
-from m1_hil import BUTTONS, M1Hil, connect
+from m1_hil import BUTTONS, M1Hil, connect, write_png
 
 RESULT_START = "<!-- M1_HIL_RESULTS:START -->"
 RESULT_END = "<!-- M1_HIL_RESULTS:END -->"
@@ -34,12 +35,21 @@ def click(client: M1Hil, name: str, count: int = 1) -> None:
     client.click(BUTTONS[name], count=count)
 
 
+def write_redacted_capture(path: Path, framebuffer: bytes) -> None:
+    redacted = bytearray(framebuffer)
+    for x in range(128):
+        for y in range(10, 64):
+            redacted[x + (y // 8) * 128] &= ~(1 << (y % 8)) & 0xFF
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.with_suffix(".fb").write_bytes(redacted)
+    write_png(path, bytes(redacted), scale=4)
+
+
 def capture(client: M1Hil, directory: Path, name: str) -> bytes:
-    path = directory / f"{name}.png"
-    client.capture(path)
-    framebuffer = path.with_suffix(".fb").read_bytes()
+    framebuffer = client.request(0x13, {0x12}, timeout=8)
     if len(framebuffer) != 1024 or len(set(framebuffer)) < 2:
         raise AssertionError(f"{name}: framebuffer is missing or blank")
+    write_redacted_capture(directory / f"{name}.png", framebuffer)
     return framebuffer
 
 
@@ -61,15 +71,23 @@ def assert_title(framebuffer: bytes, expected: int | tuple[int, ...], label: str
 
 
 def capture_until_change(
-    client: M1Hil, directory: Path, name: str, previous: bytes, timeout_s: float
+    client: M1Hil,
+    directory: Path,
+    name: str,
+    previous: bytes,
+    timeout_s: float,
+    started: float | None = None,
 ) -> bytes:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
+    deadline = time.monotonic() + timeout_s if started is None else started + timeout_s
+    while True:
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"{name}: screen did not change within {timeout_s:.1f} s")
         current = capture(client, directory, name)
         if current != previous:
+            if time.monotonic() > deadline:
+                raise AssertionError(f"{name}: screen changed after {timeout_s:.1f} s")
             return current
         time.sleep(0.1)
-    raise AssertionError(f"{name}: screen did not change within {timeout_s:.1f} s")
 
 
 def open_wifi(client: M1Hil) -> None:
@@ -98,7 +116,7 @@ def exercise_scene(
     started = time.monotonic()
     enter()
     active = capture_until_change(
-        client, artifacts, f"{prefix}-active", before, entry_timeout_s
+        client, artifacts, f"{prefix}-active", before, entry_timeout_s, started
     )
     entry_ms = (time.monotonic() - started) * 1000
     assert_title(active, active_title, f"{prefix} entry")
@@ -106,19 +124,21 @@ def exercise_scene(
     started = time.monotonic()
     click(client, "back")
     menu = capture_until_change(
-        client, artifacts, f"{prefix}-menu", active, exit_timeout_s
+        client, artifacts, f"{prefix}-menu", active, exit_timeout_s, started
     )
     exit_ms = (time.monotonic() - started) * 1000
     assert_title(menu, menu_title, f"{prefix} exit")
 
+    started = time.monotonic()
     click(client, "ok")
     reentry = capture_until_change(
-        client, artifacts, f"{prefix}-reentry", menu, entry_timeout_s
+        client, artifacts, f"{prefix}-reentry", menu, entry_timeout_s, started
     )
     assert_title(reentry, active_title, f"{prefix} re-entry")
+    started = time.monotonic()
     click(client, "back")
     cleanup = capture_until_change(
-        client, artifacts, f"{prefix}-cleanup", reentry, exit_timeout_s
+        client, artifacts, f"{prefix}-cleanup", reentry, exit_timeout_s, started
     )
     assert_title(cleanup, menu_title, f"{prefix} cleanup")
     client.info()
@@ -195,12 +215,31 @@ def render_pr_results(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def merge_pr_results(block: str, results: list[dict]) -> str:
+    updates = {result["id"]: result for result in results}
+    lines = []
+    seen = set()
+    for line in block.splitlines():
+        match = re.match(r"^- \[[ x]\] `([^`]+)`", line)
+        if not match:
+            continue
+        test_id = match.group(1)
+        seen.add(test_id)
+        lines.append(render_pr_results([updates[test_id]]) if test_id in updates else line)
+    for result in results:
+        if result["id"] not in seen:
+            lines.append(render_pr_results([result]))
+    return "\n".join(lines)
+
+
 def update_pr_body(body: str, results: list[dict]) -> str:
-    block = f"{RESULT_START}\n{render_pr_results(results)}\n{RESULT_END}"
     if RESULT_START in body and RESULT_END in body:
         start = body.index(RESULT_START)
         end = body.index(RESULT_END, start) + len(RESULT_END)
+        merged = merge_pr_results(body[start + len(RESULT_START):end - len(RESULT_END)], results)
+        block = f"{RESULT_START}\n{merged}\n{RESULT_END}"
         return body[:start] + block + body[end:]
+    block = f"{RESULT_START}\n{render_pr_results(results)}\n{RESULT_END}"
     section = (
         "## Single-device HIL\n"
         "Run `python scripts/m1_hil_test.py --update-pr <PR>` locally. "
@@ -266,6 +305,19 @@ def recover_device(port: str, baud: int) -> None:
             pass
 
 
+def public_error(stage: str, error: BaseException) -> str:
+    prefix = "cleanup failed" if stage == "cleanup" else stage
+    if isinstance(error, AssertionError):
+        return str(error)
+    if isinstance(error, TimeoutError):
+        return f"{prefix}: response timed out"
+    if isinstance(error, ValueError):
+        return f"{prefix}: invalid response or value"
+    if isinstance(error, OSError):
+        return f"{prefix}: connection or I/O error"
+    return f"{prefix}: {type(error).__name__}"
+
+
 def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
     started = time.monotonic()
     stage = "connect"
@@ -290,14 +342,14 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
         status, detail = "FAIL", str(error)
     except (OSError, RuntimeError, TimeoutError, ValueError) as error:
         status = "FAIL" if stage == "test" else "SKIP"
-        detail = f"{stage}: {error}"
+        detail = public_error(stage, error)
     finally:
         if status != "PASS":
             try:
                 recover_device(port, baud)
                 detail += "; recovery reboot issued"
-            except (OSError, RuntimeError, TimeoutError) as cleanup_error:
-                detail += f"; cleanup failed: {cleanup_error}"
+            except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
+                detail += f"; {public_error('cleanup', cleanup_error)}"
     return {
         "id": case.test_id,
         "title": case.title,
@@ -358,5 +410,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(public_error("run", error), file=sys.stderr)
         sys.exit(1)

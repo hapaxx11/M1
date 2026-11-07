@@ -1,0 +1,1 @@
+Documentation: **HIL tooling** — flush and eject staged media before remounting, redact captures and public errors, enforce transition budgets, preserve unexecuted checklist entries, and keep recovery failures in test results.

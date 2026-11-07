@@ -8,6 +8,7 @@ import hashlib
 import os
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import time
 import zlib
@@ -208,6 +209,33 @@ def flash_host(client: M1Hil, image_path: Path) -> None:
     print("Bank swap accepted; M1 is rebooting")
 
 
+def write_bytes_sync(path: Path, data: bytes) -> None:
+    with path.open("wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def eject_volume(drive: Path) -> None:
+    if os.name != "nt":
+        raise RuntimeError("volume ejection is unsupported on this platform")
+    text = str(drive)
+    volume = text[:2] if len(text) >= 2 and text[1] == ":" else text
+    script = (
+        f"$volume = Get-WmiObject Win32_Volume -Filter \"DriveLetter='{volume}'\"; "
+        "if ($null -eq $volume) { exit 2 }; "
+        "$result = $volume.Dismount($false, $false); "
+        "if ($result.ReturnValue -ne 0) { exit $result.ReturnValue }"
+    )
+    subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", script, volume],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
 def stage_esp32(args: argparse.Namespace) -> None:
     image = args.image.resolve()
     source = image.read_bytes()
@@ -230,14 +258,15 @@ def stage_esp32(args: argparse.Namespace) -> None:
                 raise
             print("SD card is already unmounted; resuming staging")
 
-    destination.write_bytes(source)
+    write_bytes_sync(destination, source)
     digest = hashlib.md5(source).hexdigest().upper()
-    sidecar.write_bytes(digest.encode("ascii"))
+    write_bytes_sync(sidecar, digest.encode("ascii"))
     if destination.read_bytes() != source:
         raise RuntimeError("SD image verification failed")
     if sidecar.read_bytes() != digest.encode("ascii") or len(sidecar.read_bytes()) != 32:
         raise RuntimeError("SD MD5 sidecar verification failed")
-    print(f"Staged {destination} ({len(source)} bytes)")
+    eject_volume(drive)
+    print(f"Staged {name} ({len(source)} bytes)")
     print(f"MD5 {digest}")
 
     with connect(args.port, args.baud) as client:
@@ -320,5 +349,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, RuntimeError, TimeoutError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(f"error: {type(error).__name__}", file=sys.stderr)
         sys.exit(1)
