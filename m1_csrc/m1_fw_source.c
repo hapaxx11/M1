@@ -86,7 +86,7 @@ static const char s_default_config[] =
 	"Type: github_release\n"
 	"Owner: hapaxx11\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -95,7 +95,7 @@ static const char s_default_config[] =
 	"Type: github_release\n"
 	"Owner: bedge117\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -171,7 +171,7 @@ static const char s_default_esp32_append[] =
 	"Type: github_release\n"
 	"Owner: hapaxx11\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -180,7 +180,7 @@ static const char s_default_esp32_append[] =
 	"Type: github_release\n"
 	"Owner: bedge117\n"
 	"Repo: m1-esp32-brain\n"
-	"Asset_filter: factory_m1-esp32-brain.bin\n"
+	"Asset_filter: factory_ESP32C6-SPI.bin\n"
 	"Exclude_filter:\n"
 	"Category: esp32\n"
 	"Max_releases: 5\n"
@@ -232,7 +232,7 @@ bool fw_source_append_hapax_brain(void)
 		"Type: github_release\n"
 		"Owner: hapaxx11\n"
 		"Repo: m1-esp32-brain\n"
-		"Asset_filter: factory_m1-esp32-brain.bin\n"
+		"Asset_filter: factory_ESP32C6-SPI.bin\n"
 		"Exclude_filter:\n"
 		"Category: esp32\n"
 		"Max_releases: 5\n";
@@ -414,9 +414,10 @@ bool fw_source_asset_matches_source(const fw_source_t *source,
 	                                   source->exclude_filter))
 		return true;
 
-	/* CD3 brain v1.5 releases renamed the factory image. Accept both names so
-	 * existing fw_sources.txt files keep working with old and new releases. */
-	if (strcmp(source->github.owner, "bedge117") == 0 &&
+	/* Brain releases renamed the factory image. Accept both names so existing
+	 * fw_sources.txt files keep working with old and new releases. */
+	if ((strcmp(source->github.owner, "bedge117") == 0 ||
+	     strcmp(source->github.owner, "hapaxx11") == 0) &&
 	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
 	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
 	{

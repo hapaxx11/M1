@@ -288,6 +288,12 @@ void my_esp32_operation(void)
   fallback in `m1_esp32_caps_init()` starts the legacy task for AT detection.
   Starting it unconditionally resets native firmware and can also contend
   with its full-duplex traffic.
+- **BLE stop paths must be safe before NimBLE starts.** The brain initializes
+  NimBLE lazily, and its function table is NULL beforehand. Never call GAP/host
+  APIs directly without checking host initialization; use `ble_extadv_stop()`,
+  which no-ops until `ble_host_ensure_started()` has succeeded. This includes
+  background Bluetooth Direct disable synchronization, not just active scenes.
+  Validate a disabled-Direct boot and a subsequent WiFi request on real hardware.
 - **Every ESP32-backed WiFi or Bluetooth scene pauses the qMonstatek/brain
   relay.** The reference-counted `m1_esp32_rpc_foreground_acquire()/release()`
   lease suppresses relay polling across the complete foreground operation,

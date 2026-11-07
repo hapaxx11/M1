@@ -82,6 +82,7 @@ static void test_existing_sources_gain_hapax_and_prefer_it(void)
     TEST_ASSERT_EQUAL_STRING("Hapax SPI Brain", sources[0].name);
     TEST_ASSERT_EQUAL_STRING("hapaxx11", sources[0].github.owner);
     TEST_ASSERT_EQUAL_STRING("m1-esp32-brain", sources[0].github.repo);
+    TEST_ASSERT_EQUAL_STRING("factory_ESP32C6-SPI.bin", sources[0].asset_filter);
     TEST_ASSERT_EQUAL_STRING("C3 SPI Brain", sources[1].name);
     TEST_ASSERT_EQUAL_STRING("Deauth ESP32 AT", sources[2].name);
 }
@@ -91,6 +92,7 @@ static void test_missing_file_defaults_prefer_hapax(void)
     fw_source_t sources[FW_SOURCE_MAX];
     TEST_ASSERT_EQUAL_UINT8(3, fw_source_load_config_filtered(sources, "esp32"));
     TEST_ASSERT_EQUAL_STRING("Hapax SPI Brain", sources[0].name);
+    TEST_ASSERT_EQUAL_STRING("factory_ESP32C6-SPI.bin", sources[0].asset_filter);
     TEST_ASSERT_EQUAL_STRING("C3 SPI Brain", sources[1].name);
     TEST_ASSERT_EQUAL_STRING("Deauth ESP32 AT", sources[2].name);
 }

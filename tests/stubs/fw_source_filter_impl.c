@@ -63,7 +63,8 @@ bool fw_source_asset_matches_source(const fw_source_t *source,
 	                                   source->exclude_filter))
 		return true;
 
-	if (strcmp(source->github.owner, "bedge117") == 0 &&
+	if ((strcmp(source->github.owner, "bedge117") == 0 ||
+	     strcmp(source->github.owner, "hapaxx11") == 0) &&
 	    strcmp(source->github.repo, "m1-esp32-brain") == 0 &&
 	    strcmp(source->asset_filter, "factory_m1-esp32-brain.bin") == 0)
 	{
