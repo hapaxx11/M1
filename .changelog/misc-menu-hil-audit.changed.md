@@ -1,0 +1,1 @@
+Documentation: Add a recursive non-Sub-GHz HIL audit for 40 static destinations plus conditional safe Infrared saved-file and custom-remote actions across Infrared, GPIO/CAN, games, BadUSB, and Apps, with external app/script execution and RF transmissions excluded.

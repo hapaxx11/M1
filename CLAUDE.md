@@ -143,6 +143,18 @@ Terminology used when communicating with the agent about the M1 UI.
   unavailable, record that fact and proceed without treating it as a failure.
   See the [`hardware-in-the-loop`](.github/skills/hardware-in-the-loop/SKILL.md)
   skill for the reporting and test-authoring workflow.
+- **Every menu feature needs registered HIL coverage** — whenever a change could
+  have altered menu structure, labels, ordering, navigation, actions, or hardware
+  lifecycle, inspect and update the recursive audit for that module, even when
+  no UI change was intended. Do not assume coverage is unchanged after a
+  refactor. Safe entry/exit coverage is the minimum; add a focused case for
+  state transitions that responsiveness cannot verify. External-dependent
+  functionality keeps its safe entry check and documents the functional skip.
+- **PR authors and reviewers must name exact HIL case IDs** — use
+  [`documentation/hil_menu_coverage.md`](documentation/hil_menu_coverage.md)
+  and `python scripts/m1_hil_test.py --list` to select tests. This applies to
+  review-only agent work: identify missing coverage and suggest the relevant
+  unchecked test IDs even when no code or remote PR edit is requested.
 
 - **Never delete working capability on the strength of an unverified claim** — a
   claim that some capability is unnecessary ("no weather protocol uses FSK", "no

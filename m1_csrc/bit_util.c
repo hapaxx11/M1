@@ -518,6 +518,21 @@ int add_nibbles(uint8_t const message[], unsigned num_bytes)
     return result;
 }
 
+bool hex_spaced_format(const uint8_t *src, size_t len, char *out, size_t out_size)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    if (out == NULL || len > SIZE_MAX / 3 || out_size < (len ? len * 3 : 1))
+        return false;
+    for (size_t i = 0; i < len; ++i) {
+        uint8_t value = src ? src[i] : 0;
+        out[i * 3] = digits[value >> 4];
+        out[i * 3 + 1] = digits[value & 0x0F];
+        out[i * 3 + 2] = ' ';
+    }
+    out[len ? len * 3 - 1 : 0] = '\0';
+    return true;
+}
+
 // Unit testing
 #ifdef _TEST
 #define ASSERT_EQUALS(a, b) \

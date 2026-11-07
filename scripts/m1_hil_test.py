@@ -18,6 +18,13 @@ from typing import Callable
 import zlib
 
 from m1_hil import BUTTONS, M1Hil, connect, write_png
+from m1_bt_menu_audit import run as run_bt_menu_tree
+from m1_misc_menu_audit import run as run_misc_menu_tree
+from m1_nfc_menu_audit import run as run_nfc_menu_tree
+from m1_rfid_menu_audit import run as run_rfid_menu_tree
+from m1_settings_menu_audit import run as run_settings_menu_tree
+from m1_subghz_menu_audit import run as run_subghz_menu_tree
+from m1_wifi_menu_audit import run as run_wifi_menu_tree
 
 RESULT_START = "<!-- M1_HIL_RESULTS:START -->"
 RESULT_END = "<!-- M1_HIL_RESULTS:END -->"
@@ -111,6 +118,7 @@ def exercise_scene(
     enter: Callable[[], None],
     entry_timeout_s: float,
     exit_timeout_s: float = 2.0,
+    active_dwell_s: float = 0.0,
 ) -> str:
     before = capture(client, artifacts, f"{prefix}-before")
     started = time.monotonic()
@@ -120,6 +128,10 @@ def exercise_scene(
     )
     entry_ms = (time.monotonic() - started) * 1000
     assert_title(active, active_title, f"{prefix} entry")
+    if active_dwell_s > 0.0:
+        time.sleep(active_dwell_s)
+        active = capture(client, artifacts, f"{prefix}-dwell")
+        assert_title(active, active_title, f"{prefix} watchdog dwell")
 
     started = time.monotonic()
     click(client, "back")
@@ -194,12 +206,58 @@ def run_ble_airtag_monitor(client: M1Hil, artifacts: Path) -> str:
     )
 
 
+def run_ble_spam(client: M1Hil, artifacts: Path) -> str:
+    open_bluetooth(client)
+    click(client, "down", 5)
+    click(client, "ok")
+    return exercise_scene(
+        client, artifacts, "ble-spam", 0x58EA5A94, 0x62F2B3DB,
+        lambda: click(client, "ok"), 10.0, 3.0, active_dwell_s=17.0
+    )
+
+
+def run_wifi_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_wifi_menu_tree(client)
+
+
+def run_bt_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_bt_menu_tree(client)
+
+
+def run_rfid_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_rfid_menu_tree(client)
+
+
+def run_nfc_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_nfc_menu_tree(client)
+
+
+def run_settings_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_settings_menu_tree(client)
+
+
+def run_misc_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_misc_menu_tree(client)
+
+
+def run_subghz_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_subghz_menu_tree(client)
+
+
 CASES = (
     HilCase("wifi-airtime", "WiFi Channel Airtime lifecycle", run_wifi_airtime),
     HilCase("wifi-peer-link", "WiFi Peer Link lifecycle", run_wifi_peer_link),
+    HilCase("wifi-menu-audit", "Recursive WiFi menu responsiveness", run_wifi_menu_audit),
+    HilCase("bluetooth-menu-audit", "Recursive Bluetooth menu responsiveness", run_bt_menu_audit),
+    HilCase("rfid-menu-audit", "Recursive RFID menu responsiveness", run_rfid_menu_audit),
+    HilCase("nfc-menu-audit", "Recursive NFC menu responsiveness", run_nfc_menu_audit),
+    HilCase("settings-menu-audit", "Recursive Settings menu responsiveness", run_settings_menu_audit),
+    HilCase("misc-menu-audit", "Remaining non-SubGhz menu responsiveness", run_misc_menu_audit),
+    HilCase("subghz-menu-audit", "Recursive SubGhz menu responsiveness", run_subghz_menu_audit),
     HilCase("ble-signal-finder", "BLE Signal Finder lifecycle", run_ble_signal_finder),
     HilCase("ble-gatt-discovery", "BLE GATT Discovery lifecycle", run_ble_gatt_discovery),
     HilCase("ble-airtag-monitor", "BLE AirTag Monitor lifecycle", run_ble_airtag_monitor),
+    HilCase("ble-spam", "BLE Spam watchdog and lifecycle", run_ble_spam),
 )
 
 

@@ -41,6 +41,7 @@
 #include "m1_espnow_capture_share.h"
 #include "m1_wdt_hw.h"
 #include "m1_rfid_watchdog.h"
+#include "bit_util.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -2611,7 +2612,7 @@ static void lfrfid_addm_edit_destroy(uint8_t param)
 /*============================================================================*/
 static void lfrfid_addm_edit_update(uint8_t param)
 {
-	char data_buffer[20];
+	char data_buffer[192];
 	uint8_t data_size;
 	uint8_t val, menu_index;
 
@@ -2622,11 +2623,12 @@ static void lfrfid_addm_edit_update(uint8_t param)
 
 	if(param==0xFF) // addm_save -> edit
 	{
-		m1_byte_to_hextext(lfrfid_tag_info.uid, data_size, data_buffer);
+		(void)hex_spaced_format(lfrfid_tag_info.uid, data_size,
+		                        data_buffer, sizeof(data_buffer));
 	}
 	else // submenu list -> edit
 	{
-		m1_vkb_set_initial_text(data_size, data_buffer);
+		(void)hex_spaced_format(NULL, data_size, data_buffer, sizeof(data_buffer));
 		lfrfid_tag_info.protocol = menu_index;
 	}
 	// escape : val=0,

@@ -141,7 +141,7 @@ static void do_delete(SubGhzApp *app)
     short_name[sizeof(short_name) - 1] = '\0';
 
     uint8_t confirm = m1_message_box_choice(
-        &m1_u8g2, "Delete file?", short_name, "", "OK  /  Cancel");
+        &m1_u8g2, "Delete file?", short_name, "", "OK\nCancel");
     if (confirm != 1)
         return;
 

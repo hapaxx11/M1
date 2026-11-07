@@ -300,6 +300,46 @@ void test_extract_bytes_uart_basic(void)
     TEST_ASSERT_EQUAL_UINT8(0x33, bytes[1]);
 }
 
+void test_hex_spaced_format_large_rfid_uid(void)
+{
+    uint8_t src[28];
+    struct {
+        char text[84];
+        uint8_t guard;
+    } output = {.guard = 0xA5};
+    for (size_t i = 0; i < sizeof(src); ++i)
+        src[i] = (uint8_t)i;
+    TEST_ASSERT_TRUE(hex_spaced_format(src, sizeof(src), output.text, sizeof(output.text)));
+    TEST_ASSERT_EQUAL_UINT8(0xA5, output.guard);
+    TEST_ASSERT_EQUAL_size_t(83, strlen(output.text));
+    for (size_t i = 0; i < sizeof(src); ++i) {
+        char expected[4];
+        snprintf(expected, sizeof(expected), "%02X", src[i]);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY_MESSAGE(expected, output.text + i * 3, 2, "hex byte");
+        if (i + 1 < sizeof(src))
+            TEST_ASSERT_EQUAL_CHAR(' ', output.text[i * 3 + 2]);
+    }
+}
+
+void test_hex_spaced_format_null_source_and_zero_length(void)
+{
+    char text[36];
+    TEST_ASSERT_TRUE(hex_spaced_format(NULL, 12, text, sizeof(text)));
+    TEST_ASSERT_EQUAL_size_t(35, strlen(text));
+    TEST_ASSERT_EQUAL_STRING("00 00 00 00 00 00 00 00 00 00 00 00", text);
+    TEST_ASSERT_TRUE(hex_spaced_format(NULL, 0, text, 1));
+    TEST_ASSERT_EQUAL_STRING("", text);
+}
+
+void test_hex_spaced_format_rejects_small_buffer(void)
+{
+    char text[20];
+    memset(text, 0xA5, sizeof(text));
+    TEST_ASSERT_FALSE(hex_spaced_format(NULL, 12, text, sizeof(text)));
+    for (size_t i = 0; i < sizeof(text); ++i)
+        TEST_ASSERT_EQUAL_UINT8(0xA5, (uint8_t)text[i]);
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -307,6 +347,10 @@ void test_extract_bytes_uart_basic(void)
 int main(void)
 {
     UNITY_BEGIN();
+
+    RUN_TEST(test_hex_spaced_format_large_rfid_uid);
+    RUN_TEST(test_hex_spaced_format_null_source_and_zero_length);
+    RUN_TEST(test_hex_spaced_format_rejects_small_buffer);
 
     /* reverse / reflect */
     RUN_TEST(test_reverse8_zero);

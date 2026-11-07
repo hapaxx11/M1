@@ -62,6 +62,11 @@
 
 /*************************** D E F I N E S ************************************/
 
+static inline bool wifi_use_at_transport(void)
+{
+	return m1_esp32_active_transport() == ESP32_TRANSPORT_AT;
+}
+
 #define M1_LOGDB_TAG	"Wifi"
 
 #define WIFI_CMD_TIMEOUT_MS	15000  /* Scan can take up to 15 seconds */
@@ -396,7 +401,7 @@ static uint16_t wifi_do_scan(void)
 	/* On AT firmware (dag/T-800, bedge117), use AT+CWLAP instead of binary
 	 * SPI scan commands which are SiN360-only.  M1_ESP32_CAP_WIFI_JOIN is
 	 * set by the AT+CMD? probe for any firmware that supports AT+CWJAP. */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	if (wifi_use_at_transport())
 		return wifi_do_scan_at();
 
 	/* Free any previous results */
@@ -756,7 +761,7 @@ static void wifi_connect_selected_ap(void)
 	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	if (wifi_use_at_transport())
 	{
 		static char at_resp[512];
 		/* Buffer sized for worst-case fully-escaped SSID (32*2=64) +
@@ -945,7 +950,7 @@ void wifi_scan_ap(void)
 						/* CMD_WIFI_SCAN_STOP is a SiN360 binary-SPI command;
 						 * AT firmware (dag/T-800) has no equivalent because
 						 * AT+CWLAP is blocking and already complete. */
-						if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+						if (!wifi_use_at_transport())
 						{
 							m1_resp_t resp;
 							m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
@@ -1044,6 +1049,9 @@ static void ensure_esp32_ready(void)
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
 		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
+	if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+	    !get_esp32_main_init_status())
+		esp32_main_init();
 }
 
 /* ---- Sniffer packet display ---- */
@@ -2852,7 +2860,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
@@ -2999,7 +3007,7 @@ static void wifi_deauth_selected_run(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	target_count = wifi_build_selected_deauth_cmd(&cmd, ap_list, ap_count,
 		sta_list_data, sta_total, &ap_targets, &sta_targets, &selected_total);
@@ -3623,7 +3631,7 @@ void wifi_attack_beacon(void)
 	uint8_t list_count;
 	uint8_t tx_count;
 	bool shuffle_beacons;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -5183,7 +5191,7 @@ void wifi_evil_portal(void)
 	char ln[26];
 	uint32_t start_tick, last_poll;
 	const char *portal_ssid = wifi_portal_ssid;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -5342,7 +5350,7 @@ void wifi_probe_flood(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 	const uint8_t flood_channel = 6u;
 
@@ -5463,7 +5471,7 @@ void wifi_attack_karma(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -5601,7 +5609,7 @@ void wifi_attack_karma_portal(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -5803,7 +5811,7 @@ void wifi_attack_ap_clone(void)
 	const char *clone_ssids[32];
 	uint8_t cloned = 0;
 	bool selected_only = false;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -5995,7 +6003,7 @@ void wifi_target_beacon(void)
 	int spi_ret;
 	beacon_load_diag_t load_diag;
 	const char *clone_ssids[1];
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	if (!wifi_target_valid() || ap_list[ap_view_idx].ssid[0] == '\0')
 	{
@@ -6239,7 +6247,7 @@ void wifi_attack_rickroll(void)
 	m1_resp_t resp;
 	m1_cmd_t cmd;
 	beacon_load_diag_t load_diag;
-	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_at = wifi_use_at_transport();
 
 	ensure_esp32_ready();
 
@@ -6358,7 +6366,7 @@ uint8_t wifi_sync_rtc(void)
 
 	/* AT firmware: send SNTP config, then poll for time.
 	 * Binary SPI (SiN360) does not yet support NTP — return silently. */
-	if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	if (!wifi_use_at_transport())
 		return 1;
 
 	/* Configure SNTP — enable, UTC timezone, two NTP servers */
@@ -6493,7 +6501,7 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	if (wifi_use_at_transport())
 	{
 		static char at_resp[512];
 		char at_cmd[256];
@@ -6806,7 +6814,7 @@ void wifi_disconnect(void)
 		/* Native brain CD3 firmware */
 		(void)m1_esp32_rpc_wifi_disconnect();
 	}
-	else if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	else if (wifi_use_at_transport())
 	{
 		/* AT firmware (dag/T-800, bedge117) — send AT+CWQAP */
 		static char at_resp[64];

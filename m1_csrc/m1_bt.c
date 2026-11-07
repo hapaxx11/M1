@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_hal_lifecycle.h"
 #include "m1_esp32_cmd.h"
 #include "m1_virtual_kb.h"
 #include "ff.h"
@@ -133,6 +134,8 @@ static uint16_t ble_list_print(bool up_dir);
 /* AT command transport — provided by esp_app_main.c (RTOS SPI-AT task) */
 extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
                                 int out_buf_size, int timeout_sec);
+extern bool get_esp32_main_init_status(void);
+extern void esp32_main_init(void);
 
 /*============================================================================*/
 /* AT+M1BLESPAM mode constants (dag T-800 ESP32 firmware)                    */
@@ -145,13 +148,20 @@ extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
 #define BLE_SPAM_AT_ALL         7U
 #define BLE_SPAM_AT_STOP        0U
 
+/* Native brain BLE_SPAM_START modes (ble_spam_mode_t). */
+#define BLE_SPAM_RPC_APPLE      0U
+#define BLE_SPAM_RPC_FASTPAIR   1U
+#define BLE_SPAM_RPC_SAMSUNG    2U
+#define BLE_SPAM_RPC_SWIFTPAIR  3U
+#define BLE_SPAM_RPC_ALL        4U
+
 /**
- * @brief  True when the ESP32 speaks AT text commands (dag T-800 firmware).
- *         When false, the binary SPI protocol (SiN360) is in use.
+ * @brief  True when the negotiated ESP32 transport is AT text commands.
  */
 static inline bool ble_use_at_path(void)
 {
-    return m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+    m1_esp32_ensure_init();
+    return m1_esp32_active_transport() == ESP32_TRANSPORT_AT;
 }
 
 /**
@@ -164,6 +174,13 @@ static bool ble_spam_at_cmd(uint8_t mode)
 {
     char at_cmd[32];
     char at_resp[64];
+
+    if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+        !get_esp32_main_init_status())
+        esp32_main_init();
+    if (!get_esp32_main_init_status())
+        return false;
+
     snprintf(at_cmd, sizeof(at_cmd), "AT+M1BLESPAM=%u\r\n", mode);
     (void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp),
                            BLE_SPAM_AT_TIMEOUT);
@@ -2522,8 +2539,7 @@ static void ble_raw_adv_send(const uint8_t *data, uint8_t len)
 /**
   * @brief  Run an RPC BLE spam mode until user presses BACK.
   * @param  title  Screen title string.
-  * @param  mode   BLE_SPAM_START mode byte (0x01=Apple 0x02=Samsung
-  *                0x03=Windows 0xFF=All).
+  * @param  mode   BLE_SPAM_START mode byte (BLE_SPAM_RPC_*).
   */
 /*============================================================================*/
 static void ble_spam_rpc_run(const char *title, uint8_t mode)
@@ -2651,7 +2667,7 @@ void ble_spam_sour_apple(void)
     }
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
     {
-        ble_spam_rpc_run("SOUR APPLE", 0x01u);
+        ble_spam_rpc_run("SOUR APPLE", BLE_SPAM_RPC_APPLE);
         return;
     }
     ble_ensure_esp32_ready();
@@ -2763,8 +2779,7 @@ void ble_spam_google_fastpair(void)
     }
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
     {
-        /* brain CD3 uses 0xFF=All; there is no Google-specific mode byte */
-        ble_spam_rpc_run("GOOGLE FP", 0xFFu);
+        ble_spam_rpc_run("GOOGLE FP", BLE_SPAM_RPC_FASTPAIR);
         return;
     }
     ble_ensure_esp32_ready();
@@ -2798,7 +2813,7 @@ void ble_spam_flipper(void)
     }
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
     {
-        ble_spam_rpc_run("FLIPPER BLE", 0xFFu);
+        ble_spam_rpc_run("FLIPPER BLE", BLE_SPAM_RPC_ALL);
         return;
     }
     ble_ensure_esp32_ready();
@@ -2821,7 +2836,7 @@ void ble_spam_all(void)
 
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
     {
-        ble_spam_rpc_run("BLE SPAM ALL", 0xFFu);
+        ble_spam_rpc_run("BLE SPAM ALL", BLE_SPAM_RPC_ALL);
         return;
     }
 
@@ -2907,10 +2922,10 @@ void ble_spam_all(void)
 
 
 /*============================================================================*/
-/*  Unified BLE Spam — dag-style mode picker with AT / binary SPI dispatch   */
+/*  Unified BLE Spam — mode picker with AT / RPC / binary SPI dispatch       */
 /*============================================================================*/
 
-/* Mode table: label, AT bitmask.
+/* Mode table: label, AT bitmask, native RPC mode.
  * For binary SPI, mode index maps to the same payload sets as ble_spam_all(). */
 #define BLE_SPAM_MODE_COUNT  4
 static const char *const ble_spam_mode_labels[BLE_SPAM_MODE_COUNT] = {
@@ -2918,6 +2933,9 @@ static const char *const ble_spam_mode_labels[BLE_SPAM_MODE_COUNT] = {
 };
 static const uint8_t ble_spam_mode_at[BLE_SPAM_MODE_COUNT] = {
     BLE_SPAM_AT_ALL, BLE_SPAM_AT_APPLE, BLE_SPAM_AT_GOOGLE, BLE_SPAM_AT_MICROSOFT,
+};
+static const uint8_t ble_spam_mode_rpc[BLE_SPAM_MODE_COUNT] = {
+    BLE_SPAM_RPC_ALL, BLE_SPAM_RPC_APPLE, BLE_SPAM_RPC_FASTPAIR, BLE_SPAM_RPC_SWIFTPAIR,
 };
 
 /**
@@ -3074,6 +3092,10 @@ void bluetooth_ble_spam(void)
                 else
                     ble_show_pending("BLE SPAM", "AT+M1BLESPAM failed",
                                      "Check ESP32 firmware");
+            }
+            else if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+            {
+                ble_spam_rpc_run("BLE SPAM", ble_spam_mode_rpc[sel]);
             }
             else
             {

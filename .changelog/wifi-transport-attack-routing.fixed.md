@@ -1,0 +1,1 @@
+**WiFi: native attack transport routing** — Use the negotiated transport for scans, connections, and attacks instead of treating WiFi-join capability as AT detection, and restore the legacy AT task only for AT firmware. Prevents native-brain operations such as Rickroll from entering an invalid AT path and becoming unresponsive.
