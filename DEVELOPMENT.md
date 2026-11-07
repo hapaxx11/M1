@@ -61,6 +61,18 @@ See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord 
 - Use appropriate integer types (`uint8_t`, `uint16_t`, etc.)
 - Add comments for non-obvious logic
 
+## Hardware-in-the-loop coverage
+
+Every user-visible menu feature must belong to a registered recursive HIL audit.
+Whenever a change could have altered menu coverage or behavior, inspect and
+update the corresponding `scripts/m1_*_menu_audit.py` destinations even if no UI
+change was intended. Name the exact test IDs in PR descriptions and reviews.
+Safe entry/exit coverage is required even when full functionality needs an
+external fixture; document that functional limitation instead of claiming a pass.
+
+See [`documentation/hil_menu_coverage.md`](documentation/hil_menu_coverage.md)
+for the authoritative menu-to-test mapping and the new-feature checklist.
+
 ## Architecture
 
 All modules with submenus use the **scene-based architecture** — a stack-based scene

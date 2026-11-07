@@ -4725,3 +4725,30 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_scene_lifecycle PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_scene_lifecycle COMMAND test_esp32_scene_lifecycle)
+
+
+# Destructive-choice labels must provide a distinct cancellable button.
+add_executable(test_delete_choice_labels
+    test_delete_choice_labels.c
+)
+target_compile_definitions(test_delete_choice_labels PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_delete_choice_labels PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_delete_choice_labels PRIVATE sanitizers)
+endif()
+add_test(NAME delete_choice_labels COMMAND test_delete_choice_labels)
+
+# POCSAG pulse draining must yield even under a continuous RF noise floor.
+add_executable(test_pocsag_scene_lifecycle
+    test_pocsag_scene_lifecycle.c
+)
+target_compile_definitions(test_pocsag_scene_lifecycle PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_pocsag_scene_lifecycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_pocsag_scene_lifecycle PRIVATE sanitizers)
+endif()
+add_test(NAME pocsag_scene_lifecycle COMMAND test_pocsag_scene_lifecycle)

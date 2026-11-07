@@ -386,8 +386,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_stop(void);
 /**
  * BLE_SPAM_START: start proximity-pair popup ad-spam.
  *
- * Wire format: [mode:1].  Mode values (mirrors BLE_SPAM_MODE_* on firmware side):
- *   0x01 = Apple  0x02 = Samsung  0x03 = Windows  0xFF = all (round-robin).
+ * Wire format: [mode:1].  Mode values mirror ble_spam_mode_t on firmware side:
+ *   0 = Apple, 1 = Fast Pair, 2 = Samsung, 3 = Swift Pair, 4 = all.
  */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_start(uint8_t mode);
 /** BLE_SPAM_STOP. */

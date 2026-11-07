@@ -23,6 +23,7 @@
 #include "m1_compile_cfg.h"
 #include "m1_badbt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_hal_lifecycle.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
@@ -1087,10 +1088,12 @@ void badbt_run(void)
     if ( !m1_esp32_get_init_status() )
         m1_esp32_init();
 
-    if ( !get_esp32_main_init_status() )
+    if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+        !get_esp32_main_init_status())
         esp32_main_init();
 
-    if ( !get_esp32_main_init_status() )
+    if (m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport()) &&
+        !get_esp32_main_init_status())
     {
         m1_message_box(&m1_u8g2, "Bad-BT", "ESP32 not", "ready", " OK ");
         m1_esp32_deinit();

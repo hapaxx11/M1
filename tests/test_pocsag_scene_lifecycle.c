@@ -1,0 +1,49 @@
+/* See COPYING.txt for license details. */
+
+#include "unity.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef M1_ROOT
+#error "M1_ROOT must be defined by CMake"
+#endif
+
+void setUp(void) {}
+void tearDown(void) {}
+
+void test_pocsag_pulse_drain_is_bounded(void)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/m1_csrc/m1_subghz_scene.c", M1_ROOT);
+    FILE *fp = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_END));
+    long size = ftell(fp);
+    TEST_ASSERT_GREATER_THAN_INT(0, size);
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_SET));
+    char content[32768];
+    TEST_ASSERT_LESS_THAN_INT(sizeof(content), size);
+    TEST_ASSERT_EQUAL_size_t((size_t)size, fread(content, 1U, (size_t)size, fp));
+    content[size] = '\0';
+    fclose(fp);
+
+    const char *scene = strstr(content, "if (subghz_scene_current(&app) == SubGhzScenePocsag)");
+    TEST_ASSERT_NOT_NULL(scene);
+    TEST_ASSERT_NOT_NULL(strstr(content, "SUBGHZ_POCSAG_PULSE_BATCH_LIMIT 64U"));
+    TEST_ASSERT_NOT_NULL(strstr(scene, "for (uint16_t pulse_count = 0;"));
+    TEST_ASSERT_NOT_NULL(strstr(scene,
+        "pulse_count < SUBGHZ_POCSAG_PULSE_BATCH_LIMIT"));
+    TEST_ASSERT_NOT_NULL(strstr(scene,
+        "if (pulse_count >= SUBGHZ_POCSAG_PULSE_BATCH_LIMIT)"));
+    TEST_ASSERT_NOT_NULL(strstr(scene, "vTaskDelay(pdMS_TO_TICKS(1U));"));
+    TEST_ASSERT_NULL(strstr(scene, "} while (true);"));
+}
+
+int main(void)
+{
+    UNITY_BEGIN();
+    RUN_TEST(test_pocsag_pulse_drain_is_bounded);
+    return UNITY_END();
+}

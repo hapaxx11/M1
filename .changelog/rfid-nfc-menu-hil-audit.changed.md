@@ -1,0 +1,1 @@
+Documentation: Add recursive single-device HIL audits for 37 RFID and 26 NFC menu destinations, covering all manual protocol/card-type editors, utilities, extra actions, and NDEF record types without tag or file modifications.

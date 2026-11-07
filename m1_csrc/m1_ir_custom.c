@@ -633,7 +633,7 @@ static void ir_cust_button_action(const char *remote_path,
     {
         uint8_t confirm = m1_message_box_choice(&m1_u8g2,
                               "Delete button?", button_name, "",
-                              "OK  /  Cancel");
+                              "OK\nCancel");
         if (confirm == 1)
         {
             if (!flipper_ir_delete_signal(remote_path, button_idx))
@@ -700,7 +700,7 @@ static bool ir_cust_delete_remote(const char *remote_path)
     uint8_t confirm = m1_message_box_choice(&m1_u8g2,
                           "Delete remote?",
                           "This cannot be undone", "",
-                          "OK  /  Cancel");
+                          "OK\nCancel");
     if (confirm != 1)
         return false;
 

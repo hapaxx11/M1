@@ -13,6 +13,12 @@
 #define INCLUDE_BIT_UTIL_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+/// Format bytes as uppercase hex separated by spaces. A NULL source emits zeros.
+/// Returns false without writing when the output buffer is too small.
+bool hex_spaced_format(const uint8_t *src, size_t len, char *out, size_t out_size);
 
 /// Reverse (reflect) the bits in an 32 bit byte.
 ///

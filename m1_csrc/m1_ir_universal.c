@@ -1280,7 +1280,7 @@ static bool ir_file_action_menu(const char *ir_file_path)
                 case IR_ACTION_DELETE:
                 {
                     uint8_t confirm = m1_message_box_choice(&m1_u8g2,
-                        "Delete file?", short_name, "", "OK  /  Cancel");
+                        "Delete file?", short_name, "", "OK\nCancel");
                     if (confirm == 1)
                     {
                         m1_fb_delete_file(ir_file_path);

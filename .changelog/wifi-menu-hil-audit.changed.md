@@ -1,0 +1,1 @@
+Documentation: Add a recursive single-device HIL audit covering every static WiFi menu destination, selected-AP Target actions, Peer Link submenus, and connected-only Net Scan actions, with bounded responsiveness and cleanup checks.
