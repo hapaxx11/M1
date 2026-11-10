@@ -1,1 +1,0 @@
-**UI: Delete confirmation cancellation** — Split slash-formatted OK/Cancel labels into distinct choices for Infrared saved files, custom remotes/buttons, and Sub-GHz MoreRAW. HIL delete audits now dismiss with BACK only, preventing accidental confirmation.

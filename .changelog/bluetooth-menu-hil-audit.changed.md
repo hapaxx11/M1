@@ -1,1 +1,0 @@
-Documentation: Add a recursive single-device HIL audit for 22 safe Bluetooth menu destinations, including Config/Edit, the unified BLE spam picker, sniffers, detectors, GATT, and Bad-BT cancellation. Active advertising/spam is confined to the explicitly authorized `ble-spam` lifecycle test with a measured active dwell and stop/re-entry checks.

@@ -1,1 +1,0 @@
-**Sub-GHz: POCSAG/FLEX entry hard fault** — Bound pulse batches and sleep for one RTOS tick after each batch so BCH error correction cannot monopolize the scene task under RF noise, and avoid pre-dequeuing the next event at the batch boundary. Restores USB RPC, keypad handling, periodic ticks, and clean exit/re-entry.

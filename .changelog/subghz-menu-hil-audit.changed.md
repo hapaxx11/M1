@@ -1,1 +1,0 @@
-Documentation: Add a recursive Sub-GHz HIL audit for 29 static scenes, protocol filtering, all 20 Add Manually editor entries, the KeeLoq editor chain, and conditional saved/MoreRAW actions, with RF transmissions, emulation, brute-force execution, and destructive edits excluded.

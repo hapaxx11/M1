@@ -1,1 +1,0 @@
-**Bluetooth: BLE spam watchdog reset** — Route native brain firmware through RPC instead of misclassifying it as AT, restore the legacy AT task before spam commands, and cover the unified picker with the correct native mode mapping. Prevents a NULL request semaphore from triggering assertion 1673 and an IWDG reset.

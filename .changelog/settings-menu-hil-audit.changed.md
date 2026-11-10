@@ -1,1 +1,0 @@
-Documentation: Add a recursive single-device HIL audit for 26 safe Settings destinations, including all LCD options, storage, power, firmware/ESP32 download pickers, and Bluetooth Direct, with format, update, backup, swap, and power-off actions excluded.

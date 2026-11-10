@@ -1,1 +1,0 @@
-**Sub-GHz: Recording allocation failure cleanup** — Stop reporting a batch as flushed when its save allocation fails, allowing recording stop to reach SD task cleanup instead of looping without progress.

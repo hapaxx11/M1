@@ -1,1 +1,0 @@
-**RFID: Add Manually editor crash** — Size and bound the hex-input buffer for every supported UID length, including 12-byte HID Ex Generic and 28-byte Indala224 entries, preventing stack corruption and RPC/reset failures when entering or leaving the editor.

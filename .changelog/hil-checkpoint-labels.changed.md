@@ -1,1 +1,0 @@
-Documentation: Use identical full destination IDs for miscellaneous and manual-editor HIL checkpoint filtering and logging, and invalidate checkpoints when shared HIL driver or execution files change.

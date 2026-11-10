@@ -1,1 +1,0 @@
-**Bluetooth: Bad-BT native lifecycle** — Start and require the legacy AT task only for negotiated AT firmware, preventing native-brain BLE HID startup from resetting the coprocessor and improving connection cancellation responsiveness.

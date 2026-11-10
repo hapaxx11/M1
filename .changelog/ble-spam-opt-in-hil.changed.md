@@ -1,1 +1,0 @@
-Documentation: Keep the active BLE spam lifecycle test discoverable but opt-in only, so default HIL runs and unfiltered PR updates never start proximity-pairing advertising without explicit test selection.

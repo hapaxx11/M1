@@ -1,1 +1,0 @@
-Documentation: Require registered HIL coverage for every menu feature and audit updates whenever menu coverage or behavior could have changed, add an authoritative menu-to-test mapping for PR authors and reviewers, and require exact unchecked HIL case IDs in PR descriptions and review suggestions.
