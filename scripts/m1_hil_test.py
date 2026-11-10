@@ -17,6 +17,7 @@ import time
 from typing import Callable
 import zlib
 
+import m1_resume
 from m1_hil import BUTTONS, M1Hil, connect, write_png
 from m1_bt_menu_audit import run as run_bt_menu_tree
 from m1_misc_menu_audit import run as run_misc_menu_tree
@@ -277,6 +278,15 @@ def run_subghz_menu_audit(client: M1Hil, artifacts: Path) -> str:
     return run_subghz_menu_tree(client)
 
 
+OPT_IN_CASE_IDS = frozenset({"ble-spam"})
+
+
+def select_cases(cases: tuple[HilCase, ...], requested: list[str] | None) -> list[HilCase]:
+    if requested:
+        return [case for case in cases if case.test_id in requested]
+    return [case for case in cases if case.test_id not in OPT_IN_CASE_IDS]
+
+
 CASES = (
     HilCase("wifi-airtime", "WiFi Channel Airtime lifecycle", run_wifi_airtime),
     HilCase("wifi-peer-link", "WiFi Peer Link lifecycle", run_wifi_peer_link),
@@ -409,13 +419,15 @@ def public_error(stage: str, error: BaseException) -> str:
     return f"{prefix}: {type(error).__name__}"
 
 
-def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
+def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
+                 fresh: bool = False) -> dict:
     started = time.monotonic()
     stage = "connect"
     status = "SKIP"
     detail = "not run"
     artifacts = output_dir / case.test_id
     artifacts.mkdir(parents=True, exist_ok=True)
+    m1_resume.start(case.test_id, output_dir, fresh=fresh)
     try:
         with connect(port, baud, timeout=10) as client:
             stage = "reboot"
@@ -441,6 +453,7 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
                 detail += "; recovery reboot issued"
             except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
                 detail += f"; {public_error('cleanup', cleanup_error)}"
+    m1_resume.finish(status == "PASS")
     return {
         "id": case.test_id,
         "title": case.title,
@@ -461,6 +474,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="run only this test; repeat to select multiple tests",
     )
     parser.add_argument("--list", action="store_true", help="list tests without hardware")
+    parser.add_argument("--fresh", action="store_true",
+                        help="ignore checkpoints and rerun every destination")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -483,8 +498,9 @@ def main() -> int:
             print(f"{case.test_id}: {case.title}")
         return 0
 
-    selected = [case for case in CASES if not args.test or case.test_id in args.test]
-    results = [execute_case(case, args.port, args.baud, args.output_dir) for case in selected]
+    selected = select_cases(CASES, args.test)
+    results = [execute_case(case, args.port, args.baud, args.output_dir, args.fresh)
+               for case in selected]
     markdown, report = write_reports(args.output_dir, results)
     for result in results:
         print(f"{result['status']:4} {result['id']}: {result['detail']}")

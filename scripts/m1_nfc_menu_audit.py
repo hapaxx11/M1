@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
+from m1_resume import log_pass, resume_targets
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
-from m1_saved_item_audit import select_first_file
+from m1_saved_item_audit import _has_file_icon, select_first_file
+from m1_wifi_menu_audit import _wait_change
 
 
 TOP_LEVEL_TARGETS = (
@@ -38,8 +40,6 @@ TOP_LEVEL_TARGETS = (
 )
 
 SAVED_ACTIONS = (
-    ("Saved/Emulate UID", 0),
-    ("Saved/Unlock", 2),
     ("Saved/Edit UID", 3),
     ("Saved/Info", 5),
     ("Saved/Rename", 6),
@@ -61,9 +61,24 @@ def _select_saved(client: M1Hil) -> int | None:
     _click(client, "ok")
     if not select_first_file(client):
         return None
-    browser_title = _title_crc(_frame(client))
-    _click(client, "ok")
-    return browser_title
+    current = _frame(client)
+    browser_title = _title_crc(current)
+    for _attempt in range(8):
+        _click(client, "ok")
+        opened = _wait_change(client, current, 8.0)
+        _click(client, "down")
+        responsive = _wait_change(client, opened, 4.0)
+        if responsive != opened:
+            _click(client, "up")
+            _wait_change(client, responsive, 4.0)
+            return browser_title
+        _click(client, "back")
+        dismissed = _wait_change(client, opened, 4.0)
+        _click(client, "down")
+        current = _wait_change(client, dismissed, 4.0)
+        if not _has_file_icon(current):
+            break
+    return None
 
 
 def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
@@ -72,17 +87,20 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         "Card Actions/Write UID and Wipe Tag (destructive)",
         "NDEF Maker/Wi-Fi security (text input required)",
         "Saved/Send to Peer (requires peer)",
+        "Saved/Emulate UID and Unlock (requires compatible live card)",
     ]
     client = _reboot_menu(client, 2)
+    nfc_root_title = _title_crc(_frame(client))
     ancestor_title = _select_saved(client)
     if not ancestor_title:
         skipped.append("Saved item actions (no saved file)")
         return client, skipped
 
-    for label, selection in SAVED_ACTIONS:
+    for label, selection in resume_targets(SAVED_ACTIONS):
         print(f"RUN  {label}", flush=True)
         if selection != 0:
             client = _reboot_menu(client, 2)
+            nfc_root_title = _title_crc(_frame(client))
             ancestor_title = _select_saved(client)
             if not ancestor_title:
                 raise AssertionError("saved file disappeared during the audit")
@@ -94,32 +112,33 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
             _frame(client)
         else:
             _audit_path(client, (selection,), False, 8.0, reentry=False,
-                        ancestor_titles=(ancestor_title,))
-        print(f"PASS {label}", flush=True)
+                        ancestor_titles=(ancestor_title, nfc_root_title))
+        log_pass(label)
 
-    for label, selection in CARD_ACTIONS:
+    for label, selection in resume_targets(CARD_ACTIONS):
         print(f"RUN  {label}", flush=True)
         client = _reboot_menu(client, 2)
+        nfc_root_title = _title_crc(_frame(client))
         ancestor_title = _select_saved(client)
         if not ancestor_title:
             raise AssertionError("saved file disappeared during card actions")
         _click(client, "down", 4)
         _click(client, "ok")
         _audit_path(client, (selection,), False, 8.0, reentry=False,
-                    ancestor_titles=(ancestor_title,))
-        print(f"PASS {label}", flush=True)
+                    ancestor_titles=(ancestor_title, nfc_root_title))
+        log_pass(label)
     return client, skipped
 
 
 def run(client: M1Hil) -> str:
     skipped: list[str] = []
     try:
-        for label, path, edit in TOP_LEVEL_TARGETS:
+        for label, path, edit in resume_targets(TOP_LEVEL_TARGETS):
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 2)
             _audit_path(client, path, edit, 8.0,
                         reentry=not label.startswith("NDEF Maker/"))
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
         client, skipped = _run_saved_actions(client)
     finally:
         client.close()

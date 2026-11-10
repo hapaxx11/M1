@@ -16,6 +16,7 @@ import m1_bt_menu_audit as bt_audit  # noqa: E402
 import m1_misc_menu_audit as misc_audit  # noqa: E402
 import m1_nfc_menu_audit as nfc_audit  # noqa: E402
 import m1_rfid_menu_audit as rfid_audit  # noqa: E402
+import m1_resume  # noqa: E402
 import m1_saved_item_audit as saved_audit  # noqa: E402
 import m1_settings_menu_audit as settings_audit  # noqa: E402
 import m1_subghz_menu_audit as subghz_audit  # noqa: E402
@@ -29,6 +30,13 @@ class TestRegistry(unittest.TestCase):
         for case in hil.CASES:
             self.assertRegex(case.test_id, r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
             self.assertTrue(case.title)
+
+    def test_active_ble_spam_is_opt_in_only(self):
+        default_ids = {case.test_id for case in hil.select_cases(hil.CASES, None)}
+        self.assertNotIn("ble-spam", default_ids)
+        self.assertEqual(len(hil.CASES) - 1, len(default_ids))
+        explicit_ids = {case.test_id for case in hil.select_cases(hil.CASES, ["ble-spam"])}
+        self.assertEqual({"ble-spam"}, explicit_ids)
 
     def test_every_top_level_menu_has_registered_recursive_audit(self):
         expected = {
@@ -225,6 +233,53 @@ class TestAuditSafety(unittest.TestCase):
                         framebuffer[1 + dx + (y // 8) * 128] |= 1 << (y % 8)
             self.assertTrue(saved_audit._is_file_icon(framebuffer, row, row_height))
 
+    def test_file_icon_must_be_on_selected_row(self):
+        framebuffer = bytearray(1024)
+        for dy, value in enumerate(saved_audit._FILE_ICON):
+            for dx in range(10):
+                if (value >> dx) & 1:
+                    y = 12 + 8 + dy
+                    framebuffer[1 + dx + (y // 8) * 128] |= 1 << (y % 8)
+        self.assertFalse(saved_audit._has_file_icon(framebuffer))
+        inverted = bytearray(1024)
+        for dy, value in enumerate(saved_audit._FILE_ICON):
+            for dx in range(10):
+                if not ((value >> dx) & 1):
+                    y = 12 + 8 + dy
+                    inverted[1 + dx + (y // 8) * 128] |= 1 << (y % 8)
+        self.assertTrue(saved_audit._has_file_icon(inverted))
+
+    def test_nfc_saved_selection_skips_unsupported_files(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(nfc_audit, "select_first_file", return_value=True),
+            mock.patch.object(nfc_audit, "_has_file_icon", return_value=True),
+            mock.patch.object(nfc_audit, "_frame", return_value=b"browser-first"),
+            mock.patch.object(nfc_audit, "_title_crc", return_value=42),
+            mock.patch.object(nfc_audit, "_wait_change", side_effect=(
+                b"unsupported", b"unsupported", b"browser-first", b"browser-second",
+                b"actions", b"actions-next", b"actions",
+            )),
+            mock.patch.object(nfc_audit, "_click") as click,
+        ):
+            self.assertEqual(42, nfc_audit._select_saved(client))
+        self.assertEqual(3, click.call_args_list.count(mock.call(client, "ok")))
+        self.assertEqual(1, click.call_args_list.count(mock.call(client, "back")))
+        self.assertEqual(1, click.call_args_list.count(mock.call(client, "up")))
+
+    def test_reboot_audit_resets_settings_cursor_first(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(settings_audit, "_reboot_settings", return_value=client) as reopen,
+            mock.patch.object(settings_audit, "_frame", return_value=b"frame"),
+            mock.patch.object(settings_audit, "_click"),
+            mock.patch.object(settings_audit, "_wait_change"),
+            mock.patch.object(settings_audit, "connect", return_value=client),
+            mock.patch.object(settings_audit.time, "sleep"),
+        ):
+            settings_audit._audit_power_reboot(client)
+        reopen.assert_called_once_with(client)
+
     def test_power_toggle_restores_original_frame(self):
         original, changed = b"original", b"changed"
         with (
@@ -298,6 +353,95 @@ class TestAuditSafety(unittest.TestCase):
                                     expected)
         source = pathlib.Path(subghz_audit.__file__).read_text(encoding="utf-8")
         self.assertIn('_click(client, "down", 17)', source)
+
+
+class TestResume(unittest.TestCase):
+    def test_checkpoint_skips_passed_destinations_and_clears_on_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            m1_resume.start("demo", root, fresh=True)
+            self.assertTrue(m1_resume.should_run("first"))
+            m1_resume.log_pass("first")
+            self.assertFalse(m1_resume.should_run("first"))
+            m1_resume.start("demo", root)
+            self.assertFalse(m1_resume.should_run("first"))
+            self.assertTrue(m1_resume.should_run("second"))
+            m1_resume.log_pass("second")
+            m1_resume.finish(True)
+            self.assertFalse((root / "demo-checkpoint.json").exists())
+
+    def test_fresh_and_version_change_invalidate_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            path = root / "demo-checkpoint.json"
+            m1_resume.start("demo", root, fresh=True)
+            self.assertFalse(path.exists())
+            self.assertTrue(m1_resume.should_run("first"))
+            path.write_text('{"format":"1","version":"stale","passed":["first"]}',
+                            encoding="utf-8")
+            m1_resume.start("demo", root)
+            self.assertTrue(m1_resume.should_run("first"))
+            m1_resume.finish(False)
+
+    def test_unstarted_logging_is_safe_for_host_tests(self):
+        m1_resume.finish(False)
+        self.assertTrue(m1_resume.should_run("anything"))
+        m1_resume.log_pass("anything")
+
+    def test_failure_preserves_only_passed_destinations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            m1_resume.finish(False)
+            self.assertTrue((root / "demo-checkpoint.json").exists())
+            m1_resume.start("demo", root)
+            self.assertEqual(["second"], m1_resume.resume_targets(["first", "second"]))
+            m1_resume.finish(False)
+
+    def test_sequential_editors_advance_without_retesting_passed_steps(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(subghz_audit, "_click") as click,
+            mock.patch.object(subghz_audit, "_frame"),
+            mock.patch.object(subghz_audit, "should_run",
+                              side_effect=(False, True, False)) as should_run,
+            mock.patch.object(subghz_audit, "log_pass") as log_pass,
+        ):
+            self.assertIs(client, subghz_audit._run_keeloq_editor_chain(client))
+        self.assertEqual(
+            [mock.call(f"Add Manually/{label} (cancel)")
+             for label in subghz_audit.KEELOQ_EDITOR_CHAIN],
+            should_run.call_args_list,
+        )
+        log_pass.assert_called_once_with("Add Manually/Set Counter (cancel)")
+        self.assertEqual(7, click.call_count)
+
+    def test_unrelated_audit_changes_do_not_invalidate_checkpoint(self):
+        names = {path.name for path in m1_resume._source_paths("nfc-menu-audit")}
+        self.assertIn("m1_nfc_menu_audit.py", names)
+        self.assertIn("m1_saved_item_audit.py", names)
+        self.assertNotIn("m1_subghz_menu_audit.py", names)
+
+    def test_moreraw_skip_matches_saved_file_type(self):
+        client = mock.MagicMock()
+        for kind, expected, unexpected in (
+            ("raw", "Saved actions", "MoreRAW actions"),
+            ("parsed", "MoreRAW actions", "Saved actions"),
+        ):
+            with self.subTest(kind=kind):
+                with (
+                    mock.patch.object(subghz_audit, "_read_raw_title", return_value=(client, 1)),
+                    mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+                    mock.patch.object(subghz_audit, "_select_saved", return_value=kind),
+                    mock.patch.object(subghz_audit, "resume_targets", return_value=[]),
+                ):
+                    _client, skipped = subghz_audit._run_saved_actions(client)
+            self.assertTrue(any(item.startswith(expected) for item in skipped))
+            self.assertFalse(any(item.startswith(unexpected) for item in skipped))
 
 
 class TestScreenTransitions(unittest.TestCase):

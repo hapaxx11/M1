@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
+from m1_resume import log_pass, resume_targets, should_run
 from m1_bt_menu_audit import (
     _audit_path, _click, _frame, _open_apps_menu, _reboot_main, _reboot_menu,
     _title_crc,
@@ -89,7 +90,7 @@ def _run_ir_saved_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
     client, present, command_title = _open_ir_saved(client)
     if not present:
         return client, 0, ["Infrared saved-file actions (no saved file)"]
-    for label, selection in IR_SAVED_ACTIONS:
+    for label, selection in resume_targets(IR_SAVED_ACTIONS):
         print(f"RUN  Infrared/{label}", flush=True)
         client, present, command_title = _open_ir_saved(client)
         if not present:
@@ -103,7 +104,7 @@ def _run_ir_saved_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
         else:
             _audit_path(client, (selection,), False, 8.0, reentry=False,
                         ancestor_titles=(command_title,))
-        print(f"PASS Infrared/{label}", flush=True)
+        log_pass(f"Infrared/{label}")
     return client, len(IR_SAVED_ACTIONS), []
 
 
@@ -160,15 +161,16 @@ def _open_custom_button_actions(client: M1Hil) -> tuple[M1Hil, bool]:
 
 def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
     skipped: list[str] = []
-    print("RUN  Infrared/Custom Remote/New Remote (cancel)", flush=True)
-    client = _open_custom_root(client)
-    _custom_new_remote_vkb(client)
-    print("PASS Infrared/Custom Remote/New Remote (cancel)", flush=True)
+    if should_run("Infrared/Custom Remote/New Remote (cancel)"):
+        print("RUN  Infrared/Custom Remote/New Remote (cancel)", flush=True)
+        client = _open_custom_root(client)
+        _custom_new_remote_vkb(client)
+        log_pass("Infrared/Custom Remote/New Remote (cancel)")
 
     client, present = _open_custom_remote(client)
     if not present:
         return client, 1, ["Custom remote/button actions (no saved remote)"]
-    for label, selection in CUSTOM_REMOTE_ACTIONS:
+    for label, selection in resume_targets(CUSTOM_REMOTE_ACTIONS):
         print(f"RUN  Infrared/{label}", flush=True)
         client, present = _open_custom_remote(client)
         if not present:
@@ -181,13 +183,13 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
             _frame(client)
         else:
             _audit_path(client, (selection,), False, 8.0)
-        print(f"PASS Infrared/{label}", flush=True)
+        log_pass(f"Infrared/{label}")
 
     client, button_present = _open_custom_button_actions(client)
     if not button_present:
         skipped.append("Custom button actions (no saved button)")
         return client, 1 + len(CUSTOM_REMOTE_ACTIONS), skipped
-    for label, selection in CUSTOM_BUTTON_ACTIONS:
+    for label, selection in resume_targets(CUSTOM_BUTTON_ACTIONS):
         print(f"RUN  Infrared/{label}", flush=True)
         client, button_present = _open_custom_button_actions(client)
         if not button_present:
@@ -200,7 +202,7 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
             _frame(client)
         else:
             _audit_path(client, (selection,), False, 8.0)
-        print(f"PASS Infrared/{label}", flush=True)
+        log_pass(f"Infrared/{label}")
     return client, 1 + len(CUSTOM_REMOTE_ACTIONS) + len(CUSTOM_BUTTON_ACTIONS), skipped
 
 
@@ -235,11 +237,11 @@ def run(client: M1Hil) -> str:
     ]
     extra_completed = 0
     try:
-        for label, path, repeat in IR_TARGETS:
+        for label, path, repeat in resume_targets(IR_TARGETS):
             print(f"RUN  Infrared/{label}", flush=True)
             client = _reboot_menu(client, 3)
             _audit_path(client, path, False, 8.0)
-            print(f"PASS Infrared/{label}", flush=True)
+            log_pass(f"Infrared/{label}")
         client, completed, action_skips = _run_ir_saved_actions(client)
         extra_completed += completed
         skipped.extend(action_skips)
@@ -247,7 +249,7 @@ def run(client: M1Hil) -> str:
         extra_completed += completed
         skipped.extend(action_skips)
 
-        for label, path, repeat in GPIO_TARGETS:
+        for label, path, repeat in resume_targets(GPIO_TARGETS):
             print(f"RUN  GPIO/{label}", flush=True)
             client = _reboot_menu(client, 4)
             if path == (0,):
@@ -258,30 +260,32 @@ def run(client: M1Hil) -> str:
                 _audit_path(client, path, False, 8.0)
                 if repeat:
                     _audit_path(client, path, False, 8.0)
-            print(f"PASS GPIO/{label}", flush=True)
+            log_pass(f"GPIO/{label}")
 
-        for label, path, _repeat in GAMES_TARGETS:
+        for label, path, _repeat in resume_targets(GAMES_TARGETS):
             print(f"RUN  Games/{label}", flush=True)
             client = _reboot_menu(client, 8)
             _audit_path(client, path, False, 8.0)
-            print(f"PASS Games/{label}", flush=True)
+            log_pass(f"Games/{label}")
 
-        print("RUN  BadUSB script picker", flush=True)
-        client = _reboot_menu(client, 7)
-        _frame(client)
-        _click(client, "back")
-        _frame(client)
-        print("PASS BadUSB script picker", flush=True)
-
-        print("RUN  Apps browser", flush=True)
-        client = _reboot_main(client)
-        if _open_apps_menu(client):
+        if should_run("BadUSB script picker"):
+            print("RUN  BadUSB script picker", flush=True)
+            client = _reboot_menu(client, 7)
+            _frame(client)
             _click(client, "back")
             _frame(client)
-            print("PASS Apps browser", flush=True)
-        else:
-            skipped.append("Apps menu (no external apps installed)")
-            print("SKIP Apps menu (not present)", flush=True)
+            log_pass("BadUSB script picker")
+
+        if should_run("Apps browser"):
+            print("RUN  Apps browser", flush=True)
+            client = _reboot_main(client)
+            if _open_apps_menu(client):
+                _click(client, "back")
+                _frame(client)
+                log_pass("Apps browser")
+            else:
+                skipped.append("Apps menu (no external apps installed)")
+                print("SKIP Apps menu (not present)", flush=True)
     finally:
         client.close()
 

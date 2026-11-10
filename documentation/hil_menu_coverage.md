@@ -29,7 +29,16 @@ in `tests/test_m1_hil_test.py` at the same time.
 
 Run `python scripts/m1_hil_test.py --list` for the registered case IDs and
 `python scripts/m1_hil_test.py --test <id>` to run one case. Do not invent test
-IDs in a PR or review.
+IDs in a PR or review. The active `ble-spam` case is opt-in: it runs only when
+selected explicitly and is excluded from default runs and unfiltered PR updates.
+
+Recursive audits atomically checkpoint each passed destination under
+`build/hil-results/`. After a failure, rerun the same command to skip passed
+destinations and resume at the first unfinished one. A failed destination stays
+pending, and the checkpoint is deleted after a complete pass. Use `--fresh` to
+ignore an existing checkpoint and deliberately rerun every destination. Changes
+to an audit or its shared helpers invalidate that audit's older checkpoints, so
+stale results cannot hide changed coverage and unrelated audits stay resumable.
 
 ## New menu-feature checklist
 

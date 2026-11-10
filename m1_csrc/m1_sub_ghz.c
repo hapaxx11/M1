@@ -7369,7 +7369,10 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
  */
 void sub_ghz_raw_recording_stop_ext(void)
 {
-	/* Flush whatever remains in the ring buffer */
+	/* Drain every pending sample even if queue backpressure suppressed
+	 * earlier flush notifications. */
+	while (sub_ghz_raw_recording_flush_ext() > 0U)
+		;
 	if (ringbuffer_get_data_slots(&subghz_rx_rawdata_rb) > 0)
 		sub_ghz_rx_raw_save(false, true);
 

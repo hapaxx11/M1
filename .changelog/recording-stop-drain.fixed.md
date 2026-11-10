@@ -1,0 +1,1 @@
+**Sub-GHz: Raw recording stop under queue pressure** — Drain all pending samples on stop even when control-slot backpressure suppresses earlier flush notifications, preventing captured data loss while preserving keypad responsiveness.

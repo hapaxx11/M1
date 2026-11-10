@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
+from m1_resume import log_pass, resume_targets, should_run
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
 from m1_saved_item_audit import select_first_file
 from m1_wifi_menu_audit import _wait_change
@@ -108,7 +109,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         skipped.append("Saved actions (first file is RAW; parsed actions skipped)")
 
     if kind == "parsed":
-        for label, selection in SAVED_ACTIONS:
+        for label, selection in resume_targets(SAVED_ACTIONS):
             print(f"RUN  {label}", flush=True)
             if selection != 1:
                 client = _reboot_menu(client, 0)
@@ -123,12 +124,11 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
             else:
                 _audit_path(client, (selection,), False, 8.0,
                             reentry=False)
-            print(f"PASS {label}", flush=True)
-    else:
+            log_pass(label)
         skipped.append("MoreRAW actions (first file is parsed, not RAW)")
 
     if kind == "raw":
-        for label, selection in MORE_RAW_ACTIONS:
+        for label, selection in resume_targets(MORE_RAW_ACTIONS):
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 0)
             if _select_saved(client, raw_title) != "raw":
@@ -146,14 +146,32 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
                 _frame(client)
             else:
                 _audit_path(client, (selection,), False, 8.0, reentry=False)
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
     return client, skipped
+
+
+def _run_keeloq_editor_chain(client: M1Hil) -> M1Hil:
+    client = _reboot_menu(client, 0)
+    _click(client, "down", 10)
+    _click(client, "ok")
+    _click(client, "down", 17)
+    _click(client, "ok")
+    _frame(client)
+    for label in KEELOQ_EDITOR_CHAIN:
+        pending = should_run(f"Add Manually/{label} (cancel)")
+        if pending:
+            print(f"RUN  Add Manually/{label} (cancel)", flush=True)
+        _click(client, "ok")
+        _frame(client)
+        if pending:
+            log_pass(f"Add Manually/{label} (cancel)")
+    return client
 
 
 def run(client: M1Hil) -> str:
     skipped = list(SKIPPED_RF) + ["SignalSettings (requires compatible saved file)"]
     try:
-        for label, path, config in TOP_LEVEL_TARGETS:
+        for label, path, config in resume_targets(TOP_LEVEL_TARGETS):
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 0)
             if config:
@@ -162,36 +180,27 @@ def run(client: M1Hil) -> str:
                 _frame(client)
             else:
                 _audit_path(client, path, False, 8.0)
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
 
-        print("RUN  Read/Config/Protocol Filter", flush=True)
-        client = _reboot_menu(client, 0)
-        _click(client, "ok")
-        _click(client, "left")
-        _click(client, "down", 11)
-        _click(client, "ok")
-        _frame(client)
-        _click(client, "back")
-        _frame(client)
-        print("PASS Read/Config/Protocol Filter", flush=True)
+        if should_run("Read/Config/Protocol Filter"):
+            print("RUN  Read/Config/Protocol Filter", flush=True)
+            client = _reboot_menu(client, 0)
+            _click(client, "ok")
+            _click(client, "left")
+            _click(client, "down", 11)
+            _click(client, "ok")
+            _frame(client)
+            _click(client, "back")
+            _frame(client)
+            log_pass("Read/Config/Protocol Filter")
 
-        for label, selection in ADD_MANUALLY_TARGETS:
+        for label, selection in resume_targets(ADD_MANUALLY_TARGETS):
             print(f"RUN  Add Manually/{label} editor (cancel)", flush=True)
             client = _reboot_menu(client, 0)
             _audit_path(client, (10, selection), False, 8.0)
-            print(f"PASS Add Manually/{label} editor (cancel)", flush=True)
+            log_pass(f"Add Manually/{label} editor (cancel)")
 
-        client = _reboot_menu(client, 0)
-        _click(client, "down", 10)
-        _click(client, "ok")
-        _click(client, "down", 17)
-        _click(client, "ok")
-        _frame(client)
-        for label in KEELOQ_EDITOR_CHAIN:
-            print(f"RUN  Add Manually/{label} (cancel)", flush=True)
-            _click(client, "ok")
-            _frame(client)
-            print(f"PASS Add Manually/{label} (cancel)", flush=True)
+        client = _run_keeloq_editor_chain(client)
 
         client, saved_skipped = _run_saved_actions(client)
         skipped.extend(saved_skipped)

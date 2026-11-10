@@ -7,6 +7,7 @@ import time
 import zlib
 
 from m1_hil import BUTTONS, M1Hil, connect
+from m1_resume import log_pass, resume_targets, should_run
 
 
 TOP_LEVEL_TARGETS = (
@@ -184,7 +185,7 @@ def _run_target_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
     if _select_target(client, wifi_title) is None:
         return client, ["Target actions (no AP available)"]
 
-    for label, selection in TARGET_ACTIONS:
+    for label, selection in resume_targets(TARGET_ACTIONS):
         print(f"RUN  {label}", flush=True)
         client = _reboot_wifi(client)
         wifi_title = _title_crc(_frame(client))
@@ -193,7 +194,7 @@ def _run_target_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         _audit_path(client, (selection,), 8.0,
                     ancestor_titles=(wifi_title,),
                     reentry=(label != "Target/Handshake"))
-        print(f"PASS {label}", flush=True)
+        log_pass(label)
     return client, []
 
 
@@ -219,11 +220,12 @@ def _run_connected_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
     if _connect_saved(client) is None:
         return client, ["Connected Status and Net Scan (no saved connection available)"]
 
-    print("RUN  Connected/Status", flush=True)
-    _audit_path(client, (0,), reentry=False)
-    print("PASS Connected/Status", flush=True)
+    if should_run("Connected/Status"):
+        print("RUN  Connected/Status", flush=True)
+        _audit_path(client, (0,), reentry=False)
+        log_pass("Connected/Status")
 
-    for label, selection in NETSCAN_ACTIONS:
+    for label, selection in resume_targets(NETSCAN_ACTIONS):
         print(f"RUN  {label}", flush=True)
         client = _reboot_wifi(client)
         wifi_title = _title_crc(_frame(client))
@@ -234,15 +236,16 @@ def _run_connected_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         _click(client, "ok")
         _audit_path(client, (selection,), 8.0,
                     ancestor_titles=(connected_title, wifi_title), reentry=False)
-        print(f"PASS {label}", flush=True)
+        log_pass(label)
 
-    print("RUN  Connected/Disconnect", flush=True)
-    client = _reboot_wifi(client)
-    wifi_title = _title_crc(_frame(client))
-    if _connect_saved(client) is None:
-        raise AssertionError("saved connection disappeared before disconnect")
-    _audit_path(client, (2,), ancestor_titles=(wifi_title,), reentry=False)
-    print("PASS Connected/Disconnect", flush=True)
+    if should_run("Connected/Disconnect"):
+        print("RUN  Connected/Disconnect", flush=True)
+        client = _reboot_wifi(client)
+        wifi_title = _title_crc(_frame(client))
+        if _connect_saved(client) is None:
+            raise AssertionError("saved connection disappeared before disconnect")
+        _audit_path(client, (2,), ancestor_titles=(wifi_title,), reentry=False)
+        log_pass("Connected/Disconnect")
     return client, []
 
 
@@ -253,21 +256,22 @@ def run(client: M1Hil) -> str:
         "Target Connect/Deauth/Beacon/PMKID (RF transmission)",
     ]
     try:
-        for label, path in TOP_LEVEL_TARGETS:
+        for label, path in resume_targets(TOP_LEVEL_TARGETS):
             print(f"RUN  {label}", flush=True)
             client = _reboot_wifi(client)
             _audit_path(client, path, 8.0)
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
 
         client, target_skipped = _run_target_actions(client)
         skipped.extend(target_skipped)
         client, connected_skipped = _run_connected_actions(client)
         skipped.extend(connected_skipped)
 
-        print("RUN  General/Disconnect", flush=True)
-        client = _reboot_wifi(client)
-        _audit_path(client, (6, 12), 8.0, reentry=False)
-        print("PASS General/Disconnect", flush=True)
+        if should_run("General/Disconnect"):
+            print("RUN  General/Disconnect", flush=True)
+            client = _reboot_wifi(client)
+            _audit_path(client, (6, 12), 8.0, reentry=False)
+            log_pass("General/Disconnect")
         _frame(client)
     finally:
         client.close()

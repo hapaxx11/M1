@@ -41,9 +41,32 @@ void test_pocsag_pulse_drain_is_bounded(void)
     TEST_ASSERT_NULL(strstr(scene, "} while (true);"));
 }
 
+void test_recording_stop_drains_every_pending_sample(void)
+{
+    char path[512];
+    snprintf(path, sizeof(path), "%s/m1_csrc/m1_sub_ghz.c", M1_ROOT);
+    FILE *fp = fopen(path, "rb");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_END));
+    long size = ftell(fp);
+    TEST_ASSERT_GREATER_THAN_INT(0, size);
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_SET));
+    char content[300000];
+    TEST_ASSERT_LESS_THAN_INT(sizeof(content), size);
+    TEST_ASSERT_EQUAL_size_t((size_t)size, fread(content, 1U, (size_t)size, fp));
+    content[size] = '\0';
+    fclose(fp);
+
+    const char *stop = strstr(content, "void sub_ghz_raw_recording_stop_ext(void)");
+    TEST_ASSERT_NOT_NULL(stop);
+    TEST_ASSERT_NOT_NULL(strstr(stop, "while (sub_ghz_raw_recording_flush_ext() > 0U)"));
+    TEST_ASSERT_NOT_NULL(strstr(stop, "sub_ghz_rx_raw_save(false, true);"));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_pocsag_pulse_drain_is_bounded);
+    RUN_TEST(test_recording_stop_drains_every_pending_sample);
     return UNITY_END();
 }

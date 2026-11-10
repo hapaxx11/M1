@@ -26,7 +26,17 @@ def _is_file_icon(framebuffer: bytes, row: int, row_height: int = 8) -> bool:
 
 
 def _has_file_icon(framebuffer: bytes) -> bool:
-    return any(_file_icon_at_y(framebuffer, y) for y in range(12, 57))
+    for y in range(12, 57):
+        actual = []
+        for dy in range(8):
+            value = 0
+            for dx in range(10):
+                x = 1 + dx
+                value |= ((framebuffer[x + ((y + dy) // 8) * 128] >> ((y + dy) % 8)) & 1) << dx
+            actual.append(value)
+        if actual == [(~value) & 0x3FF for value in _FILE_ICON]:
+            return True
+    return False
 
 
 def select_first_file(client: M1Hil) -> bool:

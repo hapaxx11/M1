@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
+from m1_resume import log_pass, resume_targets
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
 from m1_saved_item_audit import select_first_file
 
@@ -67,7 +68,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         skipped.append("Saved item actions (no saved file)")
         return client, skipped
 
-    for label, selection in SAVED_ACTIONS:
+    for label, selection in resume_targets(SAVED_ACTIONS):
         print(f"RUN  {label}", flush=True)
         if selection != 0:
             client = _reboot_menu(client, 1)
@@ -84,18 +85,18 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
             _frame(client)
         else:
             _audit_path(client, (selection,), False, 8.0)
-        print(f"PASS {label}", flush=True)
+        log_pass(label)
     return client, skipped
 
 
 def run(client: M1Hil) -> str:
     skipped: list[str] = []
     try:
-        for label, path, edit in TOP_LEVEL_TARGETS:
+        for label, path, edit in resume_targets(TOP_LEVEL_TARGETS):
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 1)
             _audit_path(client, path, edit, 8.0)
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
         client, skipped = _run_saved_actions(client)
     finally:
         client.close()

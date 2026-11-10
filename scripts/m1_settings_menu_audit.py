@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 
 from m1_hil import M1Hil, connect
+from m1_resume import log_pass, resume_targets
 from m1_bt_menu_audit import (
     _audit_path, _click, _frame, _open_settings_menu, _reboot_settings, _title_crc,
 )
@@ -58,6 +59,7 @@ def _open_settings(client: M1Hil) -> None:
 
 
 def _audit_power_reboot(client: M1Hil) -> M1Hil:
+    client = _reboot_settings(client)
     port = client.port.port
     baud = client.port.baudrate
     before = _frame(client)
@@ -91,7 +93,7 @@ def _audit_lcd_row(client: M1Hil, selection: int) -> None:
 
 def run(client: M1Hil) -> str:
     try:
-        for label, path, edit in TOP_LEVEL_TARGETS:
+        for label, path, edit in resume_targets(TOP_LEVEL_TARGETS):
             print(f"RUN  {label}", flush=True)
             if label == "Power/Reboot":
                 client = _audit_power_reboot(client)
@@ -102,7 +104,7 @@ def run(client: M1Hil) -> str:
                 else:
                     _audit_path(client, path, edit, 8.0,
                                 reentry=(path[0] != 1 and path != (5, 1)))
-            print(f"PASS {label}", flush=True)
+            log_pass(label)
 
         client = _reboot_settings(client)
         _audit_path(client, (6,), False, 8.0)
