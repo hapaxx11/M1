@@ -83,5 +83,16 @@ class TestUxGeometry(unittest.TestCase):
             data = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
             self.assertEqual(["Second"], [item["label"] for item in data["results"]])
 
+    def test_legacy_unversioned_report_is_ignored_safely(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "demo-ux.json").write_text(
+                '[{"label":"Legacy","findings":[]}]', encoding="utf-8")
+            ux.start("demo", root, True, version="v1")
+            ux.evaluate("Current")
+            ux.finish()
+            data = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
+            self.assertEqual(["Current"], [item["label"] for item in data["results"]])
+
 if __name__ == "__main__":
     unittest.main()

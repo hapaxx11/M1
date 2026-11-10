@@ -18,10 +18,10 @@
 
 ### Phase 3 — Validation and review replies
 - **Description**: Run host suites, build and flash, rerun affected audits, then push and respond to all review threads.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Validate PR review corrections`
 
 ### Phase 4 — Finalize
 - **Description**: Remove this temporary checklist before updating the draft PR.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

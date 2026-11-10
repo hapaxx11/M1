@@ -17,7 +17,8 @@ def start(test_id: str, directory: Path, enabled: bool,
     if enabled and not fresh and path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if data.get("format") == "1" and data.get("version") == version:
+            if (isinstance(data, dict) and data.get("format") == "1" and
+                    data.get("version") == version):
                 results = data.get("results", [])
         except (OSError, ValueError, TypeError):
             pass
