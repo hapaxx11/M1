@@ -18,12 +18,12 @@
 
 ### Phase 3 — Module-specific corrections
 - **Description**: Fix remaining module-specific UX violations and update recursive HIL coverage where structure changes.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Fix module scene visual UX violations`
 
 ### Phase 4 — Full validation
 - **Description**: Run host suites, build and flash firmware, and repeat every safe recursive menu audit on the corrected implementation.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: `Validate recursive visual UX compliance`
 
 ### Phase 5 — Finalize

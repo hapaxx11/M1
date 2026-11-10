@@ -45,6 +45,7 @@
 #include "m1_lcd.h"
 #include "m1_button_bar.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_buzzer.h"
@@ -65,80 +66,13 @@
 #define IR_CUSTOM_PATH_LEN       80
 #define IR_CUSTOM_MAX_DEDUP      99
 
-/* Layout: header bar height + scrollable list items */
 #define IR_CUST_HDR_H            11   /* pixels: same as status bar */
-#define IR_CUST_ITEM_H           ((uint8_t)m1_menu_item_h())
-#define IR_CUST_VISIBLE          4    /* max visible rows at once */
+#define IR_CUST_LIST_MAX         (IR_CUSTOM_MAX_BUTTONS + 3)
 
 /* Raw learn fallback (used when IRMP cannot decode the signal) */
 #define IR_RAW_MIN_SAMPLES       8
 #define IR_RAW_FREQ_DEFAULT      38000
 #define IR_RAW_DUTY_DEFAULT      0.33f
-
-/* ---- List display -------------------------------------------------------- */
-
-static void ir_cust_draw_list(const char   *title,
-                               const char    items[][IR_CUSTOM_NAME_LEN],
-                               uint16_t      count,
-                               uint16_t      sel)
-{
-    uint16_t start, i;
-    uint8_t  item_h = IR_CUST_ITEM_H;
-    char     pos[12];
-
-    if (count == 0) return;
-
-    /* Scroll window: keep selection visible */
-    start = (sel >= IR_CUST_VISIBLE) ? (uint16_t)(sel - IR_CUST_VISIBLE + 1) : 0;
-
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
-    u8g2_DrawHLine(&m1_u8g2, 0, IR_CUST_HDR_H, M1_LCD_DISPLAY_WIDTH);
-
-    u8g2_SetFont(&m1_u8g2, m1_menu_font());
-
-    for (i = 0; i < IR_CUST_VISIBLE && (start + i) < count; i++)
-    {
-        uint16_t idx = start + i;
-        uint8_t  y   = (uint8_t)(IR_CUST_HDR_H + 2 + i * item_h);
-
-        if (idx == sel)
-        {
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawRBox(&m1_u8g2, 1, y, (u8g2_uint_t)(M1_LCD_DISPLAY_WIDTH - 12),
-                          item_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-        }
-        else
-        {
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        }
-        u8g2_DrawStr(&m1_u8g2, 4, (u8g2_uint_t)(y + item_h - 1), items[idx]);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-
-    /* Scroll indicator when list overflows the visible area */
-    if (count > IR_CUST_VISIBLE)
-    {
-        uint8_t total_h   = (uint8_t)(IR_CUST_VISIBLE * item_h);
-        uint8_t bar_h     = (uint8_t)((IR_CUST_VISIBLE * total_h) / count);
-        uint8_t bar_y     = (uint8_t)(IR_CUST_HDR_H + 2 +
-                            (start * (total_h - bar_h)) / (count - IR_CUST_VISIBLE));
-        if (bar_h < 4) bar_h = 4;
-        u8g2_DrawRBox(&m1_u8g2, (u8g2_uint_t)(M1_LCD_DISPLAY_WIDTH - 2),
-                      bar_y, 2, bar_h, 1);
-    }
-
-    /* Bottom bar: position counter + OK hint */
-    snprintf(pos, sizeof(pos), "%u/%u", (unsigned)(sel + 1), (unsigned)count);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_button_bar_draw(arrowleft_8x8, pos,
-                       ok_circle_8x8, "OK",
-                       NULL, NULL);
-    m1_u8g2_nextpage();
-}
 
 /* ---- Blocking list navigation ------------------------------------------- */
 
@@ -156,12 +90,19 @@ static uint16_t ir_cust_navigate(const char *title,
 {
     S_M1_Main_Q_t       q;
     S_M1_Buttons_Status bs;
-    uint16_t            sel = start_sel;
+    const char         *labels[IR_CUST_LIST_MAX];
+    subghz_submenu_model_t model;
+    M1SceneApp          app = {0};
 
-    if (count == 0)
+    if (count == 0 || count > IR_CUST_LIST_MAX)
         return UINT16_MAX;
 
-    ir_cust_draw_list(title, items, count, sel);
+    for (uint16_t i = 0; i < count; ++i)
+        labels[i] = items[i];
+    subghz_submenu_model_init(&model, (uint8_t)count, M1_MENU_VIS(count));
+    while (model.selected < start_sel)
+        subghz_submenu_model_down(&model);
+    m1_submenu_draw(&model, title, labels);
 
     while (1)
     {
@@ -178,23 +119,23 @@ static uint16_t ir_cust_navigate(const char *title,
         }
         else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            sel = (sel > 0) ? (uint16_t)(sel - 1) : (uint16_t)(count - 1);
+            m1_submenu_event(&app, M1SceneEventUp, &model, NULL);
         }
         else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            sel = ((uint16_t)(sel + 1) < count) ? (uint16_t)(sel + 1) : 0;
+            m1_submenu_event(&app, M1SceneEventDown, &model, NULL);
         }
         else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
         {
             xQueueReset(main_q_hdl);
-            return sel;
+            return model.selected;
         }
         else
         {
-            continue; /* unhandled key — skip redraw */
+            continue;
         }
 
-        ir_cust_draw_list(title, items, count, sel);
+        m1_submenu_draw(&model, title, labels);
     }
 }
 
@@ -406,7 +347,7 @@ static void ir_cust_draw_learn(ir_cust_capture_state_t state,
         snprintf(line, sizeof(line), "A:%04X C:%04X",
                  data->address, data->command);
         u8g2_DrawStr(&m1_u8g2, 4, 44, line);
-        m1_button_bar_draw(arrowleft_8x8, "Back",
+        m1_button_bar_draw(NULL, NULL,
                            ok_circle_8x8, "Save",
                            NULL, NULL);
     }
@@ -415,7 +356,7 @@ static void ir_cust_draw_learn(ir_cust_capture_state_t state,
         u8g2_DrawStr(&m1_u8g2, 4, 24, "Captured (raw):");
         snprintf(line, sizeof(line), "%u samples", (unsigned)raw_count);
         u8g2_DrawStr(&m1_u8g2, 4, 38, line);
-        m1_button_bar_draw(arrowleft_8x8, "Back",
+        m1_button_bar_draw(NULL, NULL,
                            ok_circle_8x8, "Save",
                            NULL, NULL);
     }
@@ -423,9 +364,6 @@ static void ir_cust_draw_learn(ir_cust_capture_state_t state,
     {
         u8g2_DrawStr(&m1_u8g2, 4, 26, "Point remote at M1,");
         u8g2_DrawStr(&m1_u8g2, 4, 38, "press a button...");
-        m1_button_bar_draw(arrowleft_8x8, "Back",
-                           NULL, NULL,
-                           NULL, NULL);
     }
     m1_u8g2_nextpage();
 }

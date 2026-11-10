@@ -25,6 +25,7 @@
 #include "u8g2.h"
 
 #include "m1_display.h"
+#include "m1_subghz_button_bar.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
 #include "m1_subghz_scene.h"
@@ -182,8 +183,8 @@ static void draw(SubGhzApp *app)
     uint8_t cx = (uint8_t)(4U + ((uint16_t)s_editor.cursor + 2U) * 8U);
     u8g2_DrawHLine(&m1_u8g2, cx, 40, 7);
 
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 0, 56, "\x18\x19:Hex L/R:Move OK:Save");
+    subghz_button_bar_draw(arrowleft_8x8, "Hex", ok_circle_8x8, "Save",
+                           arrowright_8x8, NULL);
 
     m1_u8g2_nextpage();
 }

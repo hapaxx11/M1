@@ -104,7 +104,7 @@ static void flipper_show_result(const char *msg, bool success)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 12, success ? "Success" : "Failed");
         if (msg) u8g2_DrawStr(&m1_u8g2, 2, 28, msg);
-        u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
+
     } while (m1_u8g2_nextpage());
 }
 
@@ -382,7 +382,6 @@ void nfc_import_flipper(void)
             u8g2_DrawStr(&m1_u8g2, 2, 12, saved ? "NFC Saved" : "NFC Save Failed");
             u8g2_DrawStr(&m1_u8g2, 2, 28, info_str);
             u8g2_DrawStr(&m1_u8g2, 2, 44, fno.fname);
-            u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
         } while (m1_u8g2_nextpage());
     }
 
@@ -502,7 +501,6 @@ void rfid_import_flipper(void)
             u8g2_DrawStr(&m1_u8g2, 2, 12, saved ? "RFID Saved" : "RFID Save Failed");
             u8g2_DrawStr(&m1_u8g2, 2, 28, info_str);
             u8g2_DrawStr(&m1_u8g2, 2, 44, fno.fname);
-            u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
         } while (m1_u8g2_nextpage());
     }
 

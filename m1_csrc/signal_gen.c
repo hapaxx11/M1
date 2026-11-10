@@ -28,6 +28,7 @@
 #include "m1_buzzer.h"
 #include "m1_lcd.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_tasks.h"
 #include "m1_lib.h"
 
@@ -107,10 +108,8 @@ void signal_gen_run(void)
                     u8g2_DrawStr(&m1_u8g2, 4, 42, info_str);
                 }
 
-                /* Controls help */
-                u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-                u8g2_DrawStr(&m1_u8g2, 2, 54, "UP/DN:Freq  OK:Toggle");
-                u8g2_DrawStr(&m1_u8g2, 2, 64, "BACK to exit");
+                m1_button_bar_draw(arrowdown_8x8, "Freq",
+                                   ok_circle_8x8, "Toggle", NULL, NULL);
             } while (m1_u8g2_nextpage());
         }
 

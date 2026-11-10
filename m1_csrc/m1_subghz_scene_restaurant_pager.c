@@ -15,6 +15,7 @@
 #include "m1_sub_ghz_decenc.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_subghz_scene.h"
+#include "m1_submenu.h"
 #include "m1_virtual_kb.h"
 #include "flipper_subghz.h"
 #include "restaurant_pager.h"
@@ -64,8 +65,8 @@ struct restaurant_pager_app_state {
     uint8_t selected;
     uint16_t max_pager;
     uint8_t tx_repeat_count;
-    uint8_t action_selection;
-    uint8_t setting_selection;
+    subghz_submenu_model_t action_model;
+    subghz_submenu_model_t settings_model;
     restaurant_pager_view_t view;
     bool radio_active;
     bool waiting_for_tx;
@@ -563,7 +564,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
             {
-                if (state->setting_selection == 0U)
+                if (state->settings_model.selected == 0U)
                     state->max_pager = (state->max_pager > 10U) ?
                         (uint16_t)(state->max_pager - 10U) : 0U;
                 else if (state->tx_repeat_count > 1U)
@@ -591,7 +592,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
             {
-                if (state->setting_selection == 0U)
+                if (state->settings_model.selected == 0U)
                     state->max_pager = (state->max_pager <= 1013U) ?
                         (uint16_t)(state->max_pager + 10U) : 1023U;
                 else if (state->tx_repeat_count < 50U)
@@ -606,7 +607,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                      entry != NULL)
             {
                 state->view = RESTAURANT_PAGER_VIEW_ACTIONS;
-                state->action_selection = 0U;
+                subghz_submenu_model_init(&state->action_model,
+                                              RESTAURANT_PAGER_ACTION_COUNT,
+                                              M1_MENU_VIS(RESTAURANT_PAGER_ACTION_COUNT));
                 app->need_redraw = true;
             }
             return true;
@@ -614,11 +617,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventUp:
             if (state->view == RESTAURANT_PAGER_VIEW_EDIT)
                 change_pager(entry, 1);
-            else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS &&
-                     state->action_selection > 0U)
-                state->action_selection--;
+            else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS)
+                subghz_submenu_model_up(&state->action_model);
             else if (state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
-                state->setting_selection = 0U;
+                subghz_submenu_model_up(&state->settings_model);
             else if (state->view == RESTAURANT_PAGER_VIEW_SCAN &&
                      state->selected > 0U)
                 state->selected--;
@@ -628,11 +630,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventDown:
             if (state->view == RESTAURANT_PAGER_VIEW_EDIT)
                 change_pager(entry, -1);
-            else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS &&
-                     state->action_selection + 1U < RESTAURANT_PAGER_ACTION_COUNT)
-                state->action_selection++;
+            else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS)
+                subghz_submenu_model_down(&state->action_model);
             else if (state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
-                state->setting_selection = 1U;
+                subghz_submenu_model_down(&state->settings_model);
             else if (state->view == RESTAURANT_PAGER_VIEW_SCAN &&
                      state->selected + 1U < state->count)
                 state->selected++;
@@ -649,11 +650,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                      entry != NULL)
             {
                 state->view = RESTAURANT_PAGER_VIEW_ACTIONS;
-                state->action_selection = 0U;
+                subghz_submenu_model_init(&state->action_model,
+                                              RESTAURANT_PAGER_ACTION_COUNT,
+                                              M1_MENU_VIS(RESTAURANT_PAGER_ACTION_COUNT));
             }
             else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS)
             {
-                switch (state->action_selection)
+                switch (state->action_model.selected)
                 {
                     case 0U:
                         state->view = RESTAURANT_PAGER_VIEW_EDIT;
@@ -696,7 +699,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         break;
                     case 4U:
                         state->view = RESTAURANT_PAGER_VIEW_SETTINGS;
-                        state->setting_selection = 0U;
+                        subghz_submenu_model_init(&state->settings_model, 2U,
+                                                  M1_MENU_VIS(2U));
                         break;
                     default:
                         break;
@@ -802,8 +806,14 @@ static void draw(SubGhzApp *app)
             else if (state->view == RESTAURANT_PAGER_VIEW_BATCH_CONFIRM)
                 screen = "BATCH";
         }
-        subghz_status_bar_draw(frequency, "OOK", screen, false);
-        subghz_rssi_bar_draw(app->rssi);
+        bool list_view = state != NULL &&
+            (state->view == RESTAURANT_PAGER_VIEW_ACTIONS ||
+             state->view == RESTAURANT_PAGER_VIEW_SETTINGS);
+        if (!list_view)
+        {
+            subghz_status_bar_draw(frequency, "OOK", screen, false);
+            subghz_rssi_bar_draw(app->rssi);
+        }
         if (state == NULL)
         {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -821,31 +831,20 @@ static void draw(SubGhzApp *app)
         }
         else if (state->view == RESTAURANT_PAGER_VIEW_ACTIONS)
         {
-            char index[12];
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 0, 28,
-                         action_labels[state->action_selection]);
-            (void)snprintf(index, sizeof(index), "%u/%u",
-                           (unsigned)(state->action_selection + 1U),
-                           (unsigned)RESTAURANT_PAGER_ACTION_COUNT);
-            u8g2_DrawStr(&m1_u8g2, 0, 40, index);
-            if (state->status[0] != '\0')
-                u8g2_DrawStr(&m1_u8g2, 0, 50, state->status);
+            m1_submenu_draw(&state->action_model, "Pager Actions", action_labels);
         }
         else if (state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
         {
-            char setting[24];
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            (void)snprintf(setting, sizeof(setting), "%c Max pager: %u",
-                           (state->setting_selection == 0U) ? '>' : ' ',
+            char max_pager[24];
+            char repeats[24];
+            const char *labels[2];
+            (void)snprintf(max_pager, sizeof(max_pager), "Max pager: %u",
                            state->max_pager);
-            u8g2_DrawStr(&m1_u8g2, 0, 30, setting);
-            (void)snprintf(setting, sizeof(setting), "%c TX repeat: %u",
-                           (state->setting_selection == 1U) ? '>' : ' ',
+            (void)snprintf(repeats, sizeof(repeats), "TX repeat: %u",
                            state->tx_repeat_count);
-            u8g2_DrawStr(&m1_u8g2, 0, 42, setting);
-            if (state->status[0] != '\0')
-                u8g2_DrawStr(&m1_u8g2, 0, 52, state->status);
+            labels[0] = max_pager;
+            labels[1] = repeats;
+            m1_submenu_draw(&state->settings_model, "Pager Settings", labels);
         }
         else if (state->view == RESTAURANT_PAGER_VIEW_BATCH_CONFIRM)
         {
@@ -853,8 +852,7 @@ static void draw(SubGhzApp *app)
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             (void)snprintf(batch, sizeof(batch), "Send pages 0-%u?",
                            state->batch_max);
-            u8g2_DrawStr(&m1_u8g2, 0, 29, batch);
-            u8g2_DrawStr(&m1_u8g2, 0, 42, "OK confirms; BACK cancels");
+            u8g2_DrawStr(&m1_u8g2, 0, 36, batch);
         }
         else if (state->count == 0U)
         {
@@ -877,18 +875,13 @@ static void draw(SubGhzApp *app)
             subghz_button_bar_draw(NULL, "ENC", NULL, "OK:SEND", NULL,
                                    "ACT/PAGER");
         else if (state != NULL &&
-                 state->view == RESTAURANT_PAGER_VIEW_ACTIONS)
-            subghz_button_bar_draw(NULL, NULL, NULL, "OK:SELECT", NULL,
-                                   "UP/DN BACK");
-        else if (state != NULL &&
                  state->view == RESTAURANT_PAGER_VIEW_SETTINGS)
-            subghz_button_bar_draw(NULL, "DEC", NULL, "INC", NULL,
-                                   "OK:DONE");
+            subghz_button_bar_draw(NULL, "DEC", ok_circle_8x8, "DONE", NULL,
+                                   "INC");
         else if (state != NULL &&
                  state->view == RESTAURANT_PAGER_VIEW_BATCH_CONFIRM)
-            subghz_button_bar_draw(NULL, NULL, NULL, "OK:SEND", NULL,
-                                   "BACK:CANCEL");
-        else
+            subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "SEND", NULL, NULL);
+        else if (state != NULL && state->view != RESTAURANT_PAGER_VIEW_ACTIONS)
             subghz_button_bar_draw(NULL, "CFG", NULL, "OK:MENU", NULL,
                                    "ACT");
     } while (m1_u8g2_nextpage());
