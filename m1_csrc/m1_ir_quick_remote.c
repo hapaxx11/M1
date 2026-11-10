@@ -25,6 +25,7 @@
 #include "m1_ir_universal.h"
 #include "m1_infrared.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_lcd.h"
 #include "m1_system.h"
 #include "m1_settings.h"
@@ -1358,8 +1359,7 @@ void ir_brute_force_scan(ir_category_t category)
                 u8g2_DrawBox(&m1_u8g2, 4, 40, bar_w, 8);
             }
 
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
+            m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Found", NULL, NULL);
         }
 
         m1_u8g2_nextpage();

@@ -333,7 +333,6 @@ static void device_detail_screen(const char *title, ieee802154_device_t *dev)
             snprintf(prn_msg, sizeof(prn_msg), "%s (%u)", dev->frame_types, dev->frame_count);
             u8g2_DrawStr(&m1_u8g2, 2, y, prn_msg);
 
-            m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "OK", NULL, NULL);
             m1_u8g2_nextpage();
         }
 

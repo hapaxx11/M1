@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "m1_games.h"
+#include "m1_button_bar.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -598,7 +599,7 @@ static void trex_draw_title(void)
 
     u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
     u8g2_DrawStr(&m1_u8g2, 22, 48, "Press OK to start");
-    u8g2_DrawStr(&m1_u8g2, 12, 60, "UP/OK:Jump DOWN:Duck");
+    m1_button_bar_draw(arrowdown_8x8, "Duck", ok_circle_8x8, "Jump", NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -626,8 +627,7 @@ static void trex_draw_game_over(void)
     uint8_t sw = u8g2_GetStrWidth(&m1_u8g2, buf);
     u8g2_DrawStr(&m1_u8g2, (GAME_SCREEN_W - sw) / 2, 38, buf);
 
-    u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
-    u8g2_DrawStr(&m1_u8g2, 10, 56, "OK:Retry  BACK:Exit");
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Retry", NULL, NULL);
 
     m1_u8g2_nextpage();
 }

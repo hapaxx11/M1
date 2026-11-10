@@ -1,0 +1,1 @@
+**UI: Scene visual standards** — Correct inverted headers, redundant Back/OK hints, physical-button mapping, and custom selector layouts across games, Infrared, RFID, NFC, Sub-GHz, and firmware download screens. Use shared font-aware submenu navigation and rounded action bars with regression coverage.

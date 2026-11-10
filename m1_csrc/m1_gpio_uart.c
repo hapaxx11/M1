@@ -22,6 +22,7 @@
 #include "main.h"
 #include "m1_gpio_uart.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
 #include "m1_system.h"
@@ -242,8 +243,8 @@ static void bridge_draw(void)
     }
 
     /* ── Bottom bar ── */
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Baud",
-                       "OK:Mode", arrowright_8x8);
+    m1_button_bar_draw(arrowleft_8x8, "Baud",
+                       ok_circle_8x8, "Mode", arrowright_8x8, NULL);
 
     m1_u8g2_nextpage();
 }

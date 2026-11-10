@@ -2045,7 +2045,7 @@ static void ble_signal_finder_draw_selection(void)
     snprintf(line, sizeof(line), "RSSI: %d dBm", device->rssi);
     u8g2_DrawStr(&m1_u8g2, 2, 43, line);
     u8g2_DrawStr(&m1_u8g2, 2, 50, "UP/DOWN to select");
-    m1_button_bar_draw(arrowleft_8x8, "Back", ok_circle_8x8, "Track", NULL, NULL);
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Track", NULL, NULL);
     m1_u8g2_nextpage();
 }
 

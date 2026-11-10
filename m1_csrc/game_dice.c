@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "m1_games.h"
+#include "m1_button_bar.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -270,13 +271,11 @@ static void dice_draw(dice_state_t *st, int8_t bounce1, int8_t bounce2)
             }
         }
         buf[pos] = '\0';
-        u8g2_DrawStr(&m1_u8g2, 0, 54, buf);
+        u8g2_DrawStr(&m1_u8g2, 0, 46, buf);
     }
 
-    /* Controls hint */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 0, 63, "OK:Roll");
-    u8g2_DrawStr(&m1_u8g2, 70, 63, "L/R:#dice");
+    m1_button_bar_draw(arrowleft_8x8, "#dice", ok_circle_8x8, "Roll",
+                       arrowright_8x8, "#dice");
 
     m1_u8g2_nextpage();
 }
