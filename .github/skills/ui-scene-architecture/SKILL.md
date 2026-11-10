@@ -7,6 +7,17 @@ description: M1 UI and scene-manager standards: the font inventory and maintenan
 
 > Extracted from CLAUDE.md. Load for any UI, scene, menu, button-bar, or font work.
 
+### HIL Coverage (mandatory)
+
+Whenever a change could have altered menu destinations, labels, ordering,
+navigation, actions, or lifecycle, inspect and update the module's recursive
+single-device HIL audit in the same change, even if no UI change was intended.
+Include safe nested action menus and do not assume a refactor preserved audit
+coverage. Use `documentation/hil_menu_coverage.md` to choose the exact
+registered test IDs for PR descriptions and review suggestions. Safe entry/exit
+coverage is the minimum; document external-dependent functional paths as skips,
+never as passes.
+
 ### Font Inventory
 
 The M1 firmware compiles ~1987 u8g2 fonts in `Drivers/u8g2_csrc/u8g2_fonts.c`.

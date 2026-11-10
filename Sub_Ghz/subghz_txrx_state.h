@@ -105,6 +105,11 @@ bool subghz_txrx_state_is_tx(subghz_txrx_state_t s);
  */
 bool subghz_txrx_state_is_powered(subghz_txrx_state_t s);
 
+/** Return true while an RX event can be queued without consuming the slots
+ * reserved for keypad and other control traffic. */
+bool subghz_rx_queue_admit(uint32_t pending, uint32_t capacity,
+                           uint32_t control_reserve);
+
 /**
  * @brief  Human-readable name for a state — for logging and diagnostics.
  *         Returns "INVALID" for out-of-range values.  Never NULL.

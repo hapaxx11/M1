@@ -356,6 +356,8 @@ static SubGhzEvent translate_button(void)
     return SubGhzEventNone;
 }
 
+#define SUBGHZ_POCSAG_PULSE_BATCH_LIMIT 64U
+
 void subghz_scene_app_run(void)
 {
     /* SubGhzApp is 5+ KB — far larger than the menu task's 4 KB stack. */
@@ -453,20 +455,28 @@ void subghz_scene_app_run(void)
                 case Q_EVENT_SUBGHZ_RX:
                     if (subghz_scene_current(&app) == SubGhzScenePocsag)
                     {
-                        do
+                        /* A continuous noise floor must not starve RPC, input,
+                         * ticks, or cleanup while waiting for an empty queue. */
+                        for (uint16_t pulse_count = 0;
+                             pulse_count < SUBGHZ_POCSAG_PULSE_BATCH_LIMIT;)
                         {
                             app.pocsag_pulse_duration_us =
                                 q_item.q_data.ir_rx_data.ir_edge_te;
                             app.pocsag_pulse_level =
                                 q_item.q_data.ir_rx_data.ir_edge_dir == PULSE_DET_RISING;
                             subghz_scene_send_event(&app, SubGhzEventRxData);
+                            ++pulse_count;
+
+                            if (pulse_count >= SUBGHZ_POCSAG_PULSE_BATCH_LIMIT)
+                                break;
 
                             S_M1_Main_Q_t peek;
                             if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE ||
                                 peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
                                 break;
                             xQueueReceive(main_q_hdl, &q_item, 0);
-                        } while (true);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(1U));
                     }
                     else if (subghz_record_mode_flag)
                     {

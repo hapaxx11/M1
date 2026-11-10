@@ -1,5 +1,6 @@
 #include "unity.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -242,6 +243,99 @@ static void test_csi_preserves_station_connection(void)
     free(wifi);
 }
 
+static void test_ble_spam_uses_negotiated_transport(void)
+{
+    char *bt = read_file("m1_csrc/m1_bt.c");
+    const char *start = strstr(bt, "static inline bool ble_use_at_path(void)");
+    const char *end = start ? strstr(start, "static bool ble_spam_at_cmd(") : NULL;
+    const char *ensure = start ? strstr(start, "m1_esp32_ensure_init();") : NULL;
+    const char *transport = start ? strstr(start,
+        "m1_esp32_active_transport() == ESP32_TRANSPORT_AT") : NULL;
+    const char *legacy = start ? strstr(start,
+        "m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN)") : NULL;
+    bool valid = start && end && ensure && transport &&
+                 ensure < end && transport < end && (!legacy || legacy >= end);
+    free(bt);
+    TEST_ASSERT_TRUE_MESSAGE(valid,
+        "BLE spam must initialise the HAL and use negotiated transport, not WIFI_JOIN");
+}
+
+static void test_ble_spam_at_command_restores_legacy_task(void)
+{
+    char *bt = read_file("m1_csrc/m1_bt.c");
+    const char *start = strstr(bt, "static bool ble_spam_at_cmd(");
+    const char *guard = start ? strstr(start,
+        "m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport())") : NULL;
+    const char *init = guard ? strstr(guard, "esp32_main_init();") : NULL;
+    const char *ready = init ? strstr(init,
+        "if (!get_esp32_main_init_status())") : NULL;
+    const char *send = start ? strstr(start, "spi_AT_send_recv(") : NULL;
+    bool valid = start && guard && init && ready && send &&
+                 guard < init && init < ready && ready < send;
+    free(bt);
+    TEST_ASSERT_TRUE_MESSAGE(valid,
+        "AT spam must restore and verify the legacy task before taking its semaphores");
+}
+
+static void test_ble_spam_unified_rpc_mode_map(void)
+{
+    char *bt = read_file("m1_csrc/m1_bt.c");
+    const char *table = strstr(bt, "static const uint8_t ble_spam_mode_rpc[");
+    const char *mapping = table ? strstr(table,
+        "BLE_SPAM_RPC_ALL, BLE_SPAM_RPC_APPLE, BLE_SPAM_RPC_FASTPAIR, BLE_SPAM_RPC_SWIFTPAIR") : NULL;
+    const char *branch = mapping ? strstr(mapping,
+        "else if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)") : NULL;
+    const char *run = branch ? strstr(branch,
+        "ble_spam_rpc_run(\"BLE SPAM\", ble_spam_mode_rpc[sel]);") : NULL;
+    const char *binary = run ? strstr(run, "ble_spam_spi_mode(sel);") : NULL;
+    bool valid = table && mapping && branch && run && binary &&
+                 table < mapping && mapping < branch && branch < run && run < binary &&
+                 strstr(bt, "#define BLE_SPAM_RPC_APPLE      0U") &&
+                 strstr(bt, "#define BLE_SPAM_RPC_FASTPAIR   1U") &&
+                 strstr(bt, "#define BLE_SPAM_RPC_SAMSUNG    2U") &&
+                 strstr(bt, "#define BLE_SPAM_RPC_SWIFTPAIR  3U") &&
+                 strstr(bt, "#define BLE_SPAM_RPC_ALL        4U") &&
+                 strstr(bt, "ble_spam_rpc_run(\"SOUR APPLE\", BLE_SPAM_RPC_APPLE);") &&
+                 strstr(bt, "ble_spam_rpc_run(\"GOOGLE FP\", BLE_SPAM_RPC_FASTPAIR);");
+    free(bt);
+    TEST_ASSERT_TRUE_MESSAGE(valid,
+        "unified and specific RPC spam modes must match the native brain enum");
+}
+
+static void test_wifi_attack_paths_use_negotiated_transport(void)
+{
+    char *wifi = read_file("m1_csrc/m1_wifi.c");
+    const char *helper = strstr(wifi, "static inline bool wifi_use_at_transport(void)");
+    const char *comparison = helper ? strstr(helper,
+        "m1_esp32_active_transport() == ESP32_TRANSPORT_AT") : NULL;
+    const char *legacy = strstr(wifi, "m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN)");
+    const char *ready = strstr(wifi, "static void ensure_esp32_ready(void)");
+    const char *guard = ready ? strstr(ready,
+        "m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport())") : NULL;
+    const char *at_init = guard ? strstr(guard, "esp32_main_init();") : NULL;
+    bool valid = helper && comparison && !legacy && ready && guard && at_init &&
+                 helper < comparison && ready < guard && guard < at_init;
+    free(wifi);
+    TEST_ASSERT_TRUE_MESSAGE(valid,
+        "WiFi must route by negotiated transport and restore AT only for AT firmware");
+}
+
+static void test_badbt_starts_legacy_task_only_for_at(void)
+{
+    char *badbt = read_file("m1_csrc/m1_badbt.c");
+    const char *start = strstr(badbt, "void badbt_run(void)");
+    const char *guard = start ? strstr(start,
+        "m1_esp32_lifecycle_at_task_required(m1_esp32_active_transport())") : NULL;
+    const char *at_init = guard ? strstr(guard, "esp32_main_init();") : NULL;
+    const char *rpc = start ? strstr(start,
+        "m1_esp32_active_transport() == ESP32_TRANSPORT_RPC") : NULL;
+    bool valid = start && guard && at_init && rpc &&
+                 guard < at_init && at_init < rpc;
+    free(badbt);
+    TEST_ASSERT_TRUE_MESSAGE(valid,
+        "Bad-BT must not reset native RPC firmware by starting the legacy AT task");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -252,5 +346,10 @@ int main(void)
     RUN_TEST(test_native_operations_gate_legacy_task_by_transport);
     RUN_TEST(test_gatt_and_raw_scan_use_cancellable_pending_states);
     RUN_TEST(test_csi_preserves_station_connection);
+    RUN_TEST(test_ble_spam_uses_negotiated_transport);
+    RUN_TEST(test_ble_spam_at_command_restores_legacy_task);
+    RUN_TEST(test_ble_spam_unified_rpc_mode_map);
+    RUN_TEST(test_wifi_attack_paths_use_negotiated_transport);
+    RUN_TEST(test_badbt_starts_legacy_task_only_for_at);
     return UNITY_END();
 }

@@ -7344,15 +7344,16 @@ uint8_t sub_ghz_raw_recording_init_ext(void)
  * how many samples are available; if >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW,
  * writes a batch to the SD card.
  *
- * @return Number of samples flushed (0 if insufficient data).
+ * @return Number of samples flushed (0 if insufficient data or saving fails).
  */
 uint32_t sub_ghz_raw_recording_flush_ext(void)
 {
 	uint32_t avail = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
 	if (avail >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW)
 	{
+		if (sub_ghz_rx_raw_save(false, false) != 0U)
+			return 0U;
 		subghz_record_total_samples += SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
-		sub_ghz_rx_raw_save(false, false);
 
 		/* RSSI visualization is now updated by the scene via
 		 * subghz_raw_rssi_push_ext() — no pulse-to-waveform
@@ -7369,7 +7370,10 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
  */
 void sub_ghz_raw_recording_stop_ext(void)
 {
-	/* Flush whatever remains in the ring buffer */
+	/* Drain every pending sample even if queue backpressure suppressed
+	 * earlier flush notifications. */
+	while (sub_ghz_raw_recording_flush_ext() > 0U)
+		;
 	if (ringbuffer_get_data_slots(&subghz_rx_rawdata_rb) > 0)
 		sub_ghz_rx_raw_save(false, true);
 

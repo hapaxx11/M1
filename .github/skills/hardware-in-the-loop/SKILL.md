@@ -129,6 +129,14 @@ python scripts/m1_hil_test.py --list
 python scripts/m1_hil_test.py --test wifi-airtime
 ```
 
+The active `ble-spam` case runs only when selected explicitly with `--test
+ble-spam`; it is excluded from default runs and unfiltered PR updates. Recursive
+menu audits checkpoint each passed destination under `build/hil-results/`.
+Rerun the same command after a failure to resume at the first unfinished
+destination. Use `--fresh` only when deliberately ignoring checkpoints and
+rerunning the full audit. Changes to an audit or its shared helpers invalidate
+that audit's older checkpoints without invalidating unrelated audits.
+
 The suite reboots each case into a known home screen, uses only one M1 and
 native USB RPC, checks entry/exit/re-entry and responsiveness, and stops active
 features before finishing. The default cases need no AP, BLE peer, second M1,
@@ -143,6 +151,20 @@ ID, deterministic setup, bounded waits, assertions, cleanup, and no external
 fixture. Keep reporting logic covered by ordinary `unittest`; do not run HIL in
 cloud CI. Unsuitable scenarios need a documented reason in the PR instead of a
 flaky or manual-only registered test.
+
+Every menu feature must also appear in its module's recursive audit. Whenever a
+change could have altered menu coverage or behavior, inspect and update that
+audit even if the change was not intended to affect UI. Safe entry/exit coverage
+is the minimum even when full functionality needs a peer, AP, card/tag, or
+decoded signal. See `documentation/hil_menu_coverage.md` for the menu-to-case
+mapping and new-destination checklist.
+
+When writing or reviewing a PR, verify that the audit changed whenever its
+coverage could have changed, and always suggest the exact relevant case IDs
+from that guide, including during review-only work. Add the unchecked IDs to
+the PR HIL section when authorized; otherwise put the suggestion in the review.
+Never invent IDs, mark unrun cases as passed, or edit a remote PR without
+permission.
 
 PR descriptions carry specific unchecked cases between `M1_HIL_RESULTS`
 markers. Before marking a draft ready/non-draft, strongly recommend running the

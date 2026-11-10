@@ -42,3 +42,10 @@ current task needs to be loaded.
 | [`forks-tracker`](.github/skills/forks-tracker/SKILL.md) | Fork auditing, upstream comparison, cherry-pick decisions |
 
 The rules in `CLAUDE.md` always apply regardless of which skill is loaded.
+
+## Menu HIL coverage
+
+Whenever a change could have altered menu coverage or behavior, inspect and
+update the relevant recursive HIL audit even if no UI change was intended. Use
+[`documentation/hil_menu_coverage.md`](documentation/hil_menu_coverage.md) for
+the required coverage checklist and exact test IDs to suggest in PRs and reviews.

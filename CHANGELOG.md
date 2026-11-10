@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6.0] - 2026-11-10
+
+### Changed
+
+- Documentation: Keep the active BLE spam lifecycle test discoverable but opt-in only, so default HIL runs and unfiltered PR updates never start proximity-pairing advertising without explicit test selection.
+- Documentation: Add a recursive single-device HIL audit for 22 safe Bluetooth menu destinations, including Config/Edit, the unified BLE spam picker, sniffers, detectors, GATT, and Bad-BT cancellation. Active advertising/spam is confined to the explicitly authorized `ble-spam` lifecycle test with a measured active dwell and stop/re-entry checks.
+- Documentation: Use identical full destination IDs for miscellaneous and manual-editor HIL checkpoint filtering and logging, and invalidate checkpoints when shared HIL driver or execution files change.
+- Documentation: Require registered HIL coverage for every menu feature and audit updates whenever menu coverage or behavior could have changed, add an authoritative menu-to-test mapping for PR authors and reviewers, and require exact unchecked HIL case IDs in PR descriptions and review suggestions.
+- Documentation: Recursive HIL menu audits now save per-destination checkpoints, resume after failures without repeating passed destinations, and support `--fresh` for intentional full reruns.
+- Documentation: Add a recursive non-Sub-GHz HIL audit for 40 static destinations plus conditional safe Infrared saved-file and custom-remote actions across Infrared, GPIO/CAN, games, BadUSB, and Apps, with external app/script execution and RF transmissions excluded.
+- Documentation: Correct Sub-GHz HIL reporting so MoreRAW actions are skipped only for parsed saved files, with raw/parsed regression coverage.
+- Documentation: NFC recursive HIL now skips unsupported saved files and verifies a responsive action menu before auditing saved-item actions, preventing false-positive results.
+- Documentation: Add recursive single-device HIL audits for 37 RFID and 26 NFC menu destinations, covering all manual protocol/card-type editors, utilities, extra actions, and NDEF record types without tag or file modifications.
+- Documentation: Add a recursive single-device HIL audit for 26 safe Settings destinations, including all LCD options, storage, power, firmware/ESP32 download pickers, and Bluetooth Direct, with format, update, backup, swap, and power-off actions excluded.
+- Documentation: Add a recursive Sub-GHz HIL audit for 29 static scenes, protocol filtering, all 20 Add Manually editor entries, the KeeLoq editor chain, and conditional saved/MoreRAW actions, with RF transmissions, emulation, brute-force execution, and destructive edits excluded.
+- Documentation: Add a recursive single-device HIL audit covering safe static WiFi menu destinations, passive selected-AP Target actions, Peer Link submenus, and connected-only Net Scan actions, with destination assertions, bounded cleanup, and active RF operations explicitly excluded.
+
+### Fixed
+
+- **Bluetooth: Bad-BT native lifecycle** — Start and require the legacy AT task only for negotiated AT firmware, preventing native-brain BLE HID startup from resetting the coprocessor and improving connection cancellation responsiveness.
+- **Bluetooth: BLE spam watchdog reset** — Route native brain firmware through RPC instead of misclassifying it as AT, restore the legacy AT task before spam commands, and cover the unified picker with the correct native mode mapping. Prevents a NULL request semaphore from triggering assertion 1673 and an IWDG reset.
+- **UI: Delete confirmation cancellation** — Split slash-formatted OK/Cancel labels into distinct choices for Infrared saved files, custom remotes/buttons, and Sub-GHz MoreRAW. HIL delete audits now dismiss with BACK only, preventing accidental confirmation.
+- **Sub-GHz: POCSAG/FLEX entry hard fault** — Bound pulse batches and sleep for one RTOS tick after each batch so BCH error correction cannot monopolize the scene task under RF noise, and avoid pre-dequeuing the next event at the batch boundary. Restores USB RPC, keypad handling, periodic ticks, and clean exit/re-entry.
+- **Sub-GHz: Recording allocation failure cleanup** — Stop reporting a batch as flushed when its save allocation fails, allowing recording stop to reach SD task cleanup instead of looping without progress.
+- **Sub-GHz: Raw recording stop under queue pressure** — Drain all pending samples on stop even when control-slot backpressure suppresses earlier flush notifications, preventing captured data loss while preserving keypad responsiveness.
+- **RFID: Add Manually editor crash** — Size and bound the hex-input buffer for every supported UID length, including 12-byte HID Ex Generic and 28-byte Indala224 entries, preventing stack corruption and RPC/reset failures when entering or leaving the editor.
+- **Sub-GHz: Control events during RF noise** — Reserve 32 main-queue slots for keypad and control traffic so POCSAG and other active receivers cannot bury BACK and RPC behind continuous pulse events.
+- **WiFi: native attack transport routing** — Use the negotiated transport for scans, connections, and attacks instead of treating WiFi-join capability as AT detection, and restore the legacy AT task only for AT firmware. Prevents native-brain operations such as Rickroll from entering an invalid AT path and becoming unresponsive.
+
 ## [0.9.5.5] - 2026-11-07
 
 ### Added

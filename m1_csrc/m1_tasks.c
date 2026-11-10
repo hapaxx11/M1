@@ -30,7 +30,6 @@
 
 #define M1_LOGDB_TAG	"Tasks"
 
-#define MAIN_QUEUE_ITEMS_MAX_N				256
 #define SDCARD_DET_QUEUE_ITEMS_MAX_N		10
 
 //************************** C O N S T A N T **********************************/

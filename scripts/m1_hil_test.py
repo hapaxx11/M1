@@ -17,7 +17,15 @@ import time
 from typing import Callable
 import zlib
 
+import m1_resume
 from m1_hil import BUTTONS, M1Hil, connect, write_png
+from m1_bt_menu_audit import run as run_bt_menu_tree
+from m1_misc_menu_audit import run as run_misc_menu_tree
+from m1_nfc_menu_audit import run as run_nfc_menu_tree
+from m1_rfid_menu_audit import run as run_rfid_menu_tree
+from m1_settings_menu_audit import run as run_settings_menu_tree
+from m1_subghz_menu_audit import run as run_subghz_menu_tree
+from m1_wifi_menu_audit import run as run_wifi_menu_tree
 
 RESULT_START = "<!-- M1_HIL_RESULTS:START -->"
 RESULT_END = "<!-- M1_HIL_RESULTS:END -->"
@@ -111,6 +119,7 @@ def exercise_scene(
     enter: Callable[[], None],
     entry_timeout_s: float,
     exit_timeout_s: float = 2.0,
+    active_dwell_s: float = 0.0,
 ) -> str:
     before = capture(client, artifacts, f"{prefix}-before")
     started = time.monotonic()
@@ -120,6 +129,10 @@ def exercise_scene(
     )
     entry_ms = (time.monotonic() - started) * 1000
     assert_title(active, active_title, f"{prefix} entry")
+    if active_dwell_s > 0.0:
+        time.sleep(active_dwell_s)
+        active = capture(client, artifacts, f"{prefix}-dwell")
+        assert_title(active, active_title, f"{prefix} watchdog dwell")
 
     started = time.monotonic()
     click(client, "back")
@@ -194,12 +207,100 @@ def run_ble_airtag_monitor(client: M1Hil, artifacts: Path) -> str:
     )
 
 
+def run_ble_spam(client: M1Hil, artifacts: Path) -> str:
+    open_bluetooth(client)
+    click(client, "down", 5)
+    click(client, "ok")
+    menu = capture(client, artifacts, "ble-spam-menu")
+    click(client, "ok")
+    picker = capture_until_change(
+        client, artifacts, "ble-spam-unified-picker", menu, 3.0
+    )
+
+    started = time.monotonic()
+    click(client, "ok")
+    active = capture_until_change(
+        client, artifacts, "ble-spam-active", picker, 10.0, started
+    )
+    assert_title(active, 0x58EA5A94, "ble-spam entry")
+    entry_ms = (time.monotonic() - started) * 1000
+    time.sleep(17.0)
+    active = capture(client, artifacts, "ble-spam-dwell")
+    assert_title(active, 0x58EA5A94, "ble-spam watchdog dwell")
+
+    started = time.monotonic()
+    click(client, "back")
+    stopped = capture_until_change(
+        client, artifacts, "ble-spam-stopped", active, 3.0, started
+    )
+    assert_title(stopped, 0x58EA5A94, "ble-spam stop")
+    exit_ms = (time.monotonic() - started) * 1000
+
+    click(client, "ok")
+    active = capture_until_change(
+        client, artifacts, "ble-spam-restarted", stopped, 10.0
+    )
+    assert_title(active, 0x58EA5A94, "ble-spam restart")
+    click(client, "back")
+    cleanup = capture_until_change(
+        client, artifacts, "ble-spam-cleanup", active, 3.0
+    )
+    assert_title(cleanup, 0x58EA5A94, "ble-spam cleanup")
+    client.info()
+    return f"entry {entry_ms:.0f} ms, exit {exit_ms:.0f} ms, active stop/restart passed"
+
+
+def run_wifi_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_wifi_menu_tree(client)
+
+
+def run_bt_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_bt_menu_tree(client)
+
+
+def run_rfid_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_rfid_menu_tree(client)
+
+
+def run_nfc_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_nfc_menu_tree(client)
+
+
+def run_settings_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_settings_menu_tree(client)
+
+
+def run_misc_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_misc_menu_tree(client)
+
+
+def run_subghz_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_subghz_menu_tree(client)
+
+
+OPT_IN_CASE_IDS = frozenset({"ble-spam"})
+
+
+def select_cases(cases: tuple[HilCase, ...], requested: list[str] | None) -> list[HilCase]:
+    if requested:
+        return [case for case in cases if case.test_id in requested]
+    return [case for case in cases if case.test_id not in OPT_IN_CASE_IDS]
+
+
 CASES = (
     HilCase("wifi-airtime", "WiFi Channel Airtime lifecycle", run_wifi_airtime),
     HilCase("wifi-peer-link", "WiFi Peer Link lifecycle", run_wifi_peer_link),
+    HilCase("wifi-menu-audit", "Recursive WiFi menu responsiveness", run_wifi_menu_audit),
+    HilCase("bluetooth-menu-audit", "Recursive Bluetooth menu responsiveness", run_bt_menu_audit),
+    HilCase("rfid-menu-audit", "Recursive RFID menu responsiveness", run_rfid_menu_audit),
+    HilCase("nfc-menu-audit", "Recursive NFC menu responsiveness", run_nfc_menu_audit),
+    HilCase("settings-menu-audit", "Recursive Settings menu responsiveness", run_settings_menu_audit),
+    HilCase("misc-menu-audit", "Remaining non-SubGhz menu responsiveness", run_misc_menu_audit),
+    HilCase("subghz-menu-audit", "Recursive SubGhz menu responsiveness", run_subghz_menu_audit),
     HilCase("ble-signal-finder", "BLE Signal Finder lifecycle", run_ble_signal_finder),
     HilCase("ble-gatt-discovery", "BLE GATT Discovery lifecycle", run_ble_gatt_discovery),
     HilCase("ble-airtag-monitor", "BLE AirTag Monitor lifecycle", run_ble_airtag_monitor),
+    HilCase("ble-spam", "BLE Spam watchdog and lifecycle", run_ble_spam),
 )
 
 
@@ -318,13 +419,15 @@ def public_error(stage: str, error: BaseException) -> str:
     return f"{prefix}: {type(error).__name__}"
 
 
-def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
+def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
+                 fresh: bool = False) -> dict:
     started = time.monotonic()
     stage = "connect"
     status = "SKIP"
     detail = "not run"
     artifacts = output_dir / case.test_id
     artifacts.mkdir(parents=True, exist_ok=True)
+    m1_resume.start(case.test_id, output_dir, fresh=fresh)
     try:
         with connect(port, baud, timeout=10) as client:
             stage = "reboot"
@@ -350,6 +453,7 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path) -> dict:
                 detail += "; recovery reboot issued"
             except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
                 detail += f"; {public_error('cleanup', cleanup_error)}"
+    m1_resume.finish(status == "PASS")
     return {
         "id": case.test_id,
         "title": case.title,
@@ -370,6 +474,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="run only this test; repeat to select multiple tests",
     )
     parser.add_argument("--list", action="store_true", help="list tests without hardware")
+    parser.add_argument("--fresh", action="store_true",
+                        help="ignore checkpoints and rerun every destination")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -392,8 +498,9 @@ def main() -> int:
             print(f"{case.test_id}: {case.title}")
         return 0
 
-    selected = [case for case in CASES if not args.test or case.test_id in args.test]
-    results = [execute_case(case, args.port, args.baud, args.output_dir) for case in selected]
+    selected = select_cases(CASES, args.test)
+    results = [execute_case(case, args.port, args.baud, args.output_dir, args.fresh)
+               for case in selected]
     markdown, report = write_reports(args.output_dir, results)
     for result in results:
         print(f"{result['status']:4} {result['id']}: {result['detail']}")
