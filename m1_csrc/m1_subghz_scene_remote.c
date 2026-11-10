@@ -26,7 +26,7 @@
  *   │    ↑ Gate Open             │
  *   │◄ Ch─  │ OK: Arm  │ Ch+ ►  │
  *   │    ↓ Gate Close            │
- *   │   Press to send            │  ← hint line
+ *   │                            │
  *   └────────────────────────────┘
  *
  * Navigation:
@@ -46,6 +46,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
+#include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "m1_subghz_scene.h"
@@ -235,7 +236,7 @@ static void scene_draw(SubGhzApp *app)
     {
         /* No manifest — show hint */
         u8g2_DrawStr(&m1_u8g2, 4, 28, "No remote loaded.");
-        u8g2_DrawStr(&m1_u8g2, 4, 38, "OK = browse .rem");
+        subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Browse", NULL, NULL);
         u8g2_SendBuffer(&m1_u8g2);
         return;
     }
@@ -262,11 +263,6 @@ static void scene_draw(SubGhzApp *app)
     /* DOWN button (bottom-center) */
     u8g2_DrawStr(&m1_u8g2, 32, 47, "\x19");  /* ↓ glyph */
     u8g2_DrawStr(&m1_u8g2, 42, 47, BTN_NAME(app, REM_BTN_DOWN));
-
-    /* Hint — TX status itself is shown by the Transmitter scene when
-     * a button is pressed, so this scene
-     * just shows what to do. */
-    u8g2_DrawStr(&m1_u8g2, 4, 62, "Press to send");
 
     u8g2_SendBuffer(&m1_u8g2);
 }

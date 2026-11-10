@@ -18,6 +18,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_fw_update.h"
 #include "m1_fw_update_bl.h"
 #include "m1_storage.h"
@@ -438,13 +439,9 @@ void firmware_swap_banks(void)
             sprintf(line2, "Swap to Bank %d?", target_bank);
             u8g2_DrawStr(&m1_u8g2, 4, 36, line2);
 
-            m1_info_box_display_init(false);
-            m1_info_box_display_draw(INFO_BOX_ROW_1, (const uint8_t *)"OK=Swap  BACK=Cancel");
+            m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Swap", NULL, NULL);
         } else {
             u8g2_DrawStr(&m1_u8g2, 4, 36, "Bank empty!");
-
-            m1_info_box_display_init(false);
-            m1_info_box_display_draw(INFO_BOX_ROW_1, (const uint8_t *)"No FW. BACK=Cancel");
         }
     } while (m1_u8g2_nextpage());
 
