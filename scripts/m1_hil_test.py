@@ -435,7 +435,8 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
     artifacts = output_dir / case.test_id
     artifacts.mkdir(parents=True, exist_ok=True)
     m1_resume.start(case.test_id, output_dir, fresh=fresh)
-    m1_ux_audit.start(case.test_id, output_dir, ux_audit)
+    m1_ux_audit.start(case.test_id, output_dir, ux_audit,
+                      fresh=fresh, version=m1_resume._version(case.test_id))
     try:
         with connect(port, baud, timeout=10) as client:
             stage = "reboot"

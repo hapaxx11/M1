@@ -61,8 +61,27 @@ class TestUxGeometry(unittest.TestCase):
             ux.observe(compliant_frame())
             ux.evaluate("Synthetic scene")
             ux.finish()
-            results = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
-        self.assertEqual([{"label": "Synthetic scene", "findings": []}], results)
+            data = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
+        self.assertEqual("1", data["format"])
+        self.assertEqual([{"label": "Synthetic scene", "findings": []}], data["results"])
+
+    def test_resume_preserves_findings_and_fresh_clears_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            ux.start("demo", root, True, version="v1")
+            ux.observe(compliant_frame())
+            ux.evaluate("First")
+            ux.finish()
+            ux.start("demo", root, True, version="v1")
+            ux.evaluate("Second")
+            ux.finish()
+            data = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
+            self.assertEqual(["First", "Second"], [item["label"] for item in data["results"]])
+            ux.start("demo", root, True, fresh=True, version="v1")
+            ux.evaluate("Second")
+            ux.finish()
+            data = json.loads((root / "demo-ux.json").read_text(encoding="utf-8"))
+            self.assertEqual(["Second"], [item["label"] for item in data["results"]])
 
 if __name__ == "__main__":
     unittest.main()

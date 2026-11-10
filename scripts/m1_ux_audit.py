@@ -9,13 +9,24 @@ from pathlib import Path
 _state: dict[str, object] = {}
 
 
-def start(test_id: str, directory: Path, enabled: bool) -> None:
+def start(test_id: str, directory: Path, enabled: bool,
+          fresh: bool = False, version: str = "") -> None:
     global _state
+    path = directory / f"{test_id}-ux.json"
+    results = []
+    if enabled and not fresh and path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("format") == "1" and data.get("version") == version:
+                results = data.get("results", [])
+        except (OSError, ValueError, TypeError):
+            pass
     _state = {
         "enabled": enabled,
-        "path": directory / f"{test_id}-ux.json",
+        "path": path,
+        "version": version,
         "frame": None,
-        "results": [],
+        "results": results,
     }
 
 
@@ -57,6 +68,7 @@ def evaluate(label: str) -> None:
         return
     frame = _state.get("frame")
     findings = ["no-destination-frame"] if frame is None else analyze(frame)
+    _state["results"] = [item for item in _state["results"] if item["label"] != label]
     _state["results"].append({"label": label, "findings": findings})
     _state["frame"] = None
     if findings:
@@ -67,7 +79,11 @@ def finish() -> None:
     if _state.get("enabled"):
         path = _state["path"]
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(_state["results"], indent=2) + "\n", encoding="utf-8")
+        path.write_text(json.dumps({
+            "format": "1",
+            "version": _state["version"],
+            "results": _state["results"],
+        }, indent=2) + "\n", encoding="utf-8")
         count = sum(bool(item["findings"]) for item in _state["results"])
         print(f"UX REVIEW: {count} destinations need source review", flush=True)
     _state.clear()

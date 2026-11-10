@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import m1_ux_audit
 from m1_hil import M1Hil
 from m1_resume import log_pass, resume_targets, should_run
 from m1_bt_menu_audit import (
@@ -98,7 +99,7 @@ def _run_ir_saved_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
         if selection == 4:
             _click(client, "down", selection)
             _click(client, "ok")
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
         else:
@@ -164,7 +165,8 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
     if should_run("Infrared/Custom Remote/New Remote (cancel)"):
         print("RUN  Infrared/Custom Remote/New Remote (cancel)", flush=True)
         client = _open_custom_root(client)
-        _custom_new_remote_vkb(client)
+        keyboard = _custom_new_remote_vkb(client)
+        m1_ux_audit.observe(keyboard)
         log_pass("Infrared/Custom Remote/New Remote (cancel)")
 
     client, present = _open_custom_remote(client)
@@ -178,7 +180,7 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
         if selection == 2:
             _click(client, "down", selection)
             _click(client, "ok")
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
         else:
@@ -197,7 +199,7 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
         if selection == 2:
             _click(client, "down", selection)
             _click(client, "ok")
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
         else:
@@ -211,6 +213,7 @@ def _audit_gpio_control(client: M1Hil) -> None:
     for _attempt in range(2):
         _click(client, "ok")
         _wait_title(client, expected_title, 4.0)
+        m1_ux_audit.observe(_frame(client))
         client.info()
 
 
@@ -221,6 +224,7 @@ def _audit_power_toggle(client: M1Hil, selection: int) -> None:
     changed = _wait_change(client, original, 4.0)
     if changed == original:
         raise AssertionError("power rail did not toggle")
+    m1_ux_audit.observe(changed)
     _click(client, "ok")
     restored = _wait_change(client, changed, 4.0)
     _click(client, "up", selection)
@@ -271,7 +275,7 @@ def run(client: M1Hil) -> str:
         if should_run("BadUSB script picker"):
             print("RUN  BadUSB script picker", flush=True)
             client = _reboot_menu(client, 7)
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
             log_pass("BadUSB script picker")
@@ -280,6 +284,7 @@ def run(client: M1Hil) -> str:
             print("RUN  Apps browser", flush=True)
             client = _reboot_main(client)
             if _open_apps_menu(client):
+                m1_ux_audit.observe(_frame(client))
                 _click(client, "back")
                 _frame(client)
                 log_pass("Apps browser")

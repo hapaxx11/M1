@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import m1_ux_audit
 from m1_hil import M1Hil
 from m1_resume import log_pass, resume_targets
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
@@ -80,7 +81,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         if selection == 5:
             _click(client, "down", selection)
             _click(client, "ok")
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
         else:

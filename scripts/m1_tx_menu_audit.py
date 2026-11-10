@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
+import m1_ux_audit
 from m1_resume import log_pass, resume_targets, should_run
+from m1_wifi_menu_audit import _wait_change
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_bluetooth, _reboot_menu
 from m1_wifi_menu_audit import _audit_path as _audit_wifi_path
 from m1_wifi_menu_audit import _reboot_wifi, _select_target, _title_crc
@@ -51,100 +53,104 @@ SKIPPED = (
 )
 
 
-def _run_wifi(client: M1Hil) -> M1Hil:
+def _run_wifi(state: dict) -> None:
     for label, path in resume_targets(WIFI_TX):
         print(f"RUN  {label}", flush=True)
-        client = _reboot_wifi(client)
-        _audit_wifi_path(client, path, 12.0, reentry=False)
+        state["client"] = _reboot_wifi(state["client"])
+        _audit_wifi_path(state["client"], path, 12.0, reentry=False)
         log_pass(label)
 
     for label, selection in resume_targets(WIFI_TARGET_TX):
         print(f"RUN  {label}", flush=True)
-        client = _reboot_wifi(client)
-        wifi_title = _title_crc(_frame(client))
-        if _select_target(client, wifi_title) is None:
+        state["client"] = _reboot_wifi(state["client"])
+        wifi_title = _title_crc(_frame(state["client"]))
+        if _select_target(state["client"], wifi_title) is None:
             raise AssertionError("no target available for authorized transmit audit")
-        _audit_wifi_path(client, (selection,), 12.0,
+        _audit_wifi_path(state["client"], (selection,), 12.0,
                          ancestor_titles=(wifi_title,), reentry=False)
         log_pass(label)
-    return client
 
 
-def _run_bluetooth(client: M1Hil) -> M1Hil:
+def _run_bluetooth(state: dict) -> None:
     for label, path in resume_targets(BT_TX):
         print(f"RUN  {label}", flush=True)
-        client = _reboot_bluetooth(client)
-        _audit_path(client, path, False, 10.0, reentry=False)
+        state["client"] = _reboot_bluetooth(state["client"])
+        _audit_path(state["client"], path, False, 10.0, reentry=False)
         log_pass(label)
-    return client
 
 
-def _run_subghz(client: M1Hil) -> M1Hil:
+def _run_subghz(state: dict) -> None:
     for label, path in resume_targets(SUBGHZ_TX):
         print(f"RUN  {label}", flush=True)
-        client = _reboot_menu(client, 0)
-        _audit_path(client, path, False, 10.0, reentry=False)
+        state["client"] = _reboot_menu(state["client"], 0)
+        _audit_path(state["client"], path, False, 10.0, reentry=False)
         log_pass(label)
 
     if should_run("Sub-GHz/Playlist transmission"):
         label = "Sub-GHz/Playlist transmission"
         print(f"RUN  {label}", flush=True)
-        client = _reboot_menu(client, 0)
-        _click(client, "down", 3)
-        _click(client, "ok")
-        if not select_first_file(client):
+        state["client"] = _reboot_menu(state["client"], 0)
+        _click(state["client"], "down", 3)
+        _click(state["client"], "ok")
+        if not select_first_file(state["client"]):
             raise AssertionError("no saved playlist file")
-        _click(client, "ok")
-        _frame(client)
-        _click(client, "back")
-        _frame(client)
+        _click(state["client"], "ok")
+        ready = _frame(state["client"])
+        _click(state["client"], "ok")
+        active = _wait_change(state["client"], ready, 10.0)
+        if active == ready:
+            raise AssertionError("playlist did not enter transmission")
+        m1_ux_audit.observe(active)
+        _click(state["client"], "back")
+        stopped = _wait_change(state["client"], active, 10.0)
+        if stopped == active:
+            raise AssertionError("playlist transmission did not stop")
         log_pass(label)
 
     if should_run("Sub-GHz/Saved Emulate"):
-        client, raw_title = _read_raw_title(client)
-        client = _reboot_menu(client, 0)
-        if _select_subghz_saved(client, raw_title) != "parsed":
+        state["client"], raw_title = _read_raw_title(state["client"])
+        state["client"] = _reboot_menu(state["client"], 0)
+        if _select_subghz_saved(state["client"], raw_title) != "parsed":
             raise AssertionError("parsed saved file required for transmit audit")
-        _audit_path(client, (0,), False, 10.0, reentry=False)
+        _audit_path(state["client"], (0,), False, 10.0, reentry=False)
         log_pass("Sub-GHz/Saved Emulate")
-    return client
 
 
-def _run_ir_nfc(client: M1Hil) -> M1Hil:
+def _run_ir_nfc(state: dict) -> None:
     if should_run("Infrared/ESL/Broadcast Page 0"):
-        client = _reboot_menu(client, 3)
-        _audit_path(client, (4, 0, 0), False, 10.0, reentry=False)
+        state["client"] = _reboot_menu(state["client"], 3)
+        _audit_path(state["client"], (4, 0, 0), False, 10.0, reentry=False)
         log_pass("Infrared/ESL/Broadcast Page 0")
 
     if should_run("Infrared/Send All"):
-        client, present, command_title = _open_ir_saved(client)
+        state["client"], present, command_title = _open_ir_saved(state["client"])
         if not present:
             raise AssertionError("saved IR file required for transmit audit")
-        _audit_path(client, (0,), False, 10.0, reentry=False,
+        _audit_path(state["client"], (0,), False, 10.0, reentry=False,
                     ancestor_titles=(command_title,))
         log_pass("Infrared/Send All")
 
     if should_run("NFC/Saved Emulate UID"):
-        client = _reboot_menu(client, 2)
-        if not _select_nfc_saved(client):
+        state["client"] = _reboot_menu(state["client"], 2)
+        if not _select_nfc_saved(state["client"]):
             raise AssertionError("valid NFC file required for transmit audit")
-        _audit_path(client, (0,), False, 10.0, reentry=False)
+        _audit_path(state["client"], (0,), False, 10.0, reentry=False)
         log_pass("NFC/Saved Emulate UID")
-    return client
 
 
 def run(client: M1Hil) -> str:
     completed = 0
+    state = {"client": client}
     try:
-        client = _run_wifi(client)
+        _run_wifi(state)
         completed += len(WIFI_TX) + len(WIFI_TARGET_TX)
-        client = _run_bluetooth(client)
+        _run_bluetooth(state)
         completed += len(BT_TX)
-        client = _run_subghz(client)
+        _run_subghz(state)
         completed += len(SUBGHZ_TX) + 2
-        client = _run_ir_nfc(client)
+        _run_ir_nfc(state)
         completed += 3
-        _frame(client)
+        _frame(state["client"])
     finally:
-        client.close()
+        state["client"].close()
     return f"{completed} transmit destinations responsive; skipped: {', '.join(SKIPPED)}"

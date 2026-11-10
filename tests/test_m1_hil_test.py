@@ -506,6 +506,52 @@ class TestResume(unittest.TestCase):
             self.assertFalse(any(item.startswith(unexpected) for item in skipped))
 
 
+class TestTransmitReview(unittest.TestCase):
+    def test_playlist_requires_start_and_bounded_stop(self):
+        client = mock.MagicMock()
+        state = {"client": client}
+        with (
+            mock.patch.object(tx_audit, "should_run", side_effect=(True, False)),
+            mock.patch.object(tx_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(tx_audit, "select_first_file", return_value=True),
+            mock.patch.object(tx_audit, "_frame", side_effect=(b"ready", b"stopped")),
+            mock.patch.object(tx_audit, "_wait_change", side_effect=(b"active", b"stopped")),
+            mock.patch.object(tx_audit, "_click") as click,
+            mock.patch.object(tx_audit.m1_ux_audit, "observe") as observe,
+            mock.patch.object(tx_audit, "log_pass"),
+        ):
+            tx_audit._run_subghz(state)
+        self.assertEqual(3, click.call_args_list.count(mock.call(client, "ok")))
+        self.assertEqual(1, click.call_args_list.count(mock.call(client, "back")))
+        observe.assert_called_once_with(b"active")
+
+    def test_cleanup_closes_latest_reconnected_client(self):
+        original = mock.MagicMock()
+        latest = mock.MagicMock()
+
+        def reconnect_then_fail(state):
+            state["client"] = latest
+            raise RuntimeError("interrupt")
+
+        with mock.patch.object(tx_audit, "_run_wifi", side_effect=reconnect_then_fail):
+            with self.assertRaisesRegex(RuntimeError, "interrupt"):
+                tx_audit.run(original)
+        latest.close.assert_called_once_with()
+        original.close.assert_not_called()
+
+    def test_lcd_destination_is_observed_before_navigation(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(settings_audit, "_frame", return_value=b"lcd"),
+            mock.patch.object(settings_audit, "_title_crc", return_value=1),
+            mock.patch.object(settings_audit, "_click"),
+            mock.patch.object(settings_audit, "_wait_title", return_value=b"lcd"),
+            mock.patch.object(settings_audit.m1_ux_audit, "observe") as observe,
+        ):
+            settings_audit._audit_lcd_row(client, 0)
+        observe.assert_called_once_with(b"lcd")
+
+
 class TestScreenTransitions(unittest.TestCase):
     @mock.patch("m1_hil_test.time.sleep", return_value=None)
     @mock.patch("m1_hil_test.capture", side_effect=[b"old", b"old", b"new"])
