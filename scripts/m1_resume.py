@@ -22,6 +22,8 @@ _SHARED_SOURCES = (
     "m1_saved_item_audit.py",
     "m1_bt_menu_audit.py",
     "m1_wifi_menu_audit.py",
+    "m1_hil.py",
+    "m1_hil_test.py",
 )
 _state: dict[str, object] = {}
 

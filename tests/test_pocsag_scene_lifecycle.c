@@ -41,7 +41,7 @@ void test_pocsag_pulse_drain_is_bounded(void)
     TEST_ASSERT_NULL(strstr(scene, "} while (true);"));
 }
 
-void test_recording_stop_drains_every_pending_sample(void)
+void test_recording_stop_drains_and_allocation_failure_cleans_up(void)
 {
     char path[512];
     snprintf(path, sizeof(path), "%s/m1_csrc/m1_sub_ghz.c", M1_ROOT);
@@ -57,16 +57,23 @@ void test_recording_stop_drains_every_pending_sample(void)
     content[size] = '\0';
     fclose(fp);
 
+    const char *flush = strstr(content, "uint32_t sub_ghz_raw_recording_flush_ext(void)");
+    TEST_ASSERT_NOT_NULL(flush);
+    TEST_ASSERT_NOT_NULL(strstr(flush, "if (sub_ghz_rx_raw_save(false, false) != 0U)"));
+    TEST_ASSERT_NOT_NULL(strstr(flush, "return 0U;"));
+
     const char *stop = strstr(content, "void sub_ghz_raw_recording_stop_ext(void)");
     TEST_ASSERT_NOT_NULL(stop);
     TEST_ASSERT_NOT_NULL(strstr(stop, "while (sub_ghz_raw_recording_flush_ext() > 0U)"));
     TEST_ASSERT_NOT_NULL(strstr(stop, "sub_ghz_rx_raw_save(false, true);"));
+    TEST_ASSERT_NOT_NULL(strstr(stop, "m1_sdm_task_stop();"));
+    TEST_ASSERT_NOT_NULL(strstr(stop, "m1_sdm_task_deinit();"));
 }
 
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_pocsag_pulse_drain_is_bounded);
-    RUN_TEST(test_recording_stop_drains_every_pending_sample);
+    RUN_TEST(test_recording_stop_drains_and_allocation_failure_cleans_up);
     return UNITY_END();
 }

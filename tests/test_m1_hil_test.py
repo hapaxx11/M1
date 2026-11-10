@@ -424,7 +424,45 @@ class TestResume(unittest.TestCase):
         names = {path.name for path in m1_resume._source_paths("nfc-menu-audit")}
         self.assertIn("m1_nfc_menu_audit.py", names)
         self.assertIn("m1_saved_item_audit.py", names)
+        self.assertIn("m1_hil.py", names)
+        self.assertIn("m1_hil_test.py", names)
         self.assertNotIn("m1_subghz_menu_audit.py", names)
+
+    def test_actual_misc_labels_survive_checkpoint_reload(self):
+        groups = (
+            misc_audit.IR_TARGETS,
+            misc_audit.IR_SAVED_ACTIONS,
+            misc_audit.CUSTOM_REMOTE_ACTIONS,
+            misc_audit.CUSTOM_BUTTON_ACTIONS,
+            misc_audit.GPIO_TARGETS,
+            misc_audit.GAMES_TARGETS,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            for targets in groups:
+                with self.subTest(label=targets[0][0]):
+                    m1_resume.start("misc-menu-audit", root, fresh=True)
+                    m1_resume.log_pass(targets[0][0])
+                    m1_resume.finish(False)
+                    m1_resume.start("misc-menu-audit", root)
+                    remaining = m1_resume.resume_targets(targets)
+                    self.assertNotIn(targets[0][0], {target[0] for target in remaining})
+                    self.assertIn(targets[1][0], {target[0] for target in remaining})
+                    m1_resume.finish(False)
+
+    def test_completed_manual_editor_is_skipped_after_checkpoint_reload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            targets = subghz_audit.ADD_MANUALLY_TARGETS
+            self.assertEqual("Add Manually/CAME Atomo 433 editor (cancel)", targets[0][0])
+            m1_resume.start("subghz-menu-audit", root, fresh=True)
+            m1_resume.log_pass(targets[0][0])
+            m1_resume.finish(False)
+            m1_resume.start("subghz-menu-audit", root)
+            remaining = m1_resume.resume_targets(targets)
+            self.assertNotIn(targets[0][0], {target[0] for target in remaining})
+            self.assertIn(targets[1][0], {target[0] for target in remaining})
+            m1_resume.finish(False)
 
     def test_moreraw_skip_matches_saved_file_type(self):
         client = mock.MagicMock()

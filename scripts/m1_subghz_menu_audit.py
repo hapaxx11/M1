@@ -56,7 +56,7 @@ MORE_RAW_ACTIONS = (
 )
 
 ADD_MANUALLY_TARGETS = tuple(
-    (label, index)
+    (f"Add Manually/{label} editor (cancel)", index)
     for index, label in enumerate((
         "CAME Atomo 433", "Nice FloR-S 433", "Alutech AT-4N 433",
         "DITEC GOL4 433", "KingGates Stylo4k 433", "Princeton 433",
@@ -195,10 +195,10 @@ def run(client: M1Hil) -> str:
             log_pass("Read/Config/Protocol Filter")
 
         for label, selection in resume_targets(ADD_MANUALLY_TARGETS):
-            print(f"RUN  Add Manually/{label} editor (cancel)", flush=True)
+            print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 0)
             _audit_path(client, (10, selection), False, 8.0)
-            log_pass(f"Add Manually/{label} editor (cancel)")
+            log_pass(label)
 
         client = _run_keeloq_editor_chain(client)
 
