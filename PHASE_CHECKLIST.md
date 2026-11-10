@@ -18,10 +18,10 @@
 
 ### Phase 3 — Host validation and PR update
 - **Description**: Run host suites and build, then commit, push, and document source-only evidence.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Validate excluded scene UX fixes`
 
 ### Phase 4 — Finalize
 - **Description**: Remove this temporary checklist before updating the draft PR.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
