@@ -82,6 +82,8 @@ void test_back_hints_are_removed(void)
         "m1_csrc/game_snake.c",
         "m1_csrc/game_tetris.c",
         "m1_csrc/game_trex.c",
+        "m1_csrc/game_pong.c",
+        "m1_csrc/game_2048.c",
         "m1_csrc/m1_rfid.c",
     };
     for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); ++i)
@@ -148,6 +150,9 @@ void test_specialized_action_screens_use_standard_bars(void)
         "m1_csrc/game_trex.c",
         "m1_csrc/game_rps.c",
         "m1_csrc/game_dice.c",
+        "m1_csrc/game_pong.c",
+        "m1_csrc/game_2048.c",
+        "m1_csrc/game_queens.c",
     };
     for (size_t i = 0; i < sizeof(games) / sizeof(games[0]); ++i)
     {
@@ -237,6 +242,50 @@ void test_review_layout_reflow_and_feedback(void)
     free(pager);
 }
 
+void test_excluded_scenes_follow_visual_standards(void)
+{
+    char *bind = read_file("m1_csrc/m1_subghz_scene_bind_wizard.c");
+    assert_absent(bind, "BACK=Retry");
+    assert_absent(bind, "BACK=Exit");
+    assert_absent(bind, "OK=Send");
+    assert_absent(bind, "OK=Next");
+    assert_contains(bind, "subghz_button_bar_draw");
+    assert_contains(bind, "u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 5);");
+    free(bind);
+
+    char *remote = read_file("m1_csrc/m1_subghz_scene_remote.c");
+    assert_absent(remote, "OK = browse .rem");
+    assert_absent(remote, "Press to send");
+    assert_contains(remote, "ok_circle_8x8, \"Browse\"");
+    free(remote);
+
+    char *update = read_file("m1_csrc/m1_fw_update.c");
+    assert_absent(update, "OK=Swap");
+    assert_absent(update, "BACK=Cancel");
+    assert_contains(update, "ok_circle_8x8, \"Swap\"");
+    free(update);
+
+    char *transmitter = read_file("m1_csrc/m1_subghz_scene_transmitter.c");
+    assert_contains(transmitter, "u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);");
+    assert_contains(transmitter, "ok_circle_8x8, \"Send\"");
+    free(transmitter);
+
+    char *receiver = read_file("m1_csrc/m1_subghz_scene_receiver_info.c");
+    assert_contains(receiver, "u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);");
+    assert_absent(receiver, "\"Back\"");
+    free(receiver);
+
+    char *settings = read_file("m1_csrc/m1_subghz_scene_signal_settings.c");
+    assert_contains(settings, "u8g2_DrawStr(&m1_u8g2, 2, 10, \"Signal Settings\");");
+    assert_absent(settings, "\"Back\"");
+    free(settings);
+
+    char *nfc = read_file("m1_csrc/m1_nfc.c");
+    assert_absent(nfc, "BACK=exit");
+    assert_contains(nfc, "ok_circle_8x8, \"Options\"");
+    free(nfc);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -249,5 +298,6 @@ int main(void)
     RUN_TEST(test_legacy_action_hints_are_replaced);
     RUN_TEST(test_subghz_hex_editors_use_standard_bars);
     RUN_TEST(test_review_layout_reflow_and_feedback);
+    RUN_TEST(test_excluded_scenes_follow_visual_standards);
     return UNITY_END();
 }

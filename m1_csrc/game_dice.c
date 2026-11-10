@@ -380,8 +380,7 @@ static bool dice_title_screen(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 10, 38, "Roll 1 or 2 dice");
 
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 18, 52, "OK=Play  BACK=Exit");
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Play", NULL, NULL);
 
     m1_u8g2_nextpage();
 

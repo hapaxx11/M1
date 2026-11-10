@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "m1_games.h"
+#include "m1_button_bar.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -427,7 +428,7 @@ static void g2048_draw_title(void)
 
     u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
     u8g2_DrawStr(&m1_u8g2, 14, 38, "Slide tiles to merge");
-    u8g2_DrawStr(&m1_u8g2, 18, 50, "OK=Start  BACK=Exit");
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Start", NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -463,8 +464,7 @@ static void g2048_draw_game_over(const state_2048_t *s)
     uint8_t sw = u8g2_GetStrWidth(&m1_u8g2, sbuf);
     u8g2_DrawStr(&m1_u8g2, (uint8_t)((GAME_SCREEN_W - sw) / 2), 34, sbuf);
 
-    u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
-    u8g2_DrawStr(&m1_u8g2, 8, 50, "OK=Retry   BACK=Exit");
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Retry", NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -488,7 +488,7 @@ static void g2048_draw_you_win(const state_2048_t *s)
     u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
     u8g2_DrawStr(&m1_u8g2, 6, 34, "You reached 2048!");
     u8g2_DrawStr(&m1_u8g2, 6, 46, "Keep going or quit.");
-    u8g2_DrawStr(&m1_u8g2, 8, 60, "OK=Continue BACK=Exit");
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Continue", NULL, NULL);
 
     m1_u8g2_nextpage();
 }

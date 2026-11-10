@@ -4382,7 +4382,7 @@ static void nfc_extra_read_mfc(void)
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
 		u8g2_DrawStr(&m1_u8g2, 2, 34, line2);
-		u8g2_DrawStr(&m1_u8g2, 2, 48, "OK=options  BACK=exit");
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Options", NULL, NULL);
 		m1_u8g2_nextpage();
 	}
 
