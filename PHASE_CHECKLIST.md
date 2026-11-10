@@ -23,10 +23,10 @@
 
 ### Phase 4 — Full validation
 - **Description**: Run host suites, build and flash firmware, and repeat every safe recursive menu audit on the corrected implementation.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Validate recursive visual UX compliance`
 
 ### Phase 5 — Finalize
 - **Description**: Review the final diff and validation evidence, then remove this temporary checklist before any PR is created.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

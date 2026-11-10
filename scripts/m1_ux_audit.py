@@ -19,10 +19,6 @@ def start(test_id: str, directory: Path, enabled: bool) -> None:
     }
 
 
-def is_enabled() -> bool:
-    return bool(_state.get("enabled"))
-
-
 def observe(framebuffer: bytes) -> None:
     if _state.get("enabled") and len(framebuffer) == 1024:
         _state["frame"] = bytes(framebuffer)

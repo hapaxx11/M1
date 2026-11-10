@@ -41,11 +41,10 @@ BT_TX = (
     ("Bluetooth/BLE Spam/AirTag Spoof", (5, 7)),
 )
 
-SUBGHZ_TX = (
-    ("Sub-GHz/Add Manually/Transmitter", (10, 0, 0)),
-)
+SUBGHZ_TX = ()
 
 SKIPPED = (
+    "Add Manually transmitter handoff (no completed transition or visible error)",
     "Portal credential capture and file-writing wizards",
     "Peer, live-card, captured-pager, decoded-signal, and missing-file fixtures",
     "Destructive operations and unknown user scripts/apps",

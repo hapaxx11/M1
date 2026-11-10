@@ -88,11 +88,16 @@ def _read_raw_title(client: M1Hil) -> tuple[M1Hil, int]:
     return client, _title_crc(_frame(client))
 
 
+_saved_browser_title = 0
+
+
 def _select_saved(client: M1Hil, raw_title: int) -> str | None:
+    global _saved_browser_title
     _click(client, "down", 2)
     _click(client, "ok")
     if not select_first_file(client):
         return None
+    _saved_browser_title = _title_crc(_frame(client))
     _click(client, "ok")
     return "raw" if _title_crc(_frame(client)) == raw_title else "parsed"
 
@@ -123,7 +128,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
                 _frame(client)
             else:
                 _audit_path(client, (selection,), False, 8.0,
-                            reentry=False)
+                            reentry=False, ancestor_titles=(_saved_browser_title,))
             log_pass(label)
         skipped.append("MoreRAW actions (first file is parsed, not RAW)")
 

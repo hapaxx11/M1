@@ -20,6 +20,7 @@ import m1_resume  # noqa: E402
 import m1_saved_item_audit as saved_audit  # noqa: E402
 import m1_settings_menu_audit as settings_audit  # noqa: E402
 import m1_subghz_menu_audit as subghz_audit  # noqa: E402
+import m1_tx_menu_audit as tx_audit  # noqa: E402
 import m1_wifi_menu_audit as wifi_audit  # noqa: E402
 
 
@@ -34,9 +35,16 @@ class TestRegistry(unittest.TestCase):
     def test_active_ble_spam_is_opt_in_only(self):
         default_ids = {case.test_id for case in hil.select_cases(hil.CASES, None)}
         self.assertNotIn("ble-spam", default_ids)
-        self.assertEqual(len(hil.CASES) - 1, len(default_ids))
+        self.assertNotIn("tx-menu-audit", default_ids)
+        self.assertEqual(len(hil.CASES) - 2, len(default_ids))
         explicit_ids = {case.test_id for case in hil.select_cases(hil.CASES, ["ble-spam"])}
         self.assertEqual({"ble-spam"}, explicit_ids)
+        tx_ids = {case.test_id for case in hil.select_cases(hil.CASES, ["tx-menu-audit"])}
+        self.assertEqual({"tx-menu-audit"}, tx_ids)
+
+    def test_tx_transmitter_handoff_limitation_is_explicit(self):
+        self.assertEqual((), tx_audit.SUBGHZ_TX)
+        self.assertIn("Add Manually transmitter handoff", tx_audit.SKIPPED[0])
 
     def test_every_top_level_menu_has_registered_recursive_audit(self):
         expected = {
@@ -335,6 +343,22 @@ class TestAuditSafety(unittest.TestCase):
             mock.patch.object(subghz_audit, "_title_crc", return_value=5678),
         ):
             self.assertEqual("parsed", subghz_audit._select_saved(client, 1234))
+
+    def test_subghz_send_peer_accepts_saved_browser_ancestor(self):
+        client = mock.MagicMock()
+        subghz_audit._saved_browser_title = 1234
+        with (
+            mock.patch.object(subghz_audit, "_read_raw_title", return_value=(client, 1)),
+            mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(subghz_audit, "_select_saved", return_value="parsed"),
+            mock.patch.object(subghz_audit, "resume_targets",
+                              return_value=(("Saved/Send to Peer", 1),)),
+            mock.patch.object(subghz_audit, "_audit_path") as audit_path,
+        ):
+            subghz_audit._run_saved_actions(client)
+        audit_path.assert_called_once_with(
+            client, (1,), False, 8.0, reentry=False, ancestor_titles=(1234,),
+        )
 
     def test_recursive_audits_exclude_auto_start_rf_actions(self):
         self.assertFalse(any(label.startswith("Attacks/") or "Flood" in label

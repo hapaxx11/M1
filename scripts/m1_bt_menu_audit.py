@@ -49,25 +49,7 @@ def _open_bluetooth(client: M1Hil) -> int:
     return _title_crc(_frame(client))
 
 
-_ux_main_title: int | None = None
-
-
 def _reboot_main(client: M1Hil) -> M1Hil:
-    global _ux_main_title
-    if m1_ux_audit.is_enabled():
-        current = _frame(client)
-        if _ux_main_title is None:
-            _click(client, "ok")
-            current = _wait_change(client, current, 4.0)
-            _ux_main_title = _title_crc(current)
-        elif _title_crc(current) != _ux_main_title:
-            _click(client, "back")
-            current = _wait_change(client, current, 4.0)
-            if _title_crc(current) != _ux_main_title:
-                _click(client, "ok")
-                current = _wait_change(client, current, 4.0)
-        if _title_crc(current) == _ux_main_title:
-            return client
     port = client.port.port
     baud = client.port.baudrate
     try:
