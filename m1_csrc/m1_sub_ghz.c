@@ -2807,7 +2807,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 #define FREQAN_RSSI_CEIL    (-30)   /* dBm upper bound on bar scale */
 #define FREQAN_BAR_X         3      /* bar frame left edge (px) */
 #define FREQAN_BAR_W        122     /* bar frame width (px) */
-#define FREQAN_BAR_Y         38     /* bar frame top edge (px) */
+#define FREQAN_BAR_Y         32     /* bar frame top edge (px) */
 #define FREQAN_BAR_H         8      /* bar frame height (px) */
 /* Threshold defaults */
 #define FREQAN_THR_DEFAULT  (-75)   /* initial threshold (dBm) */
@@ -3017,7 +3017,7 @@ void sub_ghz_frequency_reader(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             snprintf(str, sizeof(str), "%d dBm%s",
                      (int)best_rssi, has_signal ? "  Signal!" : "");
-            u8g2_DrawStr(&m1_u8g2, 0, 35, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 30, str);
 
             /* Bar: outline frame */
             u8g2_DrawFrame(&m1_u8g2, FREQAN_BAR_X, FREQAN_BAR_Y,
@@ -3036,7 +3036,7 @@ void sub_ghz_frequency_reader(void)
             /* Threshold value and active band label */
             snprintf(str, sizeof(str), "Thr:%d  %s",
                      (int)threshold, bands[band_idx].label);
-            u8g2_DrawStr(&m1_u8g2, 0, 48, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 51, str);
 
             subghz_button_bar_draw(arrowleft_8x8, "Band", ok_circle_8x8, "Hold",
                                    arrowright_8x8, NULL);
@@ -4548,10 +4548,10 @@ void sub_ghz_spectrum_analyzer(void)
             /* Row below bars: range labels */
             snprintf(info_str, sizeof(info_str), "%lu.%01lu",
                      lo_hz / 1000000UL, (lo_hz % 1000000UL) / 100000UL);
-            u8g2_DrawStr(&m1_u8g2, 0, 48, info_str);
+            u8g2_DrawStr(&m1_u8g2, 0, 51, info_str);
             snprintf(info_str, sizeof(info_str), "%lu.%01lu",
                      hi_hz / 1000000UL, (hi_hz % 1000000UL) / 100000UL);
-            u8g2_DrawStr(&m1_u8g2, 90, 48, info_str);
+            u8g2_DrawStr(&m1_u8g2, 90, 51, info_str);
 
             if (custom_view)
                 subghz_button_bar_draw(arrowleft_8x8, "Pan", ok_circle_8x8, "Peak",

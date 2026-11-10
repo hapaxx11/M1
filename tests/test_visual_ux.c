@@ -210,6 +210,33 @@ void test_subghz_hex_editors_use_standard_bars(void)
     }
 }
 
+void test_review_layout_reflow_and_feedback(void)
+{
+    char *subghz = read_file("m1_csrc/m1_sub_ghz.c");
+    assert_contains(subghz, "#define FREQAN_BAR_Y         32");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 30, str);");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 51, str);");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 51, info_str);");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 90, 51, info_str);");
+    free(subghz);
+
+    char *analyzer = read_file("m1_csrc/m1_subghz_scene_proto_pirate_analyzer.c");
+    assert_contains(analyzer, "#define RA_BAR_Y    29");
+    assert_contains(analyzer, "u8g2_DrawStr(&m1_u8g2, 2, 43, line);");
+    assert_contains(analyzer, "u8g2_DrawStr(&m1_u8g2, 2, 51, line);");
+    free(analyzer);
+
+    char *download = read_file("m1_csrc/m1_esp32_fw_download.c");
+    assert_contains(download, "u8g2_DrawStr(&m1_u8g2, 4, 48, \"Flash via Image File\");");
+    assert_contains(download, "ok_circle_8x8, \"Next\"");
+    free(download);
+
+    char *pager = read_file("m1_csrc/m1_subghz_scene_restaurant_pager.c");
+    assert_contains(pager, "state->status_pending = (status != NULL");
+    assert_contains(pager, "m1_message_box(&m1_u8g2, screen, state->status");
+    free(pager);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -221,5 +248,6 @@ int main(void)
     RUN_TEST(test_specialized_action_screens_use_standard_bars);
     RUN_TEST(test_legacy_action_hints_are_replaced);
     RUN_TEST(test_subghz_hex_editors_use_standard_bars);
+    RUN_TEST(test_review_layout_reflow_and_feedback);
     return UNITY_END();
 }

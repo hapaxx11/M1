@@ -75,6 +75,7 @@ struct restaurant_pager_app_state {
     uint16_t batch_max;
     restaurant_pager_entry_t batch_template;
     char status[24];
+    bool status_pending;
 };
 
 static const char *const action_labels[RESTAURANT_PAGER_ACTION_COUNT] = {
@@ -137,6 +138,7 @@ static void set_status(struct restaurant_pager_app_state *state,
         return;
     (void)snprintf(state->status, sizeof(state->status), "%s",
                    (status != NULL) ? status : "");
+    state->status_pending = (status != NULL && status[0] != '\0');
 }
 
 static restaurant_pager_entry_t *selected_entry(SubGhzApp *app)
@@ -809,6 +811,13 @@ static void draw(SubGhzApp *app)
         bool list_view = state != NULL &&
             (state->view == RESTAURANT_PAGER_VIEW_ACTIONS ||
              state->view == RESTAURANT_PAGER_VIEW_SETTINGS);
+        if (list_view && state->status_pending)
+        {
+            m1_u8g2_nextpage();
+            m1_message_box(&m1_u8g2, screen, state->status, "", "OK");
+            state->status_pending = false;
+            continue;
+        }
         if (!list_view)
         {
             subghz_status_bar_draw(frequency, "OOK", screen, false);
