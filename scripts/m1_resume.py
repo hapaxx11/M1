@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import m1_ux_audit
+
 _VERSION = "1"
 _AUDIT_SOURCES = {
     "wifi-menu-audit": "m1_wifi_menu_audit.py",
@@ -16,6 +18,7 @@ _AUDIT_SOURCES = {
     "settings-menu-audit": "m1_settings_menu_audit.py",
     "misc-menu-audit": "m1_misc_menu_audit.py",
     "subghz-menu-audit": "m1_subghz_menu_audit.py",
+    "tx-menu-audit": "m1_tx_menu_audit.py",
 }
 _SHARED_SOURCES = (
     "m1_resume.py",
@@ -24,6 +27,7 @@ _SHARED_SOURCES = (
     "m1_wifi_menu_audit.py",
     "m1_hil.py",
     "m1_hil_test.py",
+    "m1_ux_audit.py",
 )
 _state: dict[str, object] = {}
 
@@ -80,6 +84,7 @@ def resume_targets(targets):
 
 def log_pass(label: str) -> None:
     print(f"PASS {label}", flush=True)
+    m1_ux_audit.evaluate(label)
     if not _state:
         return
     path = _state["path"]

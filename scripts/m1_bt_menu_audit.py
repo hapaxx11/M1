@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 
+import m1_ux_audit
 from m1_hil import BUTTONS, M1Hil, connect
 from m1_resume import log_pass, resume_targets
 from m1_wifi_menu_audit import _click, _frame, _title_crc, _wait_change, _wait_title
@@ -48,7 +49,25 @@ def _open_bluetooth(client: M1Hil) -> int:
     return _title_crc(_frame(client))
 
 
+_ux_main_title: int | None = None
+
+
 def _reboot_main(client: M1Hil) -> M1Hil:
+    global _ux_main_title
+    if m1_ux_audit.is_enabled():
+        current = _frame(client)
+        if _ux_main_title is None:
+            _click(client, "ok")
+            current = _wait_change(client, current, 4.0)
+            _ux_main_title = _title_crc(current)
+        elif _title_crc(current) != _ux_main_title:
+            _click(client, "back")
+            current = _wait_change(client, current, 4.0)
+            if _title_crc(current) != _ux_main_title:
+                _click(client, "ok")
+                current = _wait_change(client, current, 4.0)
+        if _title_crc(current) == _ux_main_title:
+            return client
     port = client.port.port
     baud = client.port.baudrate
     try:
@@ -137,6 +156,7 @@ def _audit_path(client: M1Hil, path: tuple[int, ...], edit: bool,
         if current == previous:
             raise AssertionError("editor did not change after OK")
         previous = current
+    m1_ux_audit.observe(previous)
     previous = exit_to_parent(previous)
     if reentry:
         for _selection in path:

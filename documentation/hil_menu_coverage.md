@@ -26,11 +26,13 @@ in `tests/test_m1_hil_test.py` at the same time.
 | WiFi, Target, Net Scan, General, 802.15.4, and Peer Link | `wifi-menu-audit` | `wifi-airtime`, `wifi-peer-link` |
 | Bluetooth, sniffers, spam, detectors, GATT, Bad-BT, and saved devices | `bluetooth-menu-audit` | `ble-signal-finder`, `ble-gatt-discovery`, `ble-airtag-monitor`, `ble-spam` |
 | Settings, LCD, Storage, Power, STM32/ESP32 update screens, Bluetooth Direct | `settings-menu-audit` | — |
+| Authorized transmit-only scenes across WiFi, Bluetooth, NFC, Infrared, and Sub-GHz | `tx-menu-audit` | — |
 
 Run `python scripts/m1_hil_test.py --list` for the registered case IDs and
 `python scripts/m1_hil_test.py --test <id>` to run one case. Do not invent test
-IDs in a PR or review. The active `ble-spam` case is opt-in: it runs only when
-selected explicitly and is excluded from default runs and unfiltered PR updates.
+IDs in a PR or review. The active `ble-spam` and `tx-menu-audit` cases are opt-in:
+they run only when selected explicitly and are excluded from default runs and
+unfiltered PR updates.
 
 Recursive audits atomically checkpoint each passed destination under
 `build/hil-results/`. After a failure, rerun the same command to skip passed
@@ -39,6 +41,11 @@ pending, and the checkpoint is deleted after a complete pass. Use `--fresh` to
 ignore an existing checkpoint and deliberately rerun every destination. Changes
 to an audit or its shared helpers invalidate that audit's older checkpoints, so
 stale results cannot hide changed coverage and unrelated audits stay resumable.
+
+Add `--ux-audit` to record privacy-preserving visual-geometry findings alongside
+navigation results. The `<test-id>-ux.json` report contains only static labels and
+finding codes; no framebuffer content is persisted. Review every finding against
+the scene implementation before declaring compliance or making a correction.
 
 ## New menu-feature checklist
 
