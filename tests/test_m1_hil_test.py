@@ -16,6 +16,7 @@ import m1_bt_menu_audit as bt_audit  # noqa: E402
 import m1_misc_menu_audit as misc_audit  # noqa: E402
 import m1_nfc_menu_audit as nfc_audit  # noqa: E402
 import m1_rfid_menu_audit as rfid_audit  # noqa: E402
+import m1_saved_item_audit as saved_audit  # noqa: E402
 import m1_settings_menu_audit as settings_audit  # noqa: E402
 import m1_subghz_menu_audit as subghz_audit  # noqa: E402
 import m1_wifi_menu_audit as wifi_audit  # noqa: E402
@@ -46,8 +47,8 @@ class TestRegistry(unittest.TestCase):
             self.assertIn(menu, guide)
 
     def test_wifi_audit_covers_the_static_scene_tree(self):
-        self.assertEqual(57, len(wifi_audit.TOP_LEVEL_TARGETS))
-        self.assertEqual(6, len(wifi_audit.TARGET_ACTIONS))
+        self.assertEqual(48, len(wifi_audit.TOP_LEVEL_TARGETS))
+        self.assertEqual(2, len(wifi_audit.TARGET_ACTIONS))
         self.assertEqual(5, len(wifi_audit.NETSCAN_ACTIONS))
         labels = [label for label, _path in wifi_audit.TOP_LEVEL_TARGETS]
         self.assertEqual(len(labels), len(set(labels)))
@@ -55,7 +56,7 @@ class TestRegistry(unittest.TestCase):
             self.assertIn(path[0], range(7))
 
     def test_bluetooth_audit_covers_the_static_scene_tree(self):
-        self.assertEqual(33, len(bt_audit.TOP_LEVEL_TARGETS))
+        self.assertEqual(22, len(bt_audit.TOP_LEVEL_TARGETS))
         labels = [label for label, _path, _edit in bt_audit.TOP_LEVEL_TARGETS]
         self.assertEqual(len(labels), len(set(labels)))
         for _label, path, _edit in bt_audit.TOP_LEVEL_TARGETS:
@@ -73,7 +74,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_settings_audit_covers_safe_destinations(self):
         self.assertEqual(26, len(settings_audit.TOP_LEVEL_TARGETS))
-        self.assertEqual(6, len(settings_audit.SKIPPED_DESTRUCTIVE))
+        self.assertEqual(7, len(settings_audit.SKIPPED_DESTRUCTIVE))
         labels = [label for label, _path, _edit in settings_audit.TOP_LEVEL_TARGETS]
         self.assertEqual(len(labels), len(set(labels)))
         for _label, path, _edit in settings_audit.TOP_LEVEL_TARGETS:
@@ -95,7 +96,7 @@ class TestRegistry(unittest.TestCase):
                 self.assertIn(path[0], range(count))
 
     def test_subghz_audit_covers_safe_destinations(self):
-        self.assertEqual(32, len(subghz_audit.TOP_LEVEL_TARGETS))
+        self.assertEqual(29, len(subghz_audit.TOP_LEVEL_TARGETS))
         self.assertEqual(20, len(subghz_audit.ADD_MANUALLY_TARGETS))
         self.assertEqual(3, len(subghz_audit.KEELOQ_EDITOR_CHAIN))
         self.assertEqual(4, len(subghz_audit.SAVED_ACTIONS))
@@ -117,7 +118,12 @@ class TestRegistry(unittest.TestCase):
 
         with (
             mock.patch.object(misc_audit, "_reboot_menu", side_effect=reopen),
+            mock.patch.object(misc_audit, "_reboot_main",
+                              side_effect=lambda current: reopen(current, 9)),
+            mock.patch.object(misc_audit, "_open_apps_menu", return_value=False),
             mock.patch.object(misc_audit, "_audit_path", side_effect=audit),
+            mock.patch.object(misc_audit, "_audit_power_toggle"),
+            mock.patch.object(misc_audit, "_wait_title", return_value=b"frame"),
             mock.patch.object(misc_audit, "_run_ir_saved_actions",
                               side_effect=lambda current: (current, 0, [])),
             mock.patch.object(misc_audit, "_run_custom_actions",
@@ -156,6 +162,142 @@ class TestRegistry(unittest.TestCase):
             source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
             normalized = " ".join(source.split())
             self.assertNotIn(unsafe, normalized, module.__file__)
+
+
+class TestAuditSafety(unittest.TestCase):
+    def test_navigation_rejects_unchanged_destination(self):
+        for module in (bt_audit, wifi_audit):
+            with (
+                mock.patch.object(module, "_frame", return_value=b"same"),
+                mock.patch.object(module, "_wait_change", return_value=b"same"),
+                mock.patch.object(module, "_title_crc", return_value=1),
+                mock.patch.object(module, "_click"),
+            ):
+                with self.assertRaisesRegex(AssertionError, "did not change"):
+                    module._audit_path(mock.MagicMock(), (0,), False, 0.1) \
+                        if module is bt_audit else module._audit_path(
+                            mock.MagicMock(), (0,), 0.1)
+
+    def test_parent_title_wait_allows_async_redraw(self):
+        with (
+            mock.patch.object(wifi_audit, "_frame", side_effect=(b"stale", b"parent")),
+            mock.patch.object(wifi_audit, "_title_crc",
+                              side_effect=lambda frame: {b"stale": 1, b"parent": 2}[frame]),
+            mock.patch.object(wifi_audit.time, "monotonic", side_effect=(0.0, 0.0)),
+            mock.patch.object(wifi_audit.time, "sleep"),
+        ):
+            self.assertEqual(b"parent", wifi_audit._wait_title(mock.MagicMock(), 2, 1.0))
+
+    def test_apps_absence_never_launches_settings_as_an_app(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(bt_audit, "_click") as click,
+            mock.patch.object(bt_audit, "_frame", return_value=b"frame"),
+            mock.patch.object(bt_audit, "_title_crc", return_value=0xB103D59A),
+            mock.patch.object(bt_audit, "_wait_change", return_value=b"frame"),
+        ):
+            self.assertFalse(bt_audit._open_apps_menu(client))
+        click.assert_called_once_with(client, "down", 10)
+
+    def test_settings_skips_conditional_apps_entry(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(bt_audit, "_click") as click,
+            mock.patch.object(bt_audit, "_frame", return_value=b"frame"),
+            mock.patch.object(bt_audit, "_title_crc",
+                              side_effect=(1234, 0xB103D59A, 0xB103D59A)),
+            mock.patch.object(bt_audit, "_wait_change",
+                              side_effect=(b"frame", b"settings-open")),
+        ):
+            bt_audit._open_settings_menu(client)
+        self.assertEqual(
+            [mock.call(client, "down", 10), mock.call(client, "ok")],
+            click.call_args_list,
+        )
+
+    def test_file_icon_detection_supports_all_text_sizes(self):
+        for row, row_height in ((0, 8), (2, 10), (3, 13)):
+            framebuffer = bytearray(1024)
+            for dy, value in enumerate(saved_audit._FILE_ICON):
+                for dx in range(10):
+                    if (value >> dx) & 1:
+                        y = 12 + row * row_height + dy
+                        framebuffer[1 + dx + (y // 8) * 128] |= 1 << (y % 8)
+            self.assertTrue(saved_audit._is_file_icon(framebuffer, row, row_height))
+
+    def test_power_toggle_restores_original_frame(self):
+        original, changed = b"original", b"changed"
+        with (
+            mock.patch.object(misc_audit, "_frame", return_value=original),
+            mock.patch.object(misc_audit, "_wait_change",
+                              side_effect=(changed, original, original)),
+            mock.patch.object(misc_audit, "_click"),
+        ):
+            misc_audit._audit_power_toggle(mock.MagicMock(), 1)
+        with (
+            mock.patch.object(misc_audit, "_frame", return_value=original),
+            mock.patch.object(misc_audit, "_wait_change", return_value=changed),
+            mock.patch.object(misc_audit, "_click"),
+        ):
+            with self.assertRaisesRegex(AssertionError, "not restored"):
+                misc_audit._audit_power_toggle(mock.MagicMock(), 1)
+
+    def test_focused_ble_spam_starts_active_mode_before_dwell(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(hil, "open_bluetooth"),
+            mock.patch.object(hil, "click") as click,
+            mock.patch.object(hil, "capture", side_effect=(b"menu", b"picker", b"active")),
+            mock.patch.object(hil, "capture_until_change",
+                              side_effect=(b"active", b"stopped", b"picker",
+                                           b"active", b"cleanup")) as transition,
+            mock.patch.object(hil, "assert_title"),
+            mock.patch.object(hil.time, "sleep") as sleep,
+        ):
+            result = hil.run_ble_spam(client, mock.MagicMock())
+        self.assertIn("active stop/restart passed", result)
+        self.assertEqual(5, transition.call_count)
+        sleep.assert_called_once_with(17.0)
+        self.assertEqual(
+            [mock.call(client, "down", 5), mock.call(client, "ok"),
+             mock.call(client, "ok")],
+            click.call_args_list[:3],
+        )
+
+    def test_subghz_saved_layout_is_verified_before_actions(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(subghz_audit, "select_first_file", return_value=True),
+            mock.patch.object(subghz_audit, "_click"),
+            mock.patch.object(subghz_audit, "_frame", return_value=b"raw"),
+            mock.patch.object(subghz_audit, "_title_crc", return_value=1234),
+        ):
+            self.assertEqual("raw", subghz_audit._select_saved(client, 1234))
+        with (
+            mock.patch.object(subghz_audit, "select_first_file", return_value=True),
+            mock.patch.object(subghz_audit, "_click"),
+            mock.patch.object(subghz_audit, "_frame", return_value=b"parsed"),
+            mock.patch.object(subghz_audit, "_title_crc", return_value=5678),
+        ):
+            self.assertEqual("parsed", subghz_audit._select_saved(client, 1234))
+
+    def test_recursive_audits_exclude_auto_start_rf_actions(self):
+        self.assertFalse(any(label.startswith("Attacks/") or "Flood" in label
+                             for label, _path in wifi_audit.TOP_LEVEL_TARGETS))
+        self.assertEqual({"Target/Handshake", "Target/Cycle AP"},
+                         {label for label, _selection in wifi_audit.TARGET_ACTIONS})
+        self.assertFalse(any(label == "BLE Advertise" or
+                             (label.startswith("BLE Spam/") and
+                              label != "BLE Spam/Unified picker")
+                             for label, _path, _edit in bt_audit.TOP_LEVEL_TARGETS))
+
+    def test_delete_actions_navigate_to_their_actual_indices(self):
+        for module, expected in ((rfid_audit, 1), (nfc_audit, 1), (subghz_audit, 2)):
+            source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+            self.assertGreaterEqual(source.count('_click(client, "down", selection)'),
+                                    expected)
+        source = pathlib.Path(subghz_audit.__file__).read_text(encoding="utf-8")
+        self.assertIn('_click(client, "down", 17)', source)
 
 
 class TestScreenTransitions(unittest.TestCase):

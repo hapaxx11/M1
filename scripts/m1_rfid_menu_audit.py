@@ -77,7 +77,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
                 raise AssertionError("saved file disappeared during the audit")
         _click(client, "ok")
         if selection == 5:
-            _click(client, "down")
+            _click(client, "down", selection)
             _click(client, "ok")
             _frame(client)
             _click(client, "back")

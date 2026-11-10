@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
-from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
+from m1_bt_menu_audit import (
+    _audit_path, _click, _frame, _open_apps_menu, _reboot_main, _reboot_menu,
+    _title_crc,
+)
 from m1_saved_item_audit import select_first_file
-from m1_wifi_menu_audit import _wait_change
+from m1_wifi_menu_audit import _wait_change, _wait_title
 
 
 IR_TARGETS = (
@@ -69,26 +72,26 @@ CUSTOM_BUTTON_ACTIONS = (
 )
 
 
-def _open_ir_saved(client: M1Hil) -> tuple[M1Hil, bool]:
+def _open_ir_saved(client: M1Hil) -> tuple[M1Hil, bool, int]:
     client = _reboot_menu(client, 3)
     _click(client, "down", 2)
     _click(client, "ok")
     if not select_first_file(client):
-        return client, False
+        return client, False, 0
     _click(client, "ok")
-    _frame(client)
+    command_title = _title_crc(_frame(client))
     _click(client, "left")
     _frame(client)
-    return client, True
+    return client, True, command_title
 
 
 def _run_ir_saved_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
-    client, present = _open_ir_saved(client)
+    client, present, command_title = _open_ir_saved(client)
     if not present:
         return client, 0, ["Infrared saved-file actions (no saved file)"]
     for label, selection in IR_SAVED_ACTIONS:
         print(f"RUN  Infrared/{label}", flush=True)
-        client, present = _open_ir_saved(client)
+        client, present, command_title = _open_ir_saved(client)
         if not present:
             raise AssertionError("saved IR file disappeared during the audit")
         if selection == 4:
@@ -98,7 +101,8 @@ def _run_ir_saved_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
             _click(client, "back")
             _frame(client)
         else:
-            _audit_path(client, (selection,), False, 8.0)
+            _audit_path(client, (selection,), False, 8.0, reentry=False,
+                        ancestor_titles=(command_title,))
         print(f"PASS Infrared/{label}", flush=True)
     return client, len(IR_SAVED_ACTIONS), []
 
@@ -200,6 +204,29 @@ def _run_custom_actions(client: M1Hil) -> tuple[M1Hil, int, list[str]]:
     return client, 1 + len(CUSTOM_REMOTE_ACTIONS) + len(CUSTOM_BUTTON_ACTIONS), skipped
 
 
+def _audit_gpio_control(client: M1Hil) -> None:
+    expected_title = _title_crc(_frame(client))
+    for _attempt in range(2):
+        _click(client, "ok")
+        _wait_title(client, expected_title, 4.0)
+        client.info()
+
+
+def _audit_power_toggle(client: M1Hil, selection: int) -> None:
+    original = _frame(client)
+    _click(client, "down", selection)
+    _click(client, "ok")
+    changed = _wait_change(client, original, 4.0)
+    if changed == original:
+        raise AssertionError("power rail did not toggle")
+    _click(client, "ok")
+    restored = _wait_change(client, changed, 4.0)
+    _click(client, "up", selection)
+    restored = _wait_change(client, restored, 4.0)
+    if restored != original:
+        raise AssertionError("power rail was not restored to its original state")
+
+
 def run(client: M1Hil) -> str:
     skipped = [
         "External app/script execution",
@@ -223,9 +250,14 @@ def run(client: M1Hil) -> str:
         for label, path, repeat in GPIO_TARGETS:
             print(f"RUN  GPIO/{label}", flush=True)
             client = _reboot_menu(client, 4)
-            _audit_path(client, path, False, 8.0)
-            if repeat:
+            if path == (0,):
+                _audit_gpio_control(client)
+            elif path in ((1,), (2,)):
+                _audit_power_toggle(client, path[0])
+            else:
                 _audit_path(client, path, False, 8.0)
+                if repeat:
+                    _audit_path(client, path, False, 8.0)
             print(f"PASS GPIO/{label}", flush=True)
 
         for label, path, _repeat in GAMES_TARGETS:
@@ -242,8 +274,8 @@ def run(client: M1Hil) -> str:
         print("PASS BadUSB script picker", flush=True)
 
         print("RUN  Apps browser", flush=True)
-        client = _reboot_menu(client, 9)
-        if _title_crc(_frame(client)) != 0xB103D59A:
+        client = _reboot_main(client)
+        if _open_apps_menu(client):
             _click(client, "back")
             _frame(client)
             print("PASS Apps browser", flush=True)

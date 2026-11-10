@@ -6,8 +6,10 @@ from __future__ import annotations
 import time
 
 from m1_hil import M1Hil, connect
-from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
-from m1_wifi_menu_audit import _wait_change
+from m1_bt_menu_audit import (
+    _audit_path, _click, _frame, _open_settings_menu, _reboot_settings, _title_crc,
+)
+from m1_wifi_menu_audit import _wait_change, _wait_title
 
 
 TOP_LEVEL_TARGETS = (
@@ -46,14 +48,13 @@ SKIPPED_DESTRUCTIVE = (
     "Firmware Update/Swap Banks",
     "ESP32 Update/Firmware Update",
     "ESP32 Update/Backup Flash",
+    "LCD/External IR TX self-test (RF transmission)",
 )
 
 
 def _open_settings(client: M1Hil) -> None:
     _click(client, "ok")
-    _click(client, "down", 9)
-    _click(client, "ok")
-    _frame(client)
+    _open_settings_menu(client)
 
 
 def _audit_power_reboot(client: M1Hil) -> M1Hil:
@@ -69,8 +70,23 @@ def _audit_power_reboot(client: M1Hil) -> M1Hil:
     client.close()
     time.sleep(15.0)
     fresh = connect(port, baud, timeout=20)
-    _open_settings(fresh)
+    _frame(fresh)
     return fresh
+
+
+def _audit_lcd_row(client: M1Hil, selection: int) -> None:
+    expected_title = _title_crc(_frame(client))
+    _click(client, "down")
+    _click(client, "ok")
+    previous = _frame(client)
+    for _index in range(selection):
+        _click(client, "down")
+        current = _wait_change(client, previous, 4.0)
+        if current == previous:
+            raise AssertionError("LCD row navigation did not change")
+        previous = current
+    _click(client, "back")
+    _wait_title(client, expected_title, 4.0)
 
 
 def run(client: M1Hil) -> str:
@@ -80,11 +96,15 @@ def run(client: M1Hil) -> str:
             if label == "Power/Reboot":
                 client = _audit_power_reboot(client)
             else:
-                client = _reboot_menu(client, 9)
-                _audit_path(client, path, edit, 8.0)
+                client = _reboot_settings(client)
+                if path[0] == 1 and path[1] not in (3, 4, 10):
+                    _audit_lcd_row(client, path[1])
+                else:
+                    _audit_path(client, path, edit, 8.0,
+                                reentry=(path[0] != 1 and path != (5, 1)))
             print(f"PASS {label}", flush=True)
 
-        client = _reboot_menu(client, 9)
+        client = _reboot_settings(client)
         _audit_path(client, (6,), False, 8.0)
         _frame(client)
     finally:

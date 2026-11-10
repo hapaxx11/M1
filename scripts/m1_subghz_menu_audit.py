@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
-from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
+from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
 from m1_saved_item_audit import select_first_file
 from m1_wifi_menu_audit import _wait_change
 
@@ -28,9 +28,6 @@ TOP_LEVEL_TARGETS = (
     ("Analyzer/Proto Pirate Brute Force (cancel)", (4, 5, 6), False),
     ("POCSAG/FLEX", (5,), False),
     ("Restaurant Pager", (6,), False),
-    ("Restaurant Pager/Edit (cancel)", (6, 0), False),
-    ("Restaurant Pager/Browse Saved", (6, 3), False),
-    ("Restaurant Pager/Settings", (6, 4), False),
     ("TPMS", (7,), False),
     ("Weather Station", (8,), False),
     ("Brute Force (cancel)", (9,), False),
@@ -74,7 +71,7 @@ KEELOQ_EDITOR_CHAIN = ("Set Button", "Set Counter", "Manufacturer Key")
 SKIPPED_RF = (
     "Playlist transmission",
     "Proto Pirate transmission/key recovery execution",
-    "Restaurant Send All/Save Station",
+    "Restaurant action menu (requires captured pager)",
     "Saved Emulate",
     "Add Manually Transmitter",
     "Remote button transmission",
@@ -83,58 +80,73 @@ SKIPPED_RF = (
 )
 
 
-def _select_saved(client: M1Hil) -> bool:
+def _read_raw_title(client: M1Hil) -> tuple[M1Hil, int]:
+    client = _reboot_menu(client, 0)
+    _click(client, "down")
+    _click(client, "ok")
+    return client, _title_crc(_frame(client))
+
+
+def _select_saved(client: M1Hil, raw_title: int) -> str | None:
     _click(client, "down", 2)
     _click(client, "ok")
     if not select_first_file(client):
-        return False
+        return None
     _click(client, "ok")
-    return True
+    return "raw" if _title_crc(_frame(client)) == raw_title else "parsed"
 
 
 def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
     skipped: list[str] = []
+    client, raw_title = _read_raw_title(client)
     client = _reboot_menu(client, 0)
-    if not _select_saved(client):
+    kind = _select_saved(client, raw_title)
+    if kind is None:
         skipped.extend(("Saved actions (no saved file)", "MoreRAW actions (no saved file)"))
         return client, skipped
+    if kind == "raw":
+        skipped.append("Saved actions (first file is RAW; parsed actions skipped)")
 
-    for label, selection in SAVED_ACTIONS:
-        print(f"RUN  {label}", flush=True)
-        if selection != 1:
+    if kind == "parsed":
+        for label, selection in SAVED_ACTIONS:
+            print(f"RUN  {label}", flush=True)
+            if selection != 1:
+                client = _reboot_menu(client, 0)
+                if _select_saved(client, raw_title) != "parsed":
+                    raise AssertionError("parsed saved file layout changed during the audit")
+            if selection == 4:
+                _click(client, "down", selection)
+                _click(client, "ok")
+                _frame(client)
+                _click(client, "back")
+                _frame(client)
+            else:
+                _audit_path(client, (selection,), False, 8.0,
+                            reentry=False)
+            print(f"PASS {label}", flush=True)
+    else:
+        skipped.append("MoreRAW actions (first file is parsed, not RAW)")
+
+    if kind == "raw":
+        for label, selection in MORE_RAW_ACTIONS:
+            print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 0)
-            if not _select_saved(client):
-                raise AssertionError("saved file disappeared during the audit")
-        if selection == 4:
-            _click(client, "down")
-            _click(client, "ok")
-            _frame(client)
-            _click(client, "back")
-            _frame(client)
-        else:
-            _audit_path(client, (selection,), False, 8.0)
-        print(f"PASS {label}", flush=True)
-
-    for label, selection in MORE_RAW_ACTIONS:
-        print(f"RUN  {label}", flush=True)
-        client = _reboot_menu(client, 0)
-        if not _select_saved(client):
-            raise AssertionError("saved file disappeared during MoreRAW")
-        before = _frame(client)
-        _click(client, "right")
-        more = _wait_change(client, before, 3.0)
-        if more == before:
-            skipped.append("MoreRAW actions (no compatible raw file)")
-            break
-        if selection == 2:
-            _click(client, "down")
-            _click(client, "ok")
-            _frame(client)
-            _click(client, "back")
-            _frame(client)
-        else:
-            _audit_path(client, (selection,), False, 8.0)
-        print(f"PASS {label}", flush=True)
+            if _select_saved(client, raw_title) != "raw":
+                raise AssertionError("RAW saved file layout changed during MoreRAW")
+            before = _frame(client)
+            _click(client, "right")
+            more = _wait_change(client, before, 3.0)
+            if more == before:
+                raise AssertionError("MoreRAW did not open for the RAW file")
+            if selection == 2:
+                _click(client, "down", selection)
+                _click(client, "ok")
+                _frame(client)
+                _click(client, "back")
+                _frame(client)
+            else:
+                _audit_path(client, (selection,), False, 8.0, reentry=False)
+            print(f"PASS {label}", flush=True)
     return client, skipped
 
 
@@ -145,6 +157,7 @@ def run(client: M1Hil) -> str:
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 0)
             if config:
+                _click(client, "ok")
                 _click(client, "left")
                 _frame(client)
             else:
@@ -153,6 +166,7 @@ def run(client: M1Hil) -> str:
 
         print("RUN  Read/Config/Protocol Filter", flush=True)
         client = _reboot_menu(client, 0)
+        _click(client, "ok")
         _click(client, "left")
         _click(client, "down", 11)
         _click(client, "ok")
@@ -170,6 +184,7 @@ def run(client: M1Hil) -> str:
         client = _reboot_menu(client, 0)
         _click(client, "down", 10)
         _click(client, "ok")
+        _click(client, "down", 17)
         _click(client, "ok")
         _frame(client)
         for label in KEELOQ_EDITOR_CHAIN:

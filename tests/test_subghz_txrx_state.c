@@ -282,6 +282,16 @@ static void test_force_with_null_is_safe(void)
     subghz_txrx_state_force(NULL, SUBGHZ_TXRX_STATE_IDLE);
 }
 
+static void test_rx_queue_admission_reserves_control_slots(void)
+{
+    TEST_ASSERT_TRUE(subghz_rx_queue_admit(0, 256, 32));
+    TEST_ASSERT_TRUE(subghz_rx_queue_admit(223, 256, 32));
+    TEST_ASSERT_FALSE(subghz_rx_queue_admit(224, 256, 32));
+    TEST_ASSERT_FALSE(subghz_rx_queue_admit(255, 256, 32));
+    TEST_ASSERT_FALSE(subghz_rx_queue_admit(0, 32, 32));
+    TEST_ASSERT_FALSE(subghz_rx_queue_admit(0, 0, 32));
+}
+
 /*----------------------------------------------------------------------------*/
 /* Runner                                                                     */
 /*----------------------------------------------------------------------------*/
@@ -289,6 +299,7 @@ static void test_force_with_null_is_safe(void)
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_rx_queue_admission_reserves_control_slots);
     RUN_TEST(test_name_for_every_state_is_non_null_and_nonempty);
     RUN_TEST(test_is_rx_classifies_correctly);
     RUN_TEST(test_is_tx_classifies_correctly);

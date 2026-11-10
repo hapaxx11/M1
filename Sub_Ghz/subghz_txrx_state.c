@@ -72,6 +72,13 @@ bool subghz_txrx_state_is_powered(subghz_txrx_state_t s)
     return s != SUBGHZ_TXRX_STATE_OFF;
 }
 
+bool subghz_rx_queue_admit(uint32_t pending, uint32_t capacity,
+                           uint32_t control_reserve)
+{
+    return pending < capacity && control_reserve < capacity &&
+           pending < capacity - control_reserve;
+}
+
 const char *subghz_txrx_state_name(subghz_txrx_state_t s)
 {
     switch (s) {

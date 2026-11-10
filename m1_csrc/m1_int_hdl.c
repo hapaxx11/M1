@@ -27,6 +27,9 @@
 #include "spi_master.h"
 #include "m1_rfid.h"
 #include "lfrfid.h"
+#include "subghz_txrx_state.h"
+
+#define SUBGHZ_MAIN_Q_CONTROL_RESERVE 32U
 
 /*************************** D E F I N E S ************************************/
 
@@ -770,7 +773,10 @@ void TIM1_CC_IRQHandler(void)
 			}
 		}
 	} // if ( subghz_record_mode_flag )
-	if ( send_to_q )
+	if ( send_to_q &&
+	     subghz_rx_queue_admit(uxQueueMessagesWaitingFromISR(main_q_hdl),
+	                           MAIN_QUEUE_ITEMS_MAX_N,
+	                           SUBGHZ_MAIN_Q_CONTROL_RESERVE) )
 	{
 		q_item.q_evt_type = Q_EVENT_SUBGHZ_RX;
 		xQueueSendFromISR(main_q_hdl, &q_item, &xHigherPriorityTaskWoken); // Send sample to queue, return: pdPASS or errQUEUE_FULL

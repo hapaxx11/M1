@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from m1_hil import M1Hil
-from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
+from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
 from m1_saved_item_audit import select_first_file
 
 
@@ -39,7 +39,6 @@ TOP_LEVEL_TARGETS = (
 
 SAVED_ACTIONS = (
     ("Saved/Emulate UID", 0),
-    ("Saved/Send to Peer", 1),
     ("Saved/Unlock", 2),
     ("Saved/Edit UID", 3),
     ("Saved/Info", 5),
@@ -57,13 +56,14 @@ CARD_ACTIONS = (
 )
 
 
-def _select_saved(client: M1Hil) -> bool:
+def _select_saved(client: M1Hil) -> int | None:
     _click(client, "down", 2)
     _click(client, "ok")
     if not select_first_file(client):
-        return False
+        return None
+    browser_title = _title_crc(_frame(client))
     _click(client, "ok")
-    return True
+    return browser_title
 
 
 def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
@@ -71,9 +71,11 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         "Read Save/Emulate/Card Actions (requires live card)",
         "Card Actions/Write UID and Wipe Tag (destructive)",
         "NDEF Maker/Wi-Fi security (text input required)",
+        "Saved/Send to Peer (requires peer)",
     ]
     client = _reboot_menu(client, 2)
-    if not _select_saved(client):
+    ancestor_title = _select_saved(client)
+    if not ancestor_title:
         skipped.append("Saved item actions (no saved file)")
         return client, skipped
 
@@ -81,26 +83,30 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         print(f"RUN  {label}", flush=True)
         if selection != 0:
             client = _reboot_menu(client, 2)
-            if not _select_saved(client):
+            ancestor_title = _select_saved(client)
+            if not ancestor_title:
                 raise AssertionError("saved file disappeared during the audit")
         if selection == 7:
-            _click(client, "down")
+            _click(client, "down", selection)
             _click(client, "ok")
             _frame(client)
             _click(client, "back")
             _frame(client)
         else:
-            _audit_path(client, (selection,), False, 8.0)
+            _audit_path(client, (selection,), False, 8.0, reentry=False,
+                        ancestor_titles=(ancestor_title,))
         print(f"PASS {label}", flush=True)
 
     for label, selection in CARD_ACTIONS:
         print(f"RUN  {label}", flush=True)
         client = _reboot_menu(client, 2)
-        if not _select_saved(client):
+        ancestor_title = _select_saved(client)
+        if not ancestor_title:
             raise AssertionError("saved file disappeared during card actions")
         _click(client, "down", 4)
         _click(client, "ok")
-        _audit_path(client, (selection,), False, 8.0)
+        _audit_path(client, (selection,), False, 8.0, reentry=False,
+                    ancestor_titles=(ancestor_title,))
         print(f"PASS {label}", flush=True)
     return client, skipped
 
@@ -111,7 +117,8 @@ def run(client: M1Hil) -> str:
         for label, path, edit in TOP_LEVEL_TARGETS:
             print(f"RUN  {label}", flush=True)
             client = _reboot_menu(client, 2)
-            _audit_path(client, path, edit, 8.0)
+            _audit_path(client, path, edit, 8.0,
+                        reentry=not label.startswith("NDEF Maker/"))
             print(f"PASS {label}", flush=True)
         client, skipped = _run_saved_actions(client)
     finally:

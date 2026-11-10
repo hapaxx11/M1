@@ -10,21 +10,28 @@ from m1_wifi_menu_audit import _click, _frame
 _FILE_ICON = (0x3FF, 0x241, 0x29D, 0x301, 0x27D, 0x201, 0x255, 0x3FF)
 
 
-def _is_file_icon(framebuffer: bytes, row: int) -> bool:
+def _file_icon_at_y(framebuffer: bytes, y: int) -> bool:
     actual = []
     for dy in range(8):
         value = 0
         for dx in range(10):
-            y = 12 + row * 8 + dy
             x = 1 + dx
-            value |= ((framebuffer[x + (y // 8) * 128] >> (y % 8)) & 1) << dx
+            value |= ((framebuffer[x + ((y + dy) // 8) * 128] >> ((y + dy) % 8)) & 1) << dx
         actual.append(value)
     return actual == list(_FILE_ICON) or actual == [(~value) & 0x3FF for value in _FILE_ICON]
 
 
+def _is_file_icon(framebuffer: bytes, row: int, row_height: int = 8) -> bool:
+    return _file_icon_at_y(framebuffer, 12 + row * row_height)
+
+
+def _has_file_icon(framebuffer: bytes) -> bool:
+    return any(_file_icon_at_y(framebuffer, y) for y in range(12, 57))
+
+
 def select_first_file(client: M1Hil) -> bool:
-    for index in range(1, 49):
+    for _index in range(1, 49):
         _click(client, "down")
-        if _is_file_icon(_frame(client), min(index, 5)):
+        if _has_file_icon(_frame(client)):
             return True
     return False

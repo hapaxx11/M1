@@ -210,10 +210,43 @@ def run_ble_spam(client: M1Hil, artifacts: Path) -> str:
     open_bluetooth(client)
     click(client, "down", 5)
     click(client, "ok")
-    return exercise_scene(
-        client, artifacts, "ble-spam", 0x58EA5A94, 0x62F2B3DB,
-        lambda: click(client, "ok"), 10.0, 3.0, active_dwell_s=17.0
+    menu = capture(client, artifacts, "ble-spam-menu")
+    click(client, "ok")
+    picker = capture_until_change(
+        client, artifacts, "ble-spam-unified-picker", menu, 3.0
     )
+
+    started = time.monotonic()
+    click(client, "ok")
+    active = capture_until_change(
+        client, artifacts, "ble-spam-active", picker, 10.0, started
+    )
+    assert_title(active, 0x58EA5A94, "ble-spam entry")
+    entry_ms = (time.monotonic() - started) * 1000
+    time.sleep(17.0)
+    active = capture(client, artifacts, "ble-spam-dwell")
+    assert_title(active, 0x58EA5A94, "ble-spam watchdog dwell")
+
+    started = time.monotonic()
+    click(client, "back")
+    stopped = capture_until_change(
+        client, artifacts, "ble-spam-stopped", active, 3.0, started
+    )
+    assert_title(stopped, 0x58EA5A94, "ble-spam stop")
+    exit_ms = (time.monotonic() - started) * 1000
+
+    click(client, "ok")
+    active = capture_until_change(
+        client, artifacts, "ble-spam-restarted", stopped, 10.0
+    )
+    assert_title(active, 0x58EA5A94, "ble-spam restart")
+    click(client, "back")
+    cleanup = capture_until_change(
+        client, artifacts, "ble-spam-cleanup", active, 3.0
+    )
+    assert_title(cleanup, 0x58EA5A94, "ble-spam cleanup")
+    client.info()
+    return f"entry {entry_ms:.0f} ms, exit {exit_ms:.0f} ms, active stop/restart passed"
 
 
 def run_wifi_menu_audit(client: M1Hil, artifacts: Path) -> str:

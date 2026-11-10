@@ -26,14 +26,6 @@ TOP_LEVEL_TARGETS = (
     ("Recon/Deauth Sniff", (1, 12)),
     ("Recon/Pwnagotchi", (1, 13)),
     ("Recon/SAE / WPA3", (1, 14)),
-    ("Attacks/Deauth", (2, 0)),
-    ("Attacks/Beacon Spam", (2, 1)),
-    ("Attacks/AP Clone", (2, 2)),
-    ("Attacks/Rickroll", (2, 3)),
-    ("Attacks/Evil Portal", (2, 4)),
-    ("Attacks/Probe Flood", (2, 5)),
-    ("Attacks/Karma", (2, 6)),
-    ("Attacks/PMKID Grab", (2, 7)),
     ("Wardrive/AP Wardrive", (3, 0)),
     ("Wardrive/Station Wardrive", (3, 1)),
     ("Wardrive/Save APs", (3, 2)),
@@ -43,7 +35,6 @@ TOP_LEVEL_TARGETS = (
     ("Wardrive/Clear SSIDs", (3, 6)),
     ("802.15.4/Zigbee Scan", (4, 0)),
     ("802.15.4/Thread Scan", (4, 1)),
-    ("802.15.4/Flood", (4, 2)),
     ("Peer Link/Scan Peers", (5, 0)),
     ("Peer Link/Messages", (5, 1)),
     ("Peer Link/Send Capture/Sub-GHz", (5, 2, 0)),
@@ -70,11 +61,7 @@ TOP_LEVEL_TARGETS = (
 )
 
 TARGET_ACTIONS = (
-    ("Target/Connect", 0),
-    ("Target/Deauth", 1),
     ("Target/Handshake", 2),
-    ("Target/Beacon", 3),
-    ("Target/PMKID", 4),
     ("Target/Cycle AP", 5),
 )
 
@@ -116,6 +103,17 @@ def _wait_change(client: M1Hil, previous: bytes, timeout_s: float) -> bytes:
         time.sleep(0.2)
 
 
+def _wait_title(client: M1Hil, expected: int, timeout_s: float) -> bytes:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        current = _frame(client)
+        if _title_crc(current) == expected:
+            return current
+        if time.monotonic() >= deadline:
+            raise AssertionError("parent title did not render before timeout")
+        time.sleep(0.1)
+
+
 def _open_wifi(client: M1Hil) -> int:
     _click(client, "ok")
     _click(client, "down", 5)
@@ -137,14 +135,37 @@ def _reboot_wifi(client: M1Hil) -> M1Hil:
     return fresh
 
 
-def _audit_path(client: M1Hil, path: tuple[int, ...], wait_s: float = 5.0) -> None:
-    before = _frame(client)
+def _audit_path(client: M1Hil, path: tuple[int, ...], wait_s: float = 5.0,
+                ancestor_titles: tuple[int, ...] = (), reentry: bool = True) -> None:
+    parent = _frame(client)
+    parent_title = _title_crc(parent)
+    accepted_titles = (parent_title,) + ancestor_titles
+
+    def exit_to_parent(previous: bytes) -> bytes:
+        for _level in range(len(path) + 4):
+            if _title_crc(previous) in accepted_titles:
+                return previous
+            _click(client, "back")
+            previous = _wait_change(client, previous, wait_s)
+        raise AssertionError("BACK did not return to the parent destination")
+
+    previous = parent
     for selection in path:
         _click(client, "down", selection)
         _click(client, "ok")
-    _wait_change(client, before, wait_s)
-    _click(client, "back")
-    _frame(client)
+        current = _wait_change(client, previous, wait_s)
+        if current == previous:
+            raise AssertionError("destination did not change after OK")
+        previous = current
+    previous = exit_to_parent(previous)
+    if reentry:
+        for _selection in path:
+            _click(client, "ok")
+            current = _wait_change(client, previous, wait_s)
+            if current == previous:
+                raise AssertionError("re-entry did not change after OK")
+            previous = current
+    exit_to_parent(previous)
 
 
 def _select_target(client: M1Hil, wifi_title: int) -> int | None:
@@ -166,9 +187,12 @@ def _run_target_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
     for label, selection in TARGET_ACTIONS:
         print(f"RUN  {label}", flush=True)
         client = _reboot_wifi(client)
-        if _select_target(client, _title_crc(_frame(client))) is None:
+        wifi_title = _title_crc(_frame(client))
+        if _select_target(client, wifi_title) is None:
             raise AssertionError("AP target disappeared during the audit")
-        _audit_path(client, (selection,), 8.0)
+        _audit_path(client, (selection,), 8.0,
+                    ancestor_titles=(wifi_title,),
+                    reentry=(label != "Target/Handshake"))
         print(f"PASS {label}", flush=True)
     return client, []
 
@@ -196,30 +220,38 @@ def _run_connected_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
         return client, ["Connected Status and Net Scan (no saved connection available)"]
 
     print("RUN  Connected/Status", flush=True)
-    _audit_path(client, (0,))
+    _audit_path(client, (0,), reentry=False)
     print("PASS Connected/Status", flush=True)
 
     for label, selection in NETSCAN_ACTIONS:
         print(f"RUN  {label}", flush=True)
         client = _reboot_wifi(client)
-        if _connect_saved(client) is None:
+        wifi_title = _title_crc(_frame(client))
+        connected_title = _connect_saved(client)
+        if connected_title is None:
             raise AssertionError("saved connection disappeared during the audit")
         _click(client, "down")
         _click(client, "ok")
-        _audit_path(client, (selection,), 8.0)
+        _audit_path(client, (selection,), 8.0,
+                    ancestor_titles=(connected_title, wifi_title), reentry=False)
         print(f"PASS {label}", flush=True)
 
     print("RUN  Connected/Disconnect", flush=True)
     client = _reboot_wifi(client)
+    wifi_title = _title_crc(_frame(client))
     if _connect_saved(client) is None:
         raise AssertionError("saved connection disappeared before disconnect")
-    _audit_path(client, (2,))
+    _audit_path(client, (2,), ancestor_titles=(wifi_title,), reentry=False)
     print("PASS Connected/Disconnect", flush=True)
     return client, []
 
 
 def run(client: M1Hil) -> str:
-    skipped: list[str] = ["Peer Link pairing (requires peer)"]
+    skipped: list[str] = [
+        "Peer Link pairing (requires peer)",
+        "Attacks and 802.15.4 Flood (RF transmission)",
+        "Target Connect/Deauth/Beacon/PMKID (RF transmission)",
+    ]
     try:
         for label, path in TOP_LEVEL_TARGETS:
             print(f"RUN  {label}", flush=True)
@@ -234,7 +266,7 @@ def run(client: M1Hil) -> str:
 
         print("RUN  General/Disconnect", flush=True)
         client = _reboot_wifi(client)
-        _audit_path(client, (6, 12), 8.0)
+        _audit_path(client, (6, 12), 8.0, reentry=False)
         print("PASS General/Disconnect", flush=True)
         _frame(client)
     finally:
