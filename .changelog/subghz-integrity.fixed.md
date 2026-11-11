@@ -1,1 +1,0 @@
-**Sub-GHz: harden replay and parsing** — finish Endless transmission when OK is released, repair hex-to-binary conversion and input guards, and handle extreme RAW timing values without signed overflow.

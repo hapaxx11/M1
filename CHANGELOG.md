@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6.3] - 2026-11-11
+
+### Changed
+
+- Documentation: CI uses preinstalled host tools and a direct ARM GNU toolchain archive to avoid package-mirror failures during setup.
+
+### Fixed
+
+- **Sub-GHz: harden replay and parsing** — finish Endless transmission when OK is released, repair hex-to-binary conversion and input guards, and handle extreme RAW timing values without signed overflow.
+
 ## [0.9.6.2] - 2026-11-11
 
 ### Changed
