@@ -454,7 +454,7 @@ void rfid_import_flipper(void)
         memset(&tag_info, 0, sizeof(tag_info));
         tag_info.protocol = (uint8_t)tag.protocol;
 
-        /* Copy data → uid (M1 uses uid[5], copy up to available) */
+        /* Copy data → uid, bounded by the shared protocol-data capacity. */
         uint8_t copy_len = tag.data_len;
         if (copy_len > sizeof(tag_info.uid))
             copy_len = sizeof(tag_info.uid);

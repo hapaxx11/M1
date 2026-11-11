@@ -6,6 +6,10 @@
 #define FDX_B_DECODED_SIZE     11  /* full decoded payload */
 #define FDX_B_HALF_BIT_US      128 /* RF/32: 32 * 4us = 128us half-bit */
 
+#define FDXB_ENCODED_SIZE      FDX_B_ENCODED_SIZE
+#define FDXB_DECODED_SIZE      FDX_B_DECODED_SIZE
+#define FDXB_ENCODED_BITS      128
+
 extern const LFRFIDProtocolBase protocol_fdx_b;
 
 #endif /* LFRFID_PROTOCOL_FDX_B_H_ */

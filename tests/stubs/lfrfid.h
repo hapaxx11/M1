@@ -28,8 +28,9 @@ typedef struct {
 #define FRAME_CHUNK_SIZE  (LFR_BATCH_ITEMS)
 
 /* Tag info placeholder (not used by manchester/parser tests) */
+#define LFRFID_TAG_DATA_MAX_SIZE 28
 typedef struct {
-	uint8_t  uid[5];
+	uint8_t  uid[LFRFID_TAG_DATA_MAX_SIZE];
 	uint8_t  protocol;
 	uint8_t  bitrate;
 	uint8_t  modulation;

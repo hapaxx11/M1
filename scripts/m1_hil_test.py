@@ -24,6 +24,7 @@ from m1_bt_menu_audit import run as run_bt_menu_tree
 from m1_misc_menu_audit import run as run_misc_menu_tree
 from m1_nfc_menu_audit import run as run_nfc_menu_tree
 from m1_rfid_menu_audit import run as run_rfid_menu_tree
+from m1_rfid_menu_audit import run_read_stability
 from m1_settings_menu_audit import run as run_settings_menu_tree
 from m1_subghz_menu_audit import run as run_subghz_menu_tree
 from m1_tx_menu_audit import run as run_tx_menu_tree
@@ -264,6 +265,10 @@ def run_rfid_menu_audit(client: M1Hil, artifacts: Path) -> str:
     return run_rfid_menu_tree(client)
 
 
+def run_rfid_read_stability_case(client: M1Hil, artifacts: Path) -> str:
+    return run_read_stability(client)
+
+
 def run_nfc_menu_audit(client: M1Hil, artifacts: Path) -> str:
     return run_nfc_menu_tree(client)
 
@@ -299,6 +304,7 @@ CASES = (
     HilCase("wifi-menu-audit", "Recursive WiFi menu responsiveness", run_wifi_menu_audit),
     HilCase("bluetooth-menu-audit", "Recursive Bluetooth menu responsiveness", run_bt_menu_audit),
     HilCase("rfid-menu-audit", "Recursive RFID menu responsiveness", run_rfid_menu_audit),
+    HilCase("rfid-read-stability", "RFID Read and Pet Scanner lifecycle", run_rfid_read_stability_case),
     HilCase("nfc-menu-audit", "Recursive NFC menu responsiveness", run_nfc_menu_audit),
     HilCase("settings-menu-audit", "Recursive Settings menu responsiveness", run_settings_menu_audit),
     HilCase("misc-menu-audit", "Remaining non-SubGhz menu responsiveness", run_misc_menu_audit),

@@ -2433,8 +2433,8 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
     /* Raise UART4 interrupt priority above all other priority-5 ISRs
      * (IR timers, sub-GHz, debug UART, SD card, keypad EXTIs, etc.)
      * so that no same-priority ISR can delay UART4 byte reception.
-     * Priority 4 is the same level as LFRFID's TIM5 — nothing else
-     * is higher except hard faults. */
+     * Priority 4 is intentional during ROM flashing only: this ISR path
+     * performs no RTOS calls, and normal operation restores priority 5. */
     HAL_NVIC_SetPriority(UART4_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY - 1, 0);
 
     /* Reset overrun counter for this flash session */

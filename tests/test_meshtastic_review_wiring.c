@@ -253,6 +253,17 @@ void test_nanopb_license_is_present_beside_vendored_sources(void) {
     free_repo_file(content);
 }
 
+void test_cdc_cli_notification_uses_isr_safe_api(void) {
+    char* content = read_repo_file("USB/Class/CDC/Src/usbd_cdc_if.c");
+    TEST_ASSERT_NOT_NULL(content);
+    const char* cli = strstr(content, "{ // == CDC_MODE_LOG_CLI");
+    TEST_ASSERT_NOT_NULL(cli);
+    TEST_ASSERT_NOT_NULL(strstr(cli, "xTaskNotifyFromISR(cmdLineTaskHandle"));
+    TEST_ASSERT_NULL(strstr(cli, "xTaskNotify(cmdLineTaskHandle"));
+    TEST_ASSERT_NOT_NULL(strstr(cli, "portYIELD_FROM_ISR(xHigherPriorityTaskWoken);"));
+    free_repo_file(content);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_app_manager_releases_uart_before_unloading_elf);
@@ -260,6 +271,7 @@ int main(void) {
     RUN_TEST(test_uart_task_handles_match_bridge_directions);
     RUN_TEST(test_usb_to_uart_dma_stops_and_acknowledges_before_reconfiguration);
     RUN_TEST(test_cdc_defers_host_reconfiguration_during_uart_ownership);
+    RUN_TEST(test_cdc_cli_notification_uses_isr_safe_api);
     RUN_TEST(test_baud_change_keeps_uart_owned_without_bridge_handoff);
     RUN_TEST(test_keyboard_uses_text_input_and_services_protocol);
     RUN_TEST(test_settings_ensure_parent_before_child_directory);

@@ -306,7 +306,7 @@ void protocol_render_data(uint16_t protocol_index, char* szstring)
 /*============================================================================*/
 void lfrfid_GetTagInfo(PLFRFID_TAG_INFO pTaginfo)
 {
-	memcpy(pTaginfo->uid, lfrfid_tag_info.uid,5);
+	memcpy(pTaginfo->uid, lfrfid_tag_info.uid, sizeof(pTaginfo->uid));
 	pTaginfo->bitrate = lfrfid_tag_info.bitrate;
 	pTaginfo->protocol = lfrfid_tag_info.protocol;
 }

@@ -108,9 +108,11 @@ typedef struct {
     //uint8_t  level;   
 } lfrfid_evt_t;
 
+#define LFRFID_TAG_DATA_MAX_SIZE 28
+
 typedef struct
 {
-	uint8_t 	uid[5];
+	uint8_t 	uid[LFRFID_TAG_DATA_MAX_SIZE];
 	uint8_t     protocol;
 	uint16_t	bitrate;
 	uint8_t		modulation;

@@ -215,7 +215,7 @@ static bool hid_generic_decoder_execute_impl(void *proto, uint16_t size)
 
                     /* Copy to lfrfid_tag_info.uid for system compatibility */
                     memcpy(lfrfid_tag_info.uid, g_hid_decoded,
-                           sizeof(lfrfid_tag_info.uid));
+                           HID_GENERIC_DECODED_SIZE);
 
                     return true;
                 }

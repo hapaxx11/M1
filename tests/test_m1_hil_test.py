@@ -89,6 +89,23 @@ class TestRegistry(unittest.TestCase):
             for _label, path, _edit in module.TOP_LEVEL_TARGETS:
                 self.assertIn(path[0], range(count))
 
+    @mock.patch("m1_rfid_menu_audit._click")
+    @mock.patch("m1_rfid_menu_audit._wait_change")
+    @mock.patch("m1_rfid_menu_audit._frame")
+    def test_rfid_read_stability_covers_both_readers(self, frame, wait_change, _click):
+        client = mock.MagicMock()
+        menu, read, pet = (bytes(1024), bytes([1]) * 1024, bytes([2]) * 1024)
+        frame.side_effect = [menu, read, read, pet, pet]
+        wait_change.side_effect = [read, menu, read, menu, pet, menu, pet, menu]
+
+        result = rfid_audit.run_read_stability(client, dwell_s=0.0)
+
+        self.assertIn("Read and Pet Scanner", result)
+        self.assertIn("requires live tags", result)
+        self.assertEqual(2, client.info.call_count)
+        client.close.assert_called_once_with()
+        self.assertIn("rfid-read-stability", {case.test_id for case in hil.CASES})
+
     def test_settings_audit_covers_safe_destinations(self):
         self.assertEqual(26, len(settings_audit.TOP_LEVEL_TARGETS))
         self.assertEqual(7, len(settings_audit.SKIPPED_DESTRUCTIVE))
