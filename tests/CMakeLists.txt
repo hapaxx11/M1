@@ -2233,6 +2233,27 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
+# LF RFID protocol decoders: stock FDX-B framing and EM4100 normalization.
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_protocols
+    test_lfrfid_protocols.c
+    ${M1_ROOT}/lfrfid/lfrfid_protocol_em4100.c
+)
+target_include_directories(test_lfrfid_protocols PRIVATE
+    ${M1_ROOT}/lfrfid
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_compile_options(test_lfrfid_protocols PRIVATE
+    -include ${STUBS_DIR}/stm32h5xx_hal.h
+)
+target_link_libraries(test_lfrfid_protocols PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_protocols PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_protocols COMMAND test_lfrfid_protocols)
+
+# ------------------------------------------------------------------
 # Module under test: m1_pet_tag (Pet Tag Scanner FDX-B decoder)
 # Pure logic — decodes FDX-B payload into country/national/animal fields.
 # ------------------------------------------------------------------
@@ -2282,6 +2303,26 @@ if(TARGET sanitizers)
     target_link_libraries(test_lfrfid_carrier PRIVATE sanitizers)
 endif()
 add_test(NAME lfrfid_carrier COMMAND test_lfrfid_carrier)
+
+# ------------------------------------------------------------------
+# TIM5 calls ISR-safe FreeRTOS APIs, so its priority must not exceed the
+# kernel's syscall ceiling (numerically lower means higher priority).
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_irq_priority
+    test_lfrfid_irq_priority.c
+)
+target_include_directories(test_lfrfid_irq_priority PRIVATE
+    ${M1_ROOT}/lfrfid
+    ${STUBS_DIR}
+)
+target_compile_options(test_lfrfid_irq_priority PRIVATE
+    -include ${STUBS_DIR}/stm32h5xx_hal.h
+)
+target_link_libraries(test_lfrfid_irq_priority PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_irq_priority PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_irq_priority COMMAND test_lfrfid_irq_priority)
 
 # ------------------------------------------------------------------
 # lfrfid_tpms_power: TPMS activation supply ownership and restoration.

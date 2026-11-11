@@ -288,7 +288,9 @@ static bool em4100_extract_fields(EM4100_Decoder_t* dec)
   * @retval
   */
 /*============================================================================*/
-static uint8_t manchester_symbol_feed(lfrfid_evt_t* stream, lfrfid_evt_t* stream2,uint8_t count, uint16_t Th_us)
+#define MANCHESTER_FEED_OVERFLOW  0xFFu
+
+static uint8_t manchester_symbol_feed(lfrfid_evt_t* stream, uint8_t stream_cap, lfrfid_evt_t* stream2,uint8_t count, uint16_t Th_us)
 {
     uint8_t output_count = 0;
 
@@ -296,6 +298,11 @@ static uint8_t manchester_symbol_feed(lfrfid_evt_t* stream, lfrfid_evt_t* stream
         lfrfid_evt_t current_evt = stream2[i];
 
            if (IS_FULL_BIT(current_evt.t_us, Th_us)) {
+
+            /* a full-bit expands into two half-bit events: need two free slots */
+            if (output_count + 2u > stream_cap) {
+                return MANCHESTER_FEED_OVERFLOW;
+            }
 
         	stream[output_count].t_us = Th_us;
         	stream[output_count].edge = current_evt.edge;
@@ -306,6 +313,10 @@ static uint8_t manchester_symbol_feed(lfrfid_evt_t* stream, lfrfid_evt_t* stream
             output_count++;
 
         } else {
+
+            if (output_count + 1u > stream_cap) {
+                return MANCHESTER_FEED_OVERFLOW;
+            }
 
             //if (i != output_count) {
             	stream[output_count] = current_evt;
@@ -476,9 +487,18 @@ bool em4100_decoder_execute(void* proto, uint16_t size, void* dec)
     EM4100_Decoder_t *pdec = (EM4100_Decoder_t*)dec;
 
     //if (g_decoder.state != DECODER_STATE_IDLE && g_decoder.detected_half_bit_us != 0) {
-    normalized_count = manchester_symbol_feed(temp_stream, new_stream, size, pdec->detected_half_bit_us);
+    normalized_count = manchester_symbol_feed(temp_stream,
+                                              (uint8_t)(sizeof(temp_stream) / sizeof(temp_stream[0])),
+                                              new_stream, size, pdec->detected_half_bit_us);
     //}
     //p = &temp_stream[0];
+
+    /* Reject the candidate frame if normalization would have overflowed the
+     * destination buffer; do not decode a truncated event stream. */
+    if (normalized_count == MANCHESTER_FEED_OVERFLOW) {
+        EM4100_Decoder_Init_Full(pdec);
+        return false;
+    }
 
     if (pdec->edge_count + normalized_count > sizeof(pdec->edge_buffer) / sizeof(lfrfid_evt_t)) {
         EM4100_Decoder_Init_Full(pdec);

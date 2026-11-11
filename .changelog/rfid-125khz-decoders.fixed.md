@@ -1,0 +1,1 @@
+**125 kHz RFID: restore reliable tag reading** — fix the TIM5 interrupt priority that caused an IWDG reset, restore the stock FDX-B frame decoder for pet chips, and prevent EM4100 normalization from overflowing its temporary event buffer.

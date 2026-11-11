@@ -7,6 +7,28 @@ single-device HIL case. A safe entry/exit/re-entry check in a recursive menu
 audit is the minimum. Add a focused lifecycle case when the feature needs
 specific state transitions or regression coverage beyond responsiveness.
 
+## Choose individual tests or a group
+
+Run the smallest relevant case that exercises the changed behavior; do not run
+an entire recursive menu tree solely because one file in that module changed.
+
+| Change | Test selection |
+|--------|----------------|
+| Pure logic or parser work with no hardware-path change | Relevant host suites only; HIL is unnecessary. |
+| One scene or feature | Focused registered case when available; otherwise bounded entry/BACK/re-entry and affected state transitions in that scene. |
+| New menu destination, multiple destinations, or shared scene/lifecycle code | The module's recursive audit plus focused cases for changed transitions. |
+| Shared queue, transport, reboot, or memory behavior | Relevant focused cases and module audits; full default suite only for broad regression risk. |
+| Visual-only UI work | Targeted visual HIL; recursive audit only when menu structure or coverage changed. |
+| RF-active transmission | Opt-in `tx-menu-audit` or `ble-spam` only for a changed transmit path or explicit authorized RF validation. |
+
+Use `python scripts/m1_hil_test.py --list` to select exact IDs and repeat
+`--test <id>` for a small set. Run affected cases once per candidate firmware,
+not repeatedly for unchanged code. Resume checkpoints after a failure instead
+of using `--fresh`; a complete rerun must be intentional. Full recursive audits
+are not a merge requirement. Only an observed `PASS` checks a box; `FAIL`,
+`SKIP`, and unrun cases remain unchecked. External-dependent functionality
+needs a documented limitation, not a broad responsiveness-only audit.
+
 The authoritative destinations are the target tables and saved-item actions in
 `scripts/m1_*_menu_audit.py`. Whenever a change could have altered menu
 structure, labels, ordering, navigation, available actions, or hardware
@@ -20,7 +42,7 @@ in `tests/test_m1_hil_test.py` at the same time.
 | Menu or feature area | Required recursive HIL case | Additional focused cases when relevant |
 |---|---|---|
 | Sub-GHz, including Analyzer, saved/MoreRAW, Add Manually, Remote, and Bind | `subghz-menu-audit` | Add a focused case for new radio state transitions |
-| RFID, all manual protocols, utilities, and saved actions | `rfid-menu-audit` | — |
+| RFID, all manual protocols, utilities, and saved actions | `rfid-menu-audit` | `rfid-read-stability` |
 | NFC, Extra, NDEF, manual card types, saved and card actions | `nfc-menu-audit` | — |
 | Infrared, GPIO/CAN, Games, BadUSB, and Apps | `misc-menu-audit` | — |
 | WiFi, Target, Net Scan, General, 802.15.4, and Peer Link | `wifi-menu-audit` | `wifi-airtime`, `wifi-peer-link` |

@@ -129,6 +129,28 @@ python scripts/m1_hil_test.py --list
 python scripts/m1_hil_test.py --test wifi-airtime
 ```
 
+### Choose the smallest relevant test
+
+Do not run a full recursive menu audit merely because a file in that module
+changed. Select the narrowest case that exercises the changed behavior:
+
+| Change | HIL to run |
+|--------|------------|
+| Pure logic, parser, decoder, or other host-testable code with no hardware-path change | Relevant host suites only; HIL is unnecessary. |
+| One scene or feature | Its focused registered case when one exists; otherwise a bounded entry/BACK/re-entry check and the affected state transition in that scene. Do not run the whole module audit. |
+| Multiple destinations, a new menu feature, or shared scene/lifecycle code | The module's recursive audit plus focused cases for changed transitions. |
+| Shared queue, transport, reboot, or memory behavior | Relevant focused cases and module audits; use the full default suite only for broad regression risk. |
+| Visual-only UI work | Targeted visual HIL; use a recursive audit only if menu structure or coverage changed. |
+| RF-active transmission | Opt-in `tx-menu-audit` or `ble-spam` only when that path changed or explicit RF validation is authorized. |
+
+Use `--list` to choose exact IDs and repeat `--test <id>` for a small set. Run
+each affected case once per candidate firmware, not repeatedly for unchanged
+code. Resume checkpoints after a failure; do not use `--fresh` unless a complete
+rerun is intentional. Full recursive audits are not a merge requirement: only
+an observed `PASS` checks a box, while `FAIL`, `SKIP`, and unrun cases remain
+unchecked. External-dependent functionality needs a documented limitation, not
+a broad audit that proves only responsiveness.
+
 The active `ble-spam` and `tx-menu-audit` cases run only when selected explicitly
 with `--test`; they are excluded from default runs and unfiltered PR updates. Recursive
 menu audits checkpoint each passed destination under `build/hil-results/`.

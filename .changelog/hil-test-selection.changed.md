@@ -1,0 +1,1 @@
+**HIL test selection** — use focused cases for isolated fixes, recursive module audits for structural or shared-lifecycle changes, and broad suites only for cross-cutting regression risk. Add `rfid-read-stability` for targeted RFID Read and Pet Scanner lifecycle validation.

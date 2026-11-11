@@ -8,6 +8,9 @@
 #define LFRFID_HAL_H_
 
 #include <stdbool.h>
+#include <stdint.h>
+
+#define LFRFID_TIM5_IRQ_PRIORITY configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY
 
 void rfid_read_handler(TIM_HandleTypeDef *htim);
 void rfid_emul_handler(TIM_HandleTypeDef *htim);

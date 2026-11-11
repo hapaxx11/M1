@@ -322,7 +322,7 @@ void LFRFID_Timebase_Init(uint32_t freq_hz, uint32_t period_us)
         Error_Handler();
     }
 
-    HAL_NVIC_SetPriority(TIM5_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY-1, 0);
+    HAL_NVIC_SetPriority(TIM5_IRQn, LFRFID_TIM5_IRQ_PRIORITY, 0);
     HAL_NVIC_EnableIRQ(TIM5_IRQn);
 }
 
@@ -490,7 +490,7 @@ void lfrfid_read_hw_init_ex(uint32_t carrier_freq, float carrier_duty)
   lfrfid_RFIDIn_Init();
 
   /* TIM5 interrupt Init */
-  HAL_NVIC_SetPriority(TIM5_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY - 1, 0);   // Default int priority: configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY
+  HAL_NVIC_SetPriority(TIM5_IRQn, LFRFID_TIM5_IRQ_PRIORITY, 0);
   HAL_NVIC_EnableIRQ(TIM5_IRQn);
 
   HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);

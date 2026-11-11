@@ -3,10 +3,14 @@
 
 from __future__ import annotations
 
+import time
+
 import m1_ux_audit
 from m1_hil import M1Hil
 from m1_resume import log_pass, resume_targets
-from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu
+from m1_bt_menu_audit import (
+    _audit_path, _click, _frame, _reboot_menu, _title_crc, _wait_change,
+)
 from m1_saved_item_audit import select_first_file
 
 
@@ -108,3 +112,39 @@ def run(client: M1Hil) -> str:
     if skipped:
         summary += f"; skipped: {', '.join(skipped)}"
     return summary
+
+
+def run_read_stability(client: M1Hil, dwell_s: float = 2.0) -> str:
+    try:
+        _click(client, "ok")
+        _click(client, "down")
+        _click(client, "ok")
+        menu = _frame(client)
+        menu_title = _title_crc(menu)
+
+        for label, selection in (("Read", 0), ("Pet Scanner", 1)):
+            print(f"RUN  {label} read stability", flush=True)
+            _click(client, "down", selection)
+            _click(client, "ok")
+            active = _wait_change(client, menu, 8.0)
+            if active == menu:
+                raise AssertionError(f"{label} did not open")
+            active_title = _title_crc(active)
+
+            for attempt in range(2):
+                time.sleep(dwell_s)
+                if _title_crc(_frame(client)) != active_title:
+                    raise AssertionError(f"{label} did not remain responsive")
+                _click(client, "back")
+                menu = _wait_change(client, active, 3.0)
+                if _title_crc(menu) != menu_title:
+                    raise AssertionError(f"{label} BACK did not return to the RFID menu")
+                if attempt == 0:
+                    _click(client, "ok")
+                    active = _wait_change(client, menu, 8.0)
+                    if _title_crc(active) != active_title:
+                        raise AssertionError(f"{label} re-entry failed")
+            client.info()
+    finally:
+        client.close()
+    return "Read and Pet Scanner dwell, BACK, and re-entry passed; tag detection requires live tags"
