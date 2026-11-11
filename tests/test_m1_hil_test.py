@@ -21,6 +21,7 @@ import m1_saved_item_audit as saved_audit  # noqa: E402
 import m1_settings_menu_audit as settings_audit  # noqa: E402
 import m1_subghz_menu_audit as subghz_audit  # noqa: E402
 import m1_tx_menu_audit as tx_audit  # noqa: E402
+import m1_ux_audit  # noqa: E402
 import m1_wifi_menu_audit as wifi_audit  # noqa: E402
 
 
@@ -452,6 +453,47 @@ class TestResume(unittest.TestCase):
         self.assertIn("m1_hil_test.py", names)
         self.assertNotIn("m1_subghz_menu_audit.py", names)
 
+    def test_tx_checkpoint_hash_includes_traversal_helpers_only_for_tx_audit(self):
+        tx_names = {path.name for path in m1_resume._source_paths("tx-menu-audit")}
+        self.assertTrue({
+            "m1_misc_menu_audit.py",
+            "m1_nfc_menu_audit.py",
+            "m1_subghz_menu_audit.py",
+        }.issubset(tx_names))
+        nfc_names = {path.name for path in m1_resume._source_paths("nfc-menu-audit")}
+        self.assertNotIn("m1_subghz_menu_audit.py", nfc_names)
+
+    def test_ux_audit_reruns_checkpointed_destinations_without_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            version = m1_resume._version("demo")
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            m1_resume.finish(False)
+
+            m1_resume.start("demo", root)
+            m1_ux_audit.start("demo", root, enabled=True, version=version)
+            self.assertEqual(["first"], m1_resume.resume_targets(["first"]))
+            m1_resume.finish(False)
+            m1_ux_audit.finish()
+
+    def test_ux_audit_skips_checkpointed_destinations_with_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            version = m1_resume._version("demo")
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            m1_resume.finish(False)
+            m1_ux_audit.start("demo", root, enabled=True, version=version)
+            m1_ux_audit._state["results"].append(
+                {"label": "first", "findings": []}
+            )
+
+            m1_resume.start("demo", root)
+            self.assertEqual([], m1_resume.resume_targets(["first"]))
+            m1_resume.finish(False)
+            m1_ux_audit.finish()
+
     def test_actual_misc_labels_survive_checkpoint_reload(self):
         groups = (
             misc_audit.IR_TARGETS,
@@ -658,6 +700,53 @@ class TestRecovery(unittest.TestCase):
         self.assertIn("original failure", result["detail"])
         self.assertIn("invalid response", result["detail"])
         self.assertNotIn("CRC", result["detail"])
+
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device")
+    @mock.patch("m1_hil_test.connect")
+    def test_interrupt_finalizes_reports_before_recovery(self, connect, _recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+        calls = []
+
+        def interrupt(_client, _artifacts):
+            raise KeyboardInterrupt
+
+        case = hil.HilCase("interrupt", "interrupt", interrupt)
+        with (
+            mock.patch.object(hil.m1_resume, "finish",
+                              side_effect=lambda _success: calls.append("checkpoint")),
+            mock.patch.object(hil.m1_ux_audit, "finish",
+                              side_effect=lambda: calls.append("ux")),
+            mock.patch.object(hil, "recover_device",
+                              side_effect=lambda *_args: calls.append("recovery")),
+            tempfile.TemporaryDirectory() as directory,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        self.assertEqual(["checkpoint", "ux", "recovery"], calls)
+
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device")
+    @mock.patch("m1_hil_test.connect")
+    def test_recovery_runs_even_when_ux_finalizer_fails(self, connect, recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+
+        def fail(_client, _artifacts):
+            raise AssertionError("case failed")
+
+        case = hil.HilCase("negative", "negative", fail)
+        with (
+            mock.patch.object(hil.m1_ux_audit, "finish",
+                              side_effect=RuntimeError("finalizer failed")),
+            tempfile.TemporaryDirectory() as directory,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "finalizer failed"):
+                hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        recover.assert_called_once_with("COM3", 115200)
 
 
 class TestTransitionBudgets(unittest.TestCase):

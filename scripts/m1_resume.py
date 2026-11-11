@@ -37,6 +37,12 @@ def _source_paths(test_id: str) -> list[Path]:
     names = set(_SHARED_SOURCES)
     if test_id in _AUDIT_SOURCES:
         names.add(_AUDIT_SOURCES[test_id])
+        if test_id == "tx-menu-audit":
+            names.update((
+                "m1_misc_menu_audit.py",
+                "m1_nfc_menu_audit.py",
+                "m1_subghz_menu_audit.py",
+            ))
     else:
         names.update(path.name for path in root.glob("m1_*menu_audit.py"))
     return [root / name for name in sorted(names)]
@@ -70,6 +76,9 @@ def start(test_id: str, directory: Path, fresh: bool = False) -> None:
 
 def should_run(label: str) -> bool:
     if not _state or label not in _state["passed"]:
+        return True
+    if m1_ux_audit.needs_result(label):
+        print(f"RESUME RERUN {label}: UX result missing", flush=True)
         return True
     print(f"RESUME SKIP {label}", flush=True)
     return False

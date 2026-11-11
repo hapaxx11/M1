@@ -503,7 +503,7 @@ source_selection:
 			u8g2_DrawStr(&m1_u8g2, 4, 16, "Download complete!");
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 30, msg);
-			u8g2_DrawStr(&m1_u8g2, 4, 42, rel->asset_name);
+			u8g2_DrawStr(&m1_u8g2, 4, 38, rel->asset_name);
 			u8g2_DrawStr(&m1_u8g2, 4, 48, "Flash via Image File");
 			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Next", NULL, NULL);
 		} while (m1_u8g2_nextpage());

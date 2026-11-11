@@ -36,6 +36,14 @@ def observe(framebuffer: bytes) -> None:
         _state["frame"] = bytes(framebuffer)
 
 
+def has_result(label: str) -> bool:
+    return any(item.get("label") == label for item in _state.get("results", []))
+
+
+def needs_result(label: str) -> bool:
+    return bool(_state.get("enabled")) and not has_result(label)
+
+
 def _dark_count(framebuffer: bytes, y: int) -> int:
     return sum(
         (framebuffer[x + (y // 8) * 128] >> (y % 8)) & 1

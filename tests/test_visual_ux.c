@@ -218,11 +218,16 @@ void test_subghz_hex_editors_use_standard_bars(void)
 void test_review_layout_reflow_and_feedback(void)
 {
     char *subghz = read_file("m1_csrc/m1_sub_ghz.c");
-    assert_contains(subghz, "#define FREQAN_BAR_Y         32");
-    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 30, str);");
+    assert_contains(subghz, "#define FREQAN_BAR_Y         34");
+    assert_contains(subghz, "u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 23, str);");
+    assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 31, str);");
     assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 51, str);");
     assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 0, 51, info_str);");
     assert_contains(subghz, "u8g2_DrawStr(&m1_u8g2, 90, 51, info_str);");
+    TEST_ASSERT_TRUE(23 < 25);
+    TEST_ASSERT_TRUE(31 < 34 - 2);
+    TEST_ASSERT_TRUE(34 + 8 + 1 < 51 - 6);
     free(subghz);
 
     char *analyzer = read_file("m1_csrc/m1_subghz_scene_proto_pirate_analyzer.c");
@@ -232,14 +237,30 @@ void test_review_layout_reflow_and_feedback(void)
     free(analyzer);
 
     char *download = read_file("m1_csrc/m1_esp32_fw_download.c");
+    assert_contains(download, "u8g2_DrawStr(&m1_u8g2, 4, 38, rel->asset_name);");
     assert_contains(download, "u8g2_DrawStr(&m1_u8g2, 4, 48, \"Flash via Image File\");");
     assert_contains(download, "ok_circle_8x8, \"Next\"");
     free(download);
 
+    char *dice = read_file("m1_csrc/game_dice.c");
+    assert_contains(dice, "u8g2_DrawStr(&m1_u8g2, 0, 51, buf);");
+    TEST_ASSERT_TRUE(42 < 51 - 6);
+    free(dice);
+
     char *pager = read_file("m1_csrc/m1_subghz_scene_restaurant_pager.c");
     assert_contains(pager, "state->status_pending = (status != NULL");
-    assert_contains(pager, "m1_message_box(&m1_u8g2, screen, state->status");
+    assert_contains(pager, "event != SubGhzEventRxData && event != SubGhzEventTick");
+    assert_contains(pager, "if (list_view && state->status_pending)");
+    assert_absent(pager, "m1_message_box(&m1_u8g2, screen, state->status");
     free(pager);
+
+    char *bind = read_file("m1_csrc/m1_subghz_scene_bind_wizard.c");
+    assert_contains(bind, "u8g2_SetFont(&m1_u8g2, u8g2_font_4x6_tr);");
+    assert_contains(bind, "m1_draw_text_box(&m1_u8g2, 2, 16, 124, STEP_TEXT_LINE_H");
+    assert_contains(bind, "#define STEP_TEXT_LINE_H    6");
+    TEST_ASSERT_TRUE(10 < 16 - 5);
+    TEST_ASSERT_TRUE(34 < 41 - 6);
+    free(bind);
 }
 
 void test_excluded_scenes_follow_visual_standards(void)
@@ -299,7 +320,8 @@ void test_caption_and_countdown_reflow(void)
     assert_contains(game, "ok_circle_8x8, \"Next\"");
     free(game);
     char *bind = read_file("m1_csrc/m1_subghz_scene_bind_wizard.c");
-    assert_contains(bind, "m1_draw_text_box(&m1_u8g2, 2, 11, 124");
+    assert_contains(bind, "u8g2_SetFont(&m1_u8g2, u8g2_font_4x6_tr);");
+    assert_contains(bind, "m1_draw_text_box(&m1_u8g2, 2, 16, 124");
     assert_contains(bind, "u8g2_DrawStr(&m1_u8g2, 4, 41, cd);");
     assert_contains(bind, "u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 5);");
     free(bind);

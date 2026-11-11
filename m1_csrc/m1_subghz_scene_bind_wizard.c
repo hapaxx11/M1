@@ -281,8 +281,8 @@ static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 /* LCG multiplier (Knuth MMIX) used to further mix tick entropy */
 #define BW_LCG_MUL   (6364136223846793005ULL)
 
-/* Line height in pixels for instruction text (NokiaSmallPlain ascent=7) */
-#define STEP_TEXT_LINE_H    9
+/* Four compact instruction lines fit below the header and above the timer. */
+#define STEP_TEXT_LINE_H    6
 
 /* Populate the protocol-label pointer table and (re)initialise the picker
  * model.  Called from scene_on_enter (and from any future place that resets
@@ -425,8 +425,8 @@ static void draw_step(void)
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
 
     /* Instruction text */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text_box(&m1_u8g2, 2, 11, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
+    u8g2_SetFont(&m1_u8g2, u8g2_font_4x6_tr);
+    m1_draw_text_box(&m1_u8g2, 2, 16, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
 
     /* Countdown bar + hints */
     if (st->countdown_sec > 0)

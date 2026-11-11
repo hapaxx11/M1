@@ -2807,7 +2807,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 #define FREQAN_RSSI_CEIL    (-30)   /* dBm upper bound on bar scale */
 #define FREQAN_BAR_X         3      /* bar frame left edge (px) */
 #define FREQAN_BAR_W        122     /* bar frame width (px) */
-#define FREQAN_BAR_Y         32     /* bar frame top edge (px) */
+#define FREQAN_BAR_Y         34     /* bar frame top edge (px) */
 #define FREQAN_BAR_H         8      /* bar frame height (px) */
 /* Threshold defaults */
 #define FREQAN_THR_DEFAULT  (-75)   /* initial threshold (dBm) */
@@ -3004,20 +3004,20 @@ void sub_ghz_frequency_reader(void)
             u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
 
             /* Best frequency — large font */
-            u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             if (best_hz > 0)
                 snprintf(str, sizeof(str), "%lu.%03lu MHz",
                          best_hz / 1000000UL,
                          (best_hz % 1000000UL) / 1000UL);
             else
                 snprintf(str, sizeof(str), "---.--- MHz");
-            u8g2_DrawStr(&m1_u8g2, 0, 25, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 23, str);
 
             /* RSSI reading + optional signal indicator */
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             snprintf(str, sizeof(str), "%d dBm%s",
                      (int)best_rssi, has_signal ? "  Signal!" : "");
-            u8g2_DrawStr(&m1_u8g2, 0, 30, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 31, str);
 
             /* Bar: outline frame */
             u8g2_DrawFrame(&m1_u8g2, FREQAN_BAR_X, FREQAN_BAR_Y,

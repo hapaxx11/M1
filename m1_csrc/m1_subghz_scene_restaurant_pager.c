@@ -534,6 +534,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         return true;
     }
 
+    if (state->status_pending &&
+        event != SubGhzEventRxData && event != SubGhzEventTick)
+    {
+        if (event == SubGhzEventBack || event == SubGhzEventOk)
+            state->status_pending = false;
+        app->need_redraw = true;
+        return true;
+    }
+
     restaurant_pager_entry_t *entry = selected_entry(app);
     switch (event)
     {
@@ -813,9 +822,15 @@ static void draw(SubGhzApp *app)
              state->view == RESTAURANT_PAGER_VIEW_SETTINGS);
         if (list_view && state->status_pending)
         {
-            m1_u8g2_nextpage();
-            m1_message_box(&m1_u8g2, screen, state->status, "", "OK");
-            state->status_pending = false;
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 0, 9, 128, "Pager Result",
+                         TEXT_ALIGN_CENTER);
+            u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+            u8g2_DrawFrame(&m1_u8g2, 6, 17, 116, 25);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 8, 32, 112, state->status,
+                         TEXT_ALIGN_CENTER);
+            subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "OK", NULL, NULL);
             continue;
         }
         if (!list_view)

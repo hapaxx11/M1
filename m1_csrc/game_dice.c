@@ -271,7 +271,7 @@ static void dice_draw(dice_state_t *st, int8_t bounce1, int8_t bounce2)
             }
         }
         buf[pos] = '\0';
-        u8g2_DrawStr(&m1_u8g2, 0, 46, buf);
+        u8g2_DrawStr(&m1_u8g2, 0, 51, buf);
     }
 
     m1_button_bar_draw(arrowleft_8x8, "#dice", ok_circle_8x8, "Roll",

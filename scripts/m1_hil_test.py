@@ -456,14 +456,18 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
         status = "FAIL" if stage == "test" else "SKIP"
         detail = public_error(stage, error)
     finally:
-        if status != "PASS":
+        try:
+            m1_resume.finish(status == "PASS")
+        finally:
             try:
-                recover_device(port, baud)
-                detail += "; recovery reboot issued"
-            except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
-                detail += f"; {public_error('cleanup', cleanup_error)}"
-    m1_resume.finish(status == "PASS")
-    m1_ux_audit.finish()
+                m1_ux_audit.finish()
+            finally:
+                if status != "PASS":
+                    try:
+                        recover_device(port, baud)
+                        detail += "; recovery reboot issued"
+                    except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
+                        detail += f"; {public_error('cleanup', cleanup_error)}"
     return {
         "id": case.test_id,
         "title": case.title,
