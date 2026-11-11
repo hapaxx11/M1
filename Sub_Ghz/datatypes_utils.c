@@ -1,59 +1,49 @@
 /* See COPYING.txt for license details. */
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "datatypes_utils.h"
 
 char *hexStrToBinStr(char *hexStr)
 {
-    char *binStr;
-    char hexByte[3] = {0};
-    uint8_t hexstr_len, value, k;
-    uint16_t binstr_cnt;
+    if (hexStr == NULL)
+        return NULL;
 
-    if ( !hexStr )
-    	return NULL;
+    const size_t hexstr_len = strlen(hexStr);
+    if (hexstr_len == 0 || (hexstr_len & 1U) != 0U ||
+        hexstr_len > (SIZE_MAX - 1U) / 8U)
+        return NULL;
 
-    hexstr_len = strlen(hexStr);
-    if ( !hexstr_len )
-    	return NULL;
+    char *binStr = malloc(hexstr_len * 8U + 1U);
+    if (binStr == NULL)
+        return NULL;
 
-    binStr = malloc(hexstr_len*8 + 1); // Extra NULL character at the end of the string
-    if ( !binStr )
-    	return NULL;
-
-    binstr_cnt = 0;
-    hexByte[2] = '\0'; // End of string
-    for (int i = 0; i < hexstr_len; i++)
+    size_t binstr_cnt = 0;
+    for (size_t i = 0; i < hexstr_len; i += 2U)
     {
-        char c = hexStr[i];
-        k = 0;
-        // Check if the character is a hexadecimal digit
-        if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))
+        const char high = hexStr[i];
+        const char low = hexStr[i + 1U];
+        const bool valid_high = (high >= '0' && high <= '9') ||
+                                (high >= 'A' && high <= 'F') ||
+                                (high >= 'a' && high <= 'f');
+        const bool valid_low = (low >= '0' && low <= '9') ||
+                               (low >= 'A' && low <= 'F') ||
+                               (low >= 'a' && low <= 'f');
+        if (!valid_high || !valid_low)
         {
-            hexByte[k++] = c;
-            if (k == 2)
-            {
-                // Convert the hexadecimal pair to a decimal value
-                value = strtol(hexByte, NULL, 16);
-                // Convert the decimal value to binary and add to the binary string
-                for (uint8_t j = 0x80; j; j>>=1)
-                {
-                	binStr[binstr_cnt++] = (value & j) ? '1' : '0';
-                }
-            }
-        } // if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f'))
-        else // Error in hex data, abort and return
-        {
-        	free(binStr);
-        	binStr = NULL;
+            free(binStr);
+            return NULL;
         }
-    } // for (int i = 0; i < hexstr_len; i++)
 
-    if ( binstr_cnt )
-    	binStr[binstr_cnt] = '\0'; // End of string
+        const uint8_t value = (uint8_t)((hexCharToDecimal(high) << 4) |
+                                        hexCharToDecimal(low));
+        for (uint8_t mask = 0x80U; mask != 0U; mask >>= 1U)
+            binStr[binstr_cnt++] = (value & mask) ? '1' : '0';
+    }
 
+    binStr[binstr_cnt] = '\0';
     return binStr;
 } // char *hexStrToBinStr(char *hexStr)
 
@@ -83,17 +73,29 @@ uint8_t hexCharToDecimal(char c)
 // Convert a Hex string to decimal
 uint32_t hexStringToDecimal(const char *hexString)
 {
+    if (hexString == NULL)
+        return 0;
+
+    const size_t len = strlen(hexString);
+    if ((len & 1U) != 0U)
+        return 0;
+
     uint32_t decimal = 0;
-    int len = strlen(hexString);
-
-    for (int i = 0; i < len; i += 2)
+    for (size_t i = 0; i < len; i += 2U)
     {
-        decimal <<= 8; // Shift left to accommodate next byte
+        const char high = hexString[i];
+        const char low = hexString[i + 1U];
+        const bool valid_high = (high >= '0' && high <= '9') ||
+                                (high >= 'A' && high <= 'F') ||
+                                (high >= 'a' && high <= 'f');
+        const bool valid_low = (low >= '0' && low <= '9') ||
+                               (low >= 'A' && low <= 'F') ||
+                               (low >= 'a' && low <= 'f');
+        if (!valid_high || !valid_low)
+            return 0;
 
-        // Converts two characters hex to a single byte
-        uint8_t highNibble = hexCharToDecimal(hexString[i]);
-        uint8_t lowNibble = hexCharToDecimal(hexString[i + 1]);
-        decimal |= (highNibble << 4) | lowNibble;
+        decimal = (decimal << 8) |
+                  (hexCharToDecimal(high) << 4) | hexCharToDecimal(low);
     }
 
     return decimal;
@@ -103,17 +105,18 @@ uint32_t hexStringToDecimal(const char *hexString)
 
 char *dec2binWzerofill(uint64_t Dec, unsigned int bitLength)
 {
-    // Allocate memory dynamically for safety
-    char *bin = (char *)malloc(bitLength + 1);
-    if (!bin)
-    	return NULL; // Handle allocation failure
+    if (bitLength > 64U)
+        return NULL;
 
-    bin[bitLength] = '\0'; // Null-terminate string
+    char *bin = (char *)malloc(bitLength + 1U);
+    if (bin == NULL)
+        return NULL;
 
-    for (int i = bitLength - 1; i >= 0; i--)
+    bin[bitLength] = '\0';
+    for (unsigned int i = bitLength; i > 0U; i--)
     {
-        bin[i] = (Dec & 1) ? '1' : '0';
-        Dec >>= 1;
+        bin[i - 1U] = (Dec & 1U) ? '1' : '0';
+        Dec >>= 1U;
     }
 
     return bin;

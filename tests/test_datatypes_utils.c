@@ -90,14 +90,49 @@ void test_hexstr_lowercase(void)
 
 /*============================================================================*/
 /* Tests: hexStrToBinStr                                                      */
-/*                                                                            */
-/* NOTE: hexStrToBinStr has a latent bug — it resets `k = 0` on every loop    */
-/* iteration, so the hex-pair counter never reaches 2 and no binary output    */
-/* is ever produced. The function returns a non-NULL pointer with binstr_cnt  */
-/* still at 0 (unterminated buffer) for any valid hex input.                  */
-/* These tests document the ACTUAL behavior, not the intended behavior.       */
-/* The NULL/empty guard paths do work correctly.                              */
 /*============================================================================*/
+
+void test_hextobin_decodes_hex_pairs(void)
+{
+    char input[] = "A5f0";
+    char *bits = hexStrToBinStr(input);
+    TEST_ASSERT_NOT_NULL(bits);
+    TEST_ASSERT_EQUAL_STRING("1010010111110000", bits);
+    free(bits);
+}
+
+void test_hextobin_rejects_odd_and_invalid_input(void)
+{
+    char odd[] = "ABC";
+    char invalid[] = "0G";
+    TEST_ASSERT_NULL(hexStrToBinStr(odd));
+    TEST_ASSERT_NULL(hexStrToBinStr(invalid));
+}
+
+void test_hextobin_handles_more_than_255_characters(void)
+{
+    char input[601];
+    memset(input, '0', 300);
+    memset(input + 300, '1', 300);
+    input[600] = '\0';
+    char *bits = hexStrToBinStr(input);
+    TEST_ASSERT_NOT_NULL(bits);
+    TEST_ASSERT_EQUAL_size_t(2400, strlen(bits));
+    TEST_ASSERT_EQUAL_CHAR('0', bits[0]);
+    TEST_ASSERT_EQUAL_CHAR('1', bits[2399]);
+    free(bits);
+}
+
+void test_hexstring_rejects_null_and_odd_length(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(0, hexStringToDecimal(NULL));
+    TEST_ASSERT_EQUAL_UINT32(0, hexStringToDecimal("ABC"));
+}
+
+void test_dec2bin_rejects_width_above_64(void)
+{
+    TEST_ASSERT_NULL(dec2binWzerofill(1, 65));
+}
 
 void test_hextobin_null(void)
 {
@@ -168,15 +203,20 @@ int main(void)
     RUN_TEST(test_hexstr_ff);
     RUN_TEST(test_hexstr_lowercase);
 
-    /* hexStrToBinStr (guard paths only — function has latent pair-counter bug) */
+    /* hexStrToBinStr */
     RUN_TEST(test_hextobin_null);
     RUN_TEST(test_hextobin_empty);
+    RUN_TEST(test_hextobin_decodes_hex_pairs);
+    RUN_TEST(test_hextobin_rejects_odd_and_invalid_input);
+    RUN_TEST(test_hextobin_handles_more_than_255_characters);
+    RUN_TEST(test_hexstring_rejects_null_and_odd_length);
 
     /* dec2binWzerofill */
     RUN_TEST(test_dec2bin_zero);
     RUN_TEST(test_dec2bin_ff);
     RUN_TEST(test_dec2bin_one_bit);
     RUN_TEST(test_dec2bin_large_value);
+    RUN_TEST(test_dec2bin_rejects_width_above_64);
 
     return UNITY_END();
 }

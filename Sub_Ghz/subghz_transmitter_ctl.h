@@ -171,6 +171,9 @@ subghz_transmitter_action_t subghz_transmitter_ctl_event(
     subghz_transmitter_ctl_t *c,
     subghz_transmitter_event_t event);
 
+bool subghz_transmitter_ctl_should_release(const subghz_transmitter_ctl_t *c,
+                                           bool ok_held);
+
 /**
  * @brief  Current phase (read-only).
  */

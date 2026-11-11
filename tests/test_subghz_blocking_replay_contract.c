@@ -214,9 +214,22 @@ void test_flipper_conversion_sets_prepared_replay_path_before_success(void)
     free(content);
 }
 
+void test_transmitter_polls_ok_release_before_burst_completion(void)
+{
+    char *content = read_file("m1_csrc/m1_subghz_scene_transmitter.c");
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content, "subghz_transmitter_ctl_should_release"),
+                                 "Transmitter must poll the OK GPIO level");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content, "SUBGHZ_TXCTL_EVT_OK_RELEASE"),
+                                 "Transmitter must forward OK release to its controller");
+
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_transmitter_polls_ok_release_before_burst_completion);
     RUN_TEST(test_async_abort_does_not_reset_main_queue);
     RUN_TEST(test_blocking_wrapper_flushes_main_queue_before_returning);
     RUN_TEST(test_prepare_flipper_validates_source_and_output_pointers);

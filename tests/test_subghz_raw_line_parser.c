@@ -21,6 +21,7 @@
  */
 
 #include <string.h>
+#include <limits.h>
 #include "unity.h"
 #include "subghz_raw_line_parser.h"
 
@@ -332,6 +333,23 @@ void test_parse_full_line_not_truncated_at_64_samples(void)
     TEST_ASSERT_EQUAL_UINT32((299 % 500) + 1, out[n_values - 1]);
 }
 
+void test_parse_long_min_does_not_overflow_negation(void)
+{
+    SubGhzRawLineState state;
+    subghz_raw_line_state_init(&state);
+    char input[64];
+    snprintf(input, sizeof(input), " %ld", LONG_MIN);
+    const uint32_t expected = (uint32_t)((unsigned long)LONG_MAX + 1UL);
+    uint32_t out[1];
+    const uint16_t count = subghz_parse_raw_data_line(input, true, &state, out, 1);
+    if (expected == 0) {
+        TEST_ASSERT_EQUAL_UINT16(0, count);
+    } else {
+        TEST_ASSERT_EQUAL_UINT16(1, count);
+        TEST_ASSERT_EQUAL_UINT32(expected, out[0]);
+    }
+}
+
 /* ===================================================================
  * State init
  * =================================================================== */
@@ -382,6 +400,7 @@ int main(void)
 
     /* Large values */
     RUN_TEST(test_parse_large_values);
+    RUN_TEST(test_parse_long_min_does_not_overflow_negation);
 
     /* Full-buffer capacity (replay truncation regression) */
     RUN_TEST(test_parse_full_line_not_truncated_at_64_samples);

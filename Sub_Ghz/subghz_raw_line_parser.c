@@ -33,6 +33,14 @@ void subghz_raw_line_state_init(SubGhzRawLineState *state)
 /* subghz_parse_raw_data_line                                                  */
 /*============================================================================*/
 
+static uint32_t raw_magnitude(long value)
+{
+    const unsigned long magnitude = value < 0
+        ? (unsigned long)(-(value + 1L)) + 1UL
+        : (unsigned long)value;
+    return (uint32_t)magnitude;
+}
+
 uint16_t subghz_parse_raw_data_line(const char *text,
                                      bool line_complete,
                                      SubGhzRawLineState *state,
@@ -60,10 +68,10 @@ uint16_t subghz_parse_raw_data_line(const char *text,
                  state->leftover, (int)(tok_end - p), p);
         state->leftover[0] = '\0';
 
-        long val = strtol(combined, NULL, 10);
-        if (val < 0) val = -val;
-        if (val != 0 && count < max_samples)
-            samples_out[count++] = (uint32_t)val;
+        const long val = strtol(combined, NULL, 10);
+        const uint32_t magnitude = raw_magnitude(val);
+        if (magnitude != 0 && count < max_samples)
+            samples_out[count++] = magnitude;
 
         p = tok_end;
     }
@@ -76,24 +84,24 @@ uint16_t subghz_parse_raw_data_line(const char *text,
         if (*p == '\0') break;
 
         char *endp;
-        long val = strtol(p, &endp, 10);
+        const long val = strtol(p, &endp, 10);
         if (endp == p) break;   /* no more numbers */
         p = endp;
 
-        if (val < 0) val = -val;
-        if (val == 0) continue; /* skip zero */
+        const uint32_t magnitude = raw_magnitude(val);
+        if (magnitude == 0) continue; /* skip zero */
 
         /* If we're at end of buffer and line is truncated,
          * this number might be incomplete — save as leftover */
         if (!line_complete && *p == '\0')
         {
             snprintf(state->leftover, sizeof(state->leftover),
-                     "%lu", (unsigned long)val);
+                     "%lu", (unsigned long)magnitude);
             break;
         }
 
         if (count < max_samples)
-            samples_out[count++] = (uint32_t)val;
+            samples_out[count++] = magnitude;
     }
 
     return count;
