@@ -292,7 +292,7 @@ void infrared_learn_new_remote(void)
 	u8g2_DrawXBMP(&m1_u8g2, 2, 2, 48, 25, remote_48x25);
 	u8g2_DrawStr(&m1_u8g2, 60, 20, "Reading...");
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "OK", NULL, NULL);
+
 	m1_u8g2_nextpage();
 
 	while (1)
@@ -327,8 +327,6 @@ void infrared_learn_new_remote(void)
 				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 #ifdef M1_APP_FILE_IMPORT_ENABLE
 				m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Save", NULL, NULL);
-#else
-				m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "OK", NULL, NULL);
 #endif
 				m1_u8g2_nextpage();
 			}
@@ -381,7 +379,6 @@ void infrared_learn_new_remote(void)
 					u8g2_DrawXBMP(&m1_u8g2, 2, 2, 48, 25, remote_48x25);
 					u8g2_DrawStr(&m1_u8g2, 60, 20, "Reading...");
 					u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-					m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "OK", NULL, NULL);
 					m1_u8g2_nextpage();
 				}
 				else

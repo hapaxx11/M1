@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import m1_ux_audit
 from m1_hil import M1Hil
 from m1_resume import log_pass, resume_targets, should_run
 from m1_bt_menu_audit import _audit_path, _click, _frame, _reboot_menu, _title_crc
@@ -88,11 +89,16 @@ def _read_raw_title(client: M1Hil) -> tuple[M1Hil, int]:
     return client, _title_crc(_frame(client))
 
 
+_saved_browser_title = 0
+
+
 def _select_saved(client: M1Hil, raw_title: int) -> str | None:
+    global _saved_browser_title
     _click(client, "down", 2)
     _click(client, "ok")
     if not select_first_file(client):
         return None
+    _saved_browser_title = _title_crc(_frame(client))
     _click(client, "ok")
     return "raw" if _title_crc(_frame(client)) == raw_title else "parsed"
 
@@ -118,12 +124,12 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
             if selection == 4:
                 _click(client, "down", selection)
                 _click(client, "ok")
-                _frame(client)
+                m1_ux_audit.observe(_frame(client))
                 _click(client, "back")
                 _frame(client)
             else:
                 _audit_path(client, (selection,), False, 8.0,
-                            reentry=False)
+                            reentry=False, ancestor_titles=(_saved_browser_title,))
             log_pass(label)
         skipped.append("MoreRAW actions (first file is parsed, not RAW)")
 
@@ -141,7 +147,7 @@ def _run_saved_actions(client: M1Hil) -> tuple[M1Hil, list[str]]:
             if selection == 2:
                 _click(client, "down", selection)
                 _click(client, "ok")
-                _frame(client)
+                m1_ux_audit.observe(_frame(client))
                 _click(client, "back")
                 _frame(client)
             else:
@@ -162,7 +168,7 @@ def _run_keeloq_editor_chain(client: M1Hil) -> M1Hil:
         if pending:
             print(f"RUN  Add Manually/{label} (cancel)", flush=True)
         _click(client, "ok")
-        _frame(client)
+        m1_ux_audit.observe(_frame(client))
         if pending:
             log_pass(f"Add Manually/{label} (cancel)")
     return client
@@ -177,7 +183,7 @@ def run(client: M1Hil) -> str:
             if config:
                 _click(client, "ok")
                 _click(client, "left")
-                _frame(client)
+                m1_ux_audit.observe(_frame(client))
             else:
                 _audit_path(client, path, False, 8.0)
             log_pass(label)
@@ -189,7 +195,7 @@ def run(client: M1Hil) -> str:
             _click(client, "left")
             _click(client, "down", 11)
             _click(client, "ok")
-            _frame(client)
+            m1_ux_audit.observe(_frame(client))
             _click(client, "back")
             _frame(client)
             log_pass("Read/Config/Protocol Filter")

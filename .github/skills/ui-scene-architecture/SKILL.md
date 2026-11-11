@@ -161,7 +161,8 @@ constrained vertical space:
 |------|--------|---------------|
 | `m1_subghz_scene_read.c` | `HISTORY_ROW_H 8`, `HISTORY_VISIBLE 3` | Compact RX history in split-screen (RSSI bar + history + bottom bar) |
 | `m1_subghz_scene_saved.c` | `DECODE_ROW_H 8`, `DECODE_VISIBLE 3` | Offline decode results in dual-view layout |
-| `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display, not a selectable menu |
+| `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 4` | Frequency scanner data display, not a selectable menu; four rows leave room for the action bar |
+| `m1_sub_ghz.c` | `SIGID_VISIBLE_ROWS 3` | Smart ID sweep results, not a selectable menu; three rows leave room for the action bar |
 | `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6`, `SUBGHZ_HISTORY_VISIBLE_ITEMS 5` | Legacy history (tiny rows for maximum density) |
 ## Saved Item Actions Pattern
 

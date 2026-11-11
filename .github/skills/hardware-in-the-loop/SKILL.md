@@ -129,13 +129,18 @@ python scripts/m1_hil_test.py --list
 python scripts/m1_hil_test.py --test wifi-airtime
 ```
 
-The active `ble-spam` case runs only when selected explicitly with `--test
-ble-spam`; it is excluded from default runs and unfiltered PR updates. Recursive
+The active `ble-spam` and `tx-menu-audit` cases run only when selected explicitly
+with `--test`; they are excluded from default runs and unfiltered PR updates. Recursive
 menu audits checkpoint each passed destination under `build/hil-results/`.
 Rerun the same command after a failure to resume at the first unfinished
 destination. Use `--fresh` only when deliberately ignoring checkpoints and
 rerunning the full audit. Changes to an audit or its shared helpers invalidate
 that audit's older checkpoints without invalidating unrelated audits.
+
+Add `--ux-audit` to any recursive audit to record only visual-geometry findings
+(inverted headers, missing separators, and solid bottom bars) in
+`build/hil-results/<test-id>-ux.json`. Framebuffer contents are never persisted.
+Treat findings as source-review candidates, not automatic failures.
 
 The suite reboots each case into a known home screen, uses only one M1 and
 native USB RPC, checks entry/exit/re-entry and responsiveness, and stops active

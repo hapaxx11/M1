@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "stm32h5xx_hal.h"
 #include "m1_games.h"
+#include "m1_button_bar.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -263,7 +264,8 @@ void game_rps_run(void)
                 u8g2_DrawStr(&m1_u8g2, arrow_x, 54, "^");
 
                 u8g2_SetFont(&m1_u8g2, u8g2_font_5x8_tr);
-                u8g2_DrawStr(&m1_u8g2, 10, 63, "<LEFT/RIGHT> OK:Play");
+                m1_button_bar_draw(arrowleft_8x8, NULL, ok_circle_8x8, "Play",
+                                   arrowright_8x8, NULL);
                 break;
             }
 
@@ -301,14 +303,13 @@ void game_rps_run(void)
                 /* Result text */
                 u8g2_SetFont(&m1_u8g2, u8g2_font_6x10_tr);
                 if (outcome == 1)
-                    u8g2_DrawStr(&m1_u8g2, 34, 58, "You WIN!");
+                    u8g2_DrawStr(&m1_u8g2, 34, 48, "You WIN!");
                 else if (outcome == 2)
-                    u8g2_DrawStr(&m1_u8g2, 30, 58, "You LOSE!");
+                    u8g2_DrawStr(&m1_u8g2, 30, 48, "You LOSE!");
                 else
-                    u8g2_DrawStr(&m1_u8g2, 40, 58, "DRAW!");
+                    u8g2_DrawStr(&m1_u8g2, 40, 48, "DRAW!");
 
-                u8g2_SetFont(&m1_u8g2, u8g2_font_5x8_tr);
-                u8g2_DrawStr(&m1_u8g2, 34, 64, "OK: Again");
+                m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Again", NULL, NULL);
                 break;
             }
             }

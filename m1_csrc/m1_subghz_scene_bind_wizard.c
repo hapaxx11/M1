@@ -20,7 +20,7 @@
  *   2. Key generation + file save (auto-advances)
  *   3. Step-by-step binding instructions (1..N screens)
  *        – Each screen: header "Step N of M", instruction text, optional
- *          countdown bar, OK=Next / OK=Send (for TX steps)
+ *          countdown bar and a rounded OK action button (Next / Send)
  *   4. Done screen — confirms file saved, notes replay capability
  *
  * Navigation:
@@ -43,6 +43,7 @@
 #include "m1_lcd.h"
 #include "m1_scene.h"
 #include "m1_submenu.h"
+#include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "m1_subghz_scene.h"
@@ -280,8 +281,8 @@ static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 /* LCG multiplier (Knuth MMIX) used to further mix tick entropy */
 #define BW_LCG_MUL   (6364136223846793005ULL)
 
-/* Line height in pixels for instruction text (NokiaSmallPlain ascent=7) */
-#define STEP_TEXT_LINE_H    9
+/* Four compact instruction lines fit below the header and above the timer. */
+#define STEP_TEXT_LINE_H    6
 
 /* Populate the protocol-label pointer table and (re)initialise the picker
  * model.  Called from scene_on_enter (and from any future place that resets
@@ -402,7 +403,6 @@ static void draw_save_error(void)
     u8g2_DrawStr(&m1_u8g2, 4, 28, "Check SD card.");
     u8g2_DrawStr(&m1_u8g2, 4, 40, "0:/SUBGHZ/ must");
     u8g2_DrawStr(&m1_u8g2, 4, 52, "be writable.");
-    u8g2_DrawStr(&m1_u8g2, 4, 63, "BACK=Retry");
     m1_u8g2_nextpage();
 }
 
@@ -425,8 +425,8 @@ static void draw_step(void)
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
 
     /* Instruction text */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text_box(&m1_u8g2, 2, 20, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
+    u8g2_SetFont(&m1_u8g2, u8g2_font_4x6_tr);
+    m1_draw_text_box(&m1_u8g2, 2, 16, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
 
     /* Countdown bar + hints */
     if (st->countdown_sec > 0)
@@ -439,28 +439,28 @@ static void draw_step(void)
         uint8_t bar_w = (remaining_ms > 0)
                       ? (uint8_t)((uint32_t)120u * remaining_ms / total_ms)
                       : 0u;
-        u8g2_DrawFrame(&m1_u8g2, 4, 51, 120, 5);
+        u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 5);
         if (bar_w > 0)
-            u8g2_DrawBox(&m1_u8g2, 4, 51, bar_w, 5);
+            u8g2_DrawBox(&m1_u8g2, 4, 42, bar_w, 5);
 
         /* Time remaining + action/failure hint */
         char cd[8];
         snprintf(cd, sizeof(cd), "%us", (unsigned)((remaining_ms + 999u) / 1000u));
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 4, 63, cd);
+        u8g2_DrawStr(&m1_u8g2, 4, 41, cd);
         if (bw_tx_failed && st->tx_step)
-            u8g2_DrawStr(&m1_u8g2, 46, 63, "TX fail-retry OK");
-        else
-            u8g2_DrawStr(&m1_u8g2, 70, 63, st->tx_step ? "OK=Send" : "OK=Next");
+            u8g2_DrawStr(&m1_u8g2, 30, 41, "TX failed");
     }
     else
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         if (bw_tx_failed)
-            u8g2_DrawStr(&m1_u8g2, 4, 63, "TX fail-retry OK");
-        else
-            u8g2_DrawStr(&m1_u8g2, 4, 63, st->tx_step ? "OK=Send" : "OK=Next");
+            u8g2_DrawStr(&m1_u8g2, 4, 41, "TX failed");
     }
+    subghz_button_bar_draw(NULL, NULL,
+                           ok_circle_8x8,
+                           st->tx_step ? (bw_tx_failed ? "Retry" : "Send") : "Next",
+                           NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -486,8 +486,6 @@ static void draw_done(void)
     u8g2_DrawStr(&m1_u8g2, 2, 33, "Saved to 0:/SUBGHZ/");
     u8g2_DrawStr(&m1_u8g2, 2, 44, "Use Saved to replay");
     u8g2_DrawStr(&m1_u8g2, 2, 55, "with counter-incr.");
-
-    u8g2_DrawStr(&m1_u8g2, 4, 63, "BACK=Exit");
 
     m1_u8g2_nextpage();
 }

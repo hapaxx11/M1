@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6.1] - 2026-11-11
+
+### Added
+
+- Documentation: Add opt-in recursive HIL visual-geometry auditing with privacy-preserving inverted-header, separator, and bottom-bar findings for every navigated destination.
+- Documentation: Add an explicitly opt-in transmit-scene HIL audit for authorized WiFi, Bluetooth, NFC, Infrared, and Sub-GHz transmit flows with bounded cleanup and destructive-action exclusions.
+
+### Fixed
+
+- **UI: Excluded-scene source audit** — Correct Back labels and action presentation in Bind, Remote, bank-swap, Pong, and 2048, with source-only regressions for transmitter, receiver, signal settings, and other HIL-excluded scenes.
+- **UI: Scene visual standards** — Correct inverted headers, redundant Back/OK hints, physical-button mapping, and custom selector layouts across games, Infrared, RFID, NFC, Sub-GHz, and firmware download screens. Use shared font-aware submenu navigation and rounded action bars with regression coverage.
+- **UI: Review follow-up** — Reflow analyzer labels and graphs without overlap, preserve Restaurant Pager status feedback, verify playlist start/stop and latest-client cleanup, observe manual HIL destinations, and retain visual findings across checkpoint resumes.
+- **UI: Review caption and countdown fixes** — Shorten action-button captions and separate Bind instruction, timer, countdown bar, and action-button pixel regions.
+- **UI: Dialog and Sub-GHz status readability** — use rounded message-box buttons and move RSSI text below the status-bar separator.
+
 ## [0.9.6.0] - 2026-11-10
 
 ### Changed

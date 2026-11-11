@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import time
 
+import m1_ux_audit
 from m1_hil import M1Hil, connect
 from m1_resume import log_pass, resume_targets
 from m1_bt_menu_audit import (
@@ -67,7 +68,8 @@ def _audit_power_reboot(client: M1Hil) -> M1Hil:
     _click(client, "ok")
     _click(client, "down")
     _click(client, "ok")
-    _wait_change(client, before, 4.0)
+    confirmation = _wait_change(client, before, 4.0)
+    m1_ux_audit.observe(confirmation)
     _click(client, "right")
     client.close()
     time.sleep(15.0)
@@ -81,6 +83,7 @@ def _audit_lcd_row(client: M1Hil, selection: int) -> None:
     _click(client, "down")
     _click(client, "ok")
     previous = _frame(client)
+    m1_ux_audit.observe(previous)
     for _index in range(selection):
         _click(client, "down")
         current = _wait_change(client, previous, 4.0)

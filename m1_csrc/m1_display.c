@@ -779,7 +779,48 @@ void m1_info_box_display_draw(uint8_t box_row, const uint8_t *ptext)
 uint8_t m1_message_box(u8g2_t *u8g2, const char *title1, const char *title2, const char *title3, const char *buttons)
 {
 
-  u8g2_UserInterfaceMessage(u8g2, title1, title2, title3, buttons);
+    if (u8x8_GetStringLineCnt(buttons) > 1) {
+        (void)m1_message_box_choice(u8g2, title1, title2, title3, buttons);
+        return 0;
+    }
+
+    const char *label_start = u8x8_GetStringLineStart(0, buttons);
+    char label[16];
+    uint8_t label_len = 0;
+    while (label_start[label_len] != '\0' && label_start[label_len] != '\n' && label_len < 15)
+        label_len++;
+    memcpy(label, label_start, label_len);
+    label[label_len] = '\0';
+
+    m1_u8g2_firstpage();
+    do {
+        u8g2_SetDrawColor(&m1_u8g2, 1);
+        u8g2_SetFont(&m1_u8g2, u8g2_font_6x10_tr);
+        uint8_t line_height = u8g2_GetAscent(&m1_u8g2) - u8g2_GetDescent(&m1_u8g2);
+        uint8_t y = 15;
+        char trunc[22];
+
+        if (title1) {
+            strncpy(trunc, title1, 21); trunc[21] = '\0';
+            u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
+        }
+        if (title2) {
+            strncpy(trunc, title2, 21); trunc[21] = '\0';
+            u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
+        }
+        if (title3) {
+            strncpy(trunc, title3, 21); trunc[21] = '\0';
+            u8g2_DrawStr(&m1_u8g2, 2, y, trunc);
+        }
+
+        u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, label) + 6u;
+        u8g2_uint_t btn_x = (M1_LCD_DISPLAY_WIDTH - btn_w) / 2u;
+        u8g2_uint_t box_x = (btn_x >= 2u) ? (btn_x - 2u) : 0u;
+        u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);
+        u8g2_SetDrawColor(&m1_u8g2, 0);
+        u8g2_DrawStr(&m1_u8g2, btn_x, 60, label);
+        u8g2_SetDrawColor(&m1_u8g2, 1);
+    } while (m1_u8g2_nextpage());
 
   for(;;)
   {

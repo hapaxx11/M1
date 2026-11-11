@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import m1_ux_audit
+
 _VERSION = "1"
 _AUDIT_SOURCES = {
     "wifi-menu-audit": "m1_wifi_menu_audit.py",
@@ -16,6 +18,7 @@ _AUDIT_SOURCES = {
     "settings-menu-audit": "m1_settings_menu_audit.py",
     "misc-menu-audit": "m1_misc_menu_audit.py",
     "subghz-menu-audit": "m1_subghz_menu_audit.py",
+    "tx-menu-audit": "m1_tx_menu_audit.py",
 }
 _SHARED_SOURCES = (
     "m1_resume.py",
@@ -24,6 +27,7 @@ _SHARED_SOURCES = (
     "m1_wifi_menu_audit.py",
     "m1_hil.py",
     "m1_hil_test.py",
+    "m1_ux_audit.py",
 )
 _state: dict[str, object] = {}
 
@@ -33,6 +37,12 @@ def _source_paths(test_id: str) -> list[Path]:
     names = set(_SHARED_SOURCES)
     if test_id in _AUDIT_SOURCES:
         names.add(_AUDIT_SOURCES[test_id])
+        if test_id == "tx-menu-audit":
+            names.update((
+                "m1_misc_menu_audit.py",
+                "m1_nfc_menu_audit.py",
+                "m1_subghz_menu_audit.py",
+            ))
     else:
         names.update(path.name for path in root.glob("m1_*menu_audit.py"))
     return [root / name for name in sorted(names)]
@@ -67,6 +77,9 @@ def start(test_id: str, directory: Path, fresh: bool = False) -> None:
 def should_run(label: str) -> bool:
     if not _state or label not in _state["passed"]:
         return True
+    if m1_ux_audit.needs_result(label):
+        print(f"RESUME RERUN {label}: UX result missing", flush=True)
+        return True
     print(f"RESUME SKIP {label}", flush=True)
     return False
 
@@ -80,6 +93,7 @@ def resume_targets(targets):
 
 def log_pass(label: str) -> None:
     print(f"PASS {label}", flush=True)
+    m1_ux_audit.evaluate(label)
     if not _state:
         return
     path = _state["path"]

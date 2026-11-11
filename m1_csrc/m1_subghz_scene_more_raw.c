@@ -126,7 +126,7 @@ static void do_rename(SubGhzApp *app)
     else
     {
         m1_message_box(&m1_u8g2, "Rename failed",
-                       "Could not rename file", "", "BACK");
+                       "Could not rename file", "", "OK");
     }
 }
 
@@ -159,7 +159,7 @@ static void do_delete(SubGhzApp *app)
     else
     {
         m1_message_box(&m1_u8g2, "Delete failed",
-                       "Could not delete file", "", "BACK");
+                       "Could not delete file", "", "OK");
     }
 }
 

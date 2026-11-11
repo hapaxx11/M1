@@ -20,6 +20,8 @@ import m1_resume  # noqa: E402
 import m1_saved_item_audit as saved_audit  # noqa: E402
 import m1_settings_menu_audit as settings_audit  # noqa: E402
 import m1_subghz_menu_audit as subghz_audit  # noqa: E402
+import m1_tx_menu_audit as tx_audit  # noqa: E402
+import m1_ux_audit  # noqa: E402
 import m1_wifi_menu_audit as wifi_audit  # noqa: E402
 
 
@@ -34,9 +36,16 @@ class TestRegistry(unittest.TestCase):
     def test_active_ble_spam_is_opt_in_only(self):
         default_ids = {case.test_id for case in hil.select_cases(hil.CASES, None)}
         self.assertNotIn("ble-spam", default_ids)
-        self.assertEqual(len(hil.CASES) - 1, len(default_ids))
+        self.assertNotIn("tx-menu-audit", default_ids)
+        self.assertEqual(len(hil.CASES) - 2, len(default_ids))
         explicit_ids = {case.test_id for case in hil.select_cases(hil.CASES, ["ble-spam"])}
         self.assertEqual({"ble-spam"}, explicit_ids)
+        tx_ids = {case.test_id for case in hil.select_cases(hil.CASES, ["tx-menu-audit"])}
+        self.assertEqual({"tx-menu-audit"}, tx_ids)
+
+    def test_tx_transmitter_handoff_limitation_is_explicit(self):
+        self.assertEqual((), tx_audit.SUBGHZ_TX)
+        self.assertIn("Add Manually transmitter handoff", tx_audit.SKIPPED[0])
 
     def test_every_top_level_menu_has_registered_recursive_audit(self):
         expected = {
@@ -336,6 +345,22 @@ class TestAuditSafety(unittest.TestCase):
         ):
             self.assertEqual("parsed", subghz_audit._select_saved(client, 1234))
 
+    def test_subghz_send_peer_accepts_saved_browser_ancestor(self):
+        client = mock.MagicMock()
+        subghz_audit._saved_browser_title = 1234
+        with (
+            mock.patch.object(subghz_audit, "_read_raw_title", return_value=(client, 1)),
+            mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(subghz_audit, "_select_saved", return_value="parsed"),
+            mock.patch.object(subghz_audit, "resume_targets",
+                              return_value=(("Saved/Send to Peer", 1),)),
+            mock.patch.object(subghz_audit, "_audit_path") as audit_path,
+        ):
+            subghz_audit._run_saved_actions(client)
+        audit_path.assert_called_once_with(
+            client, (1,), False, 8.0, reentry=False, ancestor_titles=(1234,),
+        )
+
     def test_recursive_audits_exclude_auto_start_rf_actions(self):
         self.assertFalse(any(label.startswith("Attacks/") or "Flood" in label
                              for label, _path in wifi_audit.TOP_LEVEL_TARGETS))
@@ -428,6 +453,47 @@ class TestResume(unittest.TestCase):
         self.assertIn("m1_hil_test.py", names)
         self.assertNotIn("m1_subghz_menu_audit.py", names)
 
+    def test_tx_checkpoint_hash_includes_traversal_helpers_only_for_tx_audit(self):
+        tx_names = {path.name for path in m1_resume._source_paths("tx-menu-audit")}
+        self.assertTrue({
+            "m1_misc_menu_audit.py",
+            "m1_nfc_menu_audit.py",
+            "m1_subghz_menu_audit.py",
+        }.issubset(tx_names))
+        nfc_names = {path.name for path in m1_resume._source_paths("nfc-menu-audit")}
+        self.assertNotIn("m1_subghz_menu_audit.py", nfc_names)
+
+    def test_ux_audit_reruns_checkpointed_destinations_without_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            version = m1_resume._version("demo")
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            m1_resume.finish(False)
+
+            m1_resume.start("demo", root)
+            m1_ux_audit.start("demo", root, enabled=True, version=version)
+            self.assertEqual(["first"], m1_resume.resume_targets(["first"]))
+            m1_resume.finish(False)
+            m1_ux_audit.finish()
+
+    def test_ux_audit_skips_checkpointed_destinations_with_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            version = m1_resume._version("demo")
+            m1_resume.start("demo", root, fresh=True)
+            m1_resume.log_pass("first")
+            m1_resume.finish(False)
+            m1_ux_audit.start("demo", root, enabled=True, version=version)
+            m1_ux_audit._state["results"].append(
+                {"label": "first", "findings": []}
+            )
+
+            m1_resume.start("demo", root)
+            self.assertEqual([], m1_resume.resume_targets(["first"]))
+            m1_resume.finish(False)
+            m1_ux_audit.finish()
+
     def test_actual_misc_labels_survive_checkpoint_reload(self):
         groups = (
             misc_audit.IR_TARGETS,
@@ -480,6 +546,52 @@ class TestResume(unittest.TestCase):
                     _client, skipped = subghz_audit._run_saved_actions(client)
             self.assertTrue(any(item.startswith(expected) for item in skipped))
             self.assertFalse(any(item.startswith(unexpected) for item in skipped))
+
+
+class TestTransmitReview(unittest.TestCase):
+    def test_playlist_requires_start_and_bounded_stop(self):
+        client = mock.MagicMock()
+        state = {"client": client}
+        with (
+            mock.patch.object(tx_audit, "should_run", side_effect=(True, False)),
+            mock.patch.object(tx_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(tx_audit, "select_first_file", return_value=True),
+            mock.patch.object(tx_audit, "_frame", side_effect=(b"ready", b"stopped")),
+            mock.patch.object(tx_audit, "_wait_change", side_effect=(b"active", b"stopped")),
+            mock.patch.object(tx_audit, "_click") as click,
+            mock.patch.object(tx_audit.m1_ux_audit, "observe") as observe,
+            mock.patch.object(tx_audit, "log_pass"),
+        ):
+            tx_audit._run_subghz(state)
+        self.assertEqual(3, click.call_args_list.count(mock.call(client, "ok")))
+        self.assertEqual(1, click.call_args_list.count(mock.call(client, "back")))
+        observe.assert_called_once_with(b"active")
+
+    def test_cleanup_closes_latest_reconnected_client(self):
+        original = mock.MagicMock()
+        latest = mock.MagicMock()
+
+        def reconnect_then_fail(state):
+            state["client"] = latest
+            raise RuntimeError("interrupt")
+
+        with mock.patch.object(tx_audit, "_run_wifi", side_effect=reconnect_then_fail):
+            with self.assertRaisesRegex(RuntimeError, "interrupt"):
+                tx_audit.run(original)
+        latest.close.assert_called_once_with()
+        original.close.assert_not_called()
+
+    def test_lcd_destination_is_observed_before_navigation(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(settings_audit, "_frame", return_value=b"lcd"),
+            mock.patch.object(settings_audit, "_title_crc", return_value=1),
+            mock.patch.object(settings_audit, "_click"),
+            mock.patch.object(settings_audit, "_wait_title", return_value=b"lcd"),
+            mock.patch.object(settings_audit.m1_ux_audit, "observe") as observe,
+        ):
+            settings_audit._audit_lcd_row(client, 0)
+        observe.assert_called_once_with(b"lcd")
 
 
 class TestScreenTransitions(unittest.TestCase):
@@ -588,6 +700,53 @@ class TestRecovery(unittest.TestCase):
         self.assertIn("original failure", result["detail"])
         self.assertIn("invalid response", result["detail"])
         self.assertNotIn("CRC", result["detail"])
+
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device")
+    @mock.patch("m1_hil_test.connect")
+    def test_interrupt_finalizes_reports_before_recovery(self, connect, _recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+        calls = []
+
+        def interrupt(_client, _artifacts):
+            raise KeyboardInterrupt
+
+        case = hil.HilCase("interrupt", "interrupt", interrupt)
+        with (
+            mock.patch.object(hil.m1_resume, "finish",
+                              side_effect=lambda _success: calls.append("checkpoint")),
+            mock.patch.object(hil.m1_ux_audit, "finish",
+                              side_effect=lambda: calls.append("ux")),
+            mock.patch.object(hil, "recover_device",
+                              side_effect=lambda *_args: calls.append("recovery")),
+            tempfile.TemporaryDirectory() as directory,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        self.assertEqual(["checkpoint", "ux", "recovery"], calls)
+
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.recover_device")
+    @mock.patch("m1_hil_test.connect")
+    def test_recovery_runs_even_when_ux_finalizer_fails(self, connect, recover, _sleep):
+        client = mock.MagicMock()
+        client.__enter__.return_value = client
+        connect.return_value = client
+
+        def fail(_client, _artifacts):
+            raise AssertionError("case failed")
+
+        case = hil.HilCase("negative", "negative", fail)
+        with (
+            mock.patch.object(hil.m1_ux_audit, "finish",
+                              side_effect=RuntimeError("finalizer failed")),
+            tempfile.TemporaryDirectory() as directory,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "finalizer failed"):
+                hil.execute_case(case, "COM3", 115200, pathlib.Path(directory))
+        recover.assert_called_once_with("COM3", 115200)
 
 
 class TestTransitionBudgets(unittest.TestCase):

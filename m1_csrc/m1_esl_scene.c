@@ -98,20 +98,6 @@ static void esl_draw_status(const char *title, const char *body)
     m1_u8g2_nextpage();
 }
 
-/**
- * Show a scrollable list of items (title + labels).  sel is the currently
- * highlighted row; scroll is the top-of-viewport index.
- */
-static void esl_draw_list(const char *title,
-                          const char *const *labels,
-                          uint8_t count,
-                          uint8_t sel,
-                          uint8_t scroll)
-{
-    uint8_t visible = M1_MENU_VIS(count);
-    m1_scene_draw_menu(title, labels, count, sel, scroll, visible);
-}
-
 /* --------------------------------------------------------------------------- */
 /* IR transmit wrapper: init → send → deinit → show result                    */
 /* --------------------------------------------------------------------------- */
@@ -148,16 +134,14 @@ static const char *const broadcast_labels[ESL_BROADCAST_ITEM_COUNT] = {
 
 static void esl_run_broadcast(void)
 {
-    uint8_t sel    = 0U;
-    uint8_t scroll = 0U;
-    uint8_t visible = M1_MENU_VIS(ESL_BROADCAST_ITEM_COUNT);
-
+    subghz_submenu_model_t model;
+    M1SceneApp app = {0};
     S_M1_Main_Q_t q_item;
     S_M1_Buttons_Status bs;
 
-    /* Draw initial menu. */
-    esl_draw_list("Broadcast", broadcast_labels, ESL_BROADCAST_ITEM_COUNT,
-                  sel, scroll);
+    subghz_submenu_model_init(&model, ESL_BROADCAST_ITEM_COUNT,
+                              M1_MENU_VIS(ESL_BROADCAST_ITEM_COUNT));
+    m1_submenu_draw(&model, "Broadcast", broadcast_labels);
 
     while(1) {
         if(xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE)
@@ -169,16 +153,11 @@ static void esl_run_broadcast(void)
         if(bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
             break;
         } else if(bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK) {
-            if(sel > 0U) { sel--; if(sel < scroll) scroll = sel; }
-            esl_draw_list("Broadcast", broadcast_labels,
-                          ESL_BROADCAST_ITEM_COUNT, sel, scroll);
+            m1_submenu_event(&app, M1SceneEventUp, &model, NULL);
+            m1_submenu_draw(&model, "Broadcast", broadcast_labels);
         } else if(bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK) {
-            if(sel < ESL_BROADCAST_ITEM_COUNT - 1U) {
-                sel++;
-                if(sel >= scroll + visible) scroll = (uint8_t)(sel - visible + 1U);
-            }
-            esl_draw_list("Broadcast", broadcast_labels,
-                          ESL_BROADCAST_ITEM_COUNT, sel, scroll);
+            m1_submenu_event(&app, M1SceneEventDown, &model, NULL);
+            m1_submenu_draw(&model, "Broadcast", broadcast_labels);
         } else if(bs.event[BUTTON_OK_KP_ID]    == BUTTON_EVENT_CLICK ||
                   bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK) {
 
@@ -186,11 +165,12 @@ static void esl_run_broadcast(void)
             size_t  frame_len;
             char    done_msg[32];
 
-            if(sel < 8U) {
+            if(model.selected < 8U) {
                 /* Page flip 0-7 */
                 frame_len = m1_esl_build_broadcast_page_frame(
-                    frame, sel, false, 120U);
-                snprintf(done_msg, sizeof(done_msg), "Page %u sent", (unsigned)sel);
+                    frame, model.selected, false, 120U);
+                snprintf(done_msg, sizeof(done_msg), "Page %u sent",
+                         (unsigned)model.selected);
             } else {
                 /* Debug screen */
                 frame_len = m1_esl_build_broadcast_debug_frame(frame);
@@ -202,8 +182,7 @@ static void esl_run_broadcast(void)
             }
 
             /* Redraw menu so user can send again or navigate. */
-            esl_draw_list("Broadcast", broadcast_labels,
-                          ESL_BROADCAST_ITEM_COUNT, sel, scroll);
+            m1_submenu_draw(&model, "Broadcast", broadcast_labels);
         }
     }
 
@@ -262,15 +241,14 @@ static void esl_run_target(void)
     esl_app.barcode_valid = true;
 
     /* Step 2: action menu for this target. */
-    uint8_t sel    = 0U;
-    uint8_t scroll = 0U;
-    uint8_t visible = M1_MENU_VIS(TARGET_ACTION_COUNT);
-
+    subghz_submenu_model_t model;
+    M1SceneApp app = {0};
     S_M1_Main_Q_t q_item;
     S_M1_Buttons_Status bs;
 
-    esl_draw_list("Target ESL", target_action_labels, TARGET_ACTION_COUNT,
-                  sel, scroll);
+    subghz_submenu_model_init(&model, TARGET_ACTION_COUNT,
+                              M1_MENU_VIS(TARGET_ACTION_COUNT));
+    m1_submenu_draw(&model, "Target ESL", target_action_labels);
 
     while(1) {
         if(xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE)
@@ -282,16 +260,11 @@ static void esl_run_target(void)
         if(bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
             break;
         } else if(bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK) {
-            if(sel > 0U) { sel--; if(sel < scroll) scroll = sel; }
-            esl_draw_list("Target ESL", target_action_labels,
-                          TARGET_ACTION_COUNT, sel, scroll);
+            m1_submenu_event(&app, M1SceneEventUp, &model, NULL);
+            m1_submenu_draw(&model, "Target ESL", target_action_labels);
         } else if(bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK) {
-            if(sel < TARGET_ACTION_COUNT - 1U) {
-                sel++;
-                if(sel >= scroll + visible) scroll = (uint8_t)(sel - visible + 1U);
-            }
-            esl_draw_list("Target ESL", target_action_labels,
-                          TARGET_ACTION_COUNT, sel, scroll);
+            m1_submenu_event(&app, M1SceneEventDown, &model, NULL);
+            m1_submenu_draw(&model, "Target ESL", target_action_labels);
         } else if(bs.event[BUTTON_OK_KP_ID]    == BUTTON_EVENT_CLICK ||
                   bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK) {
 
@@ -299,13 +272,13 @@ static void esl_run_target(void)
             size_t  frame_len = 0U;
             char    done_msg[32];
 
-            if(sel == 0U) {
+            if(model.selected == 0U) {
                 /* Ping */
                 frame_len = m1_esl_build_ping_frame(frame, plid);
                 snprintf(done_msg, sizeof(done_msg), "Ping sent");
-            } else if(sel >= 1U && sel <= 8U) {
+            } else if(model.selected >= 1U && model.selected <= 8U) {
                 /* Page flip 0-7: send broadcast page frame */
-                uint8_t page = (uint8_t)(sel - 1U);
+                uint8_t page = (uint8_t)(model.selected - 1U);
                 frame_len = m1_esl_build_broadcast_page_frame(
                     frame, page, false, 120U);
                 snprintf(done_msg, sizeof(done_msg), "Page %u sent", (unsigned)page);
@@ -320,8 +293,7 @@ static void esl_run_target(void)
             }
 
             /* Redraw action menu. */
-            esl_draw_list("Target ESL", target_action_labels,
-                          TARGET_ACTION_COUNT, sel, scroll);
+            m1_submenu_draw(&model, "Target ESL", target_action_labels);
         }
     }
 

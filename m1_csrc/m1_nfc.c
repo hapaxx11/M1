@@ -2072,7 +2072,7 @@ static void nfc_fuzz_draw_setup(uint8_t prof_sel, const uint8_t *uid, uint8_t ui
 	u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "UP/DN:adj", "OK:Start", NULL);
+	m1_button_bar_draw(arrowdown_8x8, "Adj", ok_circle_8x8, "Start", NULL, NULL);
 
 	m1_u8g2_nextpage();
 }
@@ -4382,7 +4382,7 @@ static void nfc_extra_read_mfc(void)
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
 		u8g2_DrawStr(&m1_u8g2, 2, 34, line2);
-		u8g2_DrawStr(&m1_u8g2, 2, 48, "OK=options  BACK=exit");
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Options", NULL, NULL);
 		m1_u8g2_nextpage();
 	}
 

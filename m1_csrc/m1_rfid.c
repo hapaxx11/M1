@@ -3368,7 +3368,7 @@ static void lfrfid_fuzz_draw_setup(uint8_t proto_sel, const uint8_t uid[5],
 	sprintf(sz, "Dir: %s  Delay: %dms", dir > 0 ? "Up" : "Down", delay_ms);
 	m1_draw_text(&m1_u8g2, 2, 48, 124, sz, TEXT_ALIGN_LEFT);
 
-	m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Start U/D:Proto L/R:Dir", TEXT_ALIGN_CENTER);
+	m1_button_bar_draw(arrowdown_8x8, "Proto", ok_circle_8x8, "Start", arrowright_8x8, "Dir");
 	m1_u8g2_nextpage();
 }
 
@@ -3392,7 +3392,7 @@ static void lfrfid_fuzz_draw_running(uint8_t proto_sel, const uint8_t uid[5],
 	sprintf(sz, "Count: %lu", (unsigned long)count);
 	m1_draw_text(&m1_u8g2, 2, 48, 124, sz, TEXT_ALIGN_LEFT);
 
-	m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "BACK:Stop", TEXT_ALIGN_CENTER);
+
 	m1_u8g2_nextpage();
 }
 
@@ -3538,7 +3538,7 @@ static void lfrfid_bf_draw(bf_state_t state, uint16_t fc, uint16_t card_num)
 	{
 	case BF_ST_IDLE:
 		m1_draw_text(&m1_u8g2, 2, 36, 124, "U/D:Card# L/R:+/-10", TEXT_ALIGN_LEFT);
-		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Start  BACK:Exit", TEXT_ALIGN_CENTER);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Start", NULL, NULL);
 		break;
 	case BF_ST_RUNNING:
 		snprintf(sz, sizeof(sz), "FC: %03u / 255", fc);
@@ -3546,16 +3546,14 @@ static void lfrfid_bf_draw(bf_state_t state, uint16_t fc, uint16_t card_num)
 		/* Progress bar */
 		u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 8);
 		u8g2_DrawBox(&m1_u8g2, 5, 43, (uint8_t)((fc * 118) / 255), 6);
-		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "Writing... BACK:Pause", TEXT_ALIGN_CENTER);
 		break;
 	case BF_ST_PAUSED:
 		snprintf(sz, sizeof(sz), "Paused at FC: %03u", fc);
 		m1_draw_text(&m1_u8g2, 2, 36, 124, sz, TEXT_ALIGN_LEFT);
-		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Resume  BACK:Exit", TEXT_ALIGN_CENTER);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Resume", NULL, NULL);
 		break;
 	case BF_ST_DONE:
 		m1_draw_text(&m1_u8g2, 2, 36, 124, "All 256 FCs written!", TEXT_ALIGN_LEFT);
-		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "BACK:Exit", TEXT_ALIGN_CENTER);
 		break;
 	}
 	m1_u8g2_nextpage();

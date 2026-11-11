@@ -58,6 +58,7 @@
 #include "m1_settings.h"
 #include "m1_virtual_kb.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_subghz_button_bar.h"
 #include "uiView.h"
 
@@ -830,9 +831,8 @@ static bool sub_ghz_custom_freq_entry(void)
 			if (cursor >= 4) cursor_x += 5; /* dot offset for fractional digits */
 			u8g2_DrawHLine(&m1_u8g2, cursor_x, 40, 8);
 
-			/* Controls hint */
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-			u8g2_DrawStr(&m1_u8g2, 0, 56, "\x18\x19:Digit L/R:Move OK:Set");
+			subghz_button_bar_draw(arrowleft_8x8, "Digit", ok_circle_8x8, "Set",
+			                       arrowright_8x8, NULL);
 		} while (m1_u8g2_nextpage());
 
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
@@ -2798,7 +2798,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 /*  FREQUENCY ANALYZER                                                        */
 /*  Momentum-style: sweep a band range each pass, find the strongest signal, */
 /*  display with large frequency readout, RSSI bar, and threshold marker.    */
-/*  L/R: cycle band  UP/DN: adjust threshold  OK: hold/resume  BACK: exit   */
+/*  L/R: cycle band  UP/DN: adjust threshold  OK: hold/resume              */
 /*                                                                            */
 /*============================================================================*/
 
@@ -2807,7 +2807,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 #define FREQAN_RSSI_CEIL    (-30)   /* dBm upper bound on bar scale */
 #define FREQAN_BAR_X         3      /* bar frame left edge (px) */
 #define FREQAN_BAR_W        122     /* bar frame width (px) */
-#define FREQAN_BAR_Y         38     /* bar frame top edge (px) */
+#define FREQAN_BAR_Y         34     /* bar frame top edge (px) */
 #define FREQAN_BAR_H         8      /* bar frame height (px) */
 /* Threshold defaults */
 #define FREQAN_THR_DEFAULT  (-75)   /* initial threshold (dBm) */
@@ -3004,20 +3004,20 @@ void sub_ghz_frequency_reader(void)
             u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
 
             /* Best frequency — large font */
-            u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             if (best_hz > 0)
                 snprintf(str, sizeof(str), "%lu.%03lu MHz",
                          best_hz / 1000000UL,
                          (best_hz % 1000000UL) / 1000UL);
             else
                 snprintf(str, sizeof(str), "---.--- MHz");
-            u8g2_DrawStr(&m1_u8g2, 0, 25, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 23, str);
 
             /* RSSI reading + optional signal indicator */
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             snprintf(str, sizeof(str), "%d dBm%s",
                      (int)best_rssi, has_signal ? "  Signal!" : "");
-            u8g2_DrawStr(&m1_u8g2, 0, 35, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 31, str);
 
             /* Bar: outline frame */
             u8g2_DrawFrame(&m1_u8g2, FREQAN_BAR_X, FREQAN_BAR_Y,
@@ -3036,10 +3036,10 @@ void sub_ghz_frequency_reader(void)
             /* Threshold value and active band label */
             snprintf(str, sizeof(str), "Thr:%d  %s",
                      (int)threshold, bands[band_idx].label);
-            u8g2_DrawStr(&m1_u8g2, 0, 54, str);
+            u8g2_DrawStr(&m1_u8g2, 0, 51, str);
 
-            /* Controls hint (\x18\x19 = up/down arrow glyphs in the font) */
-            u8g2_DrawStr(&m1_u8g2, 0, 63, "L/R:Band \x18\x19:Thr OK:Hold");
+            subghz_button_bar_draw(arrowleft_8x8, "Band", ok_circle_8x8, "Hold",
+                                   arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 
@@ -4545,19 +4545,20 @@ void sub_ghz_spectrum_analyzer(void)
                 u8g2_DrawPixel(&m1_u8g2, peak_bar + 1, marker_y - 1);
             }
 
-            /* Row below bars (y=54): range labels */
+            /* Row below bars: range labels */
             snprintf(info_str, sizeof(info_str), "%lu.%01lu",
                      lo_hz / 1000000UL, (lo_hz % 1000000UL) / 100000UL);
-            u8g2_DrawStr(&m1_u8g2, 0, 54, info_str);
+            u8g2_DrawStr(&m1_u8g2, 0, 51, info_str);
             snprintf(info_str, sizeof(info_str), "%lu.%01lu",
                      hi_hz / 1000000UL, (hi_hz % 1000000UL) / 100000UL);
-            u8g2_DrawStr(&m1_u8g2, 90, 54, info_str);
+            u8g2_DrawStr(&m1_u8g2, 90, 51, info_str);
 
-            /* Bottom row (y=64): controls hint */
             if (custom_view)
-                u8g2_DrawStr(&m1_u8g2, 0, 64, "\x18\x19:Zoom OK:Peak L/R:Pan");
+                subghz_button_bar_draw(arrowleft_8x8, "Pan", ok_circle_8x8, "Peak",
+                                       arrowright_8x8, NULL);
             else
-                u8g2_DrawStr(&m1_u8g2, 0, 64, "\x18\x19:Zoom OK:Peak L/R:Band");
+                subghz_button_bar_draw(arrowleft_8x8, "Band", ok_circle_8x8, "Peak",
+                                       arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 
@@ -5188,28 +5189,22 @@ void sub_ghz_brute_force(void)
     menu_sub_ghz_init();
 
     /* Select protocol screen */
+    char label_text[NUM_BRUTE_PROTOS][24];
+    const char *labels[NUM_BRUTE_PROTOS];
+    subghz_submenu_model_t model;
+    M1SceneApp list_app = {0};
+    for (uint8_t i = 0; i < NUM_BRUTE_PROTOS; ++i)
+    {
+        snprintf(label_text[i], sizeof(label_text[i]), "%s (%u bit)",
+                 brute_names[i], brute_bits[i]);
+        labels[i] = label_text[i];
+    }
+    subghz_submenu_model_init(&model, NUM_BRUTE_PROTOS,
+                              M1_MENU_VIS(NUM_BRUTE_PROTOS));
+    m1_submenu_draw(&model, "Brute Force", labels);
+
     while (running && state == 0)
     {
-        bool secplus_sel = (brute_protos[proto_idx] == SECPLUS_PROTO_SENTINEL);
-        m1_u8g2_firstpage();
-        do {
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 2, 12, "Brute Force");
-            snprintf(line1, sizeof(line1), "> %s (%d bit)",
-                     brute_names[proto_idx], brute_bits[proto_idx]);
-            u8g2_DrawStr(&m1_u8g2, 2, 28, line1);
-            if (secplus_sel) {
-                u8g2_DrawStr(&m1_u8g2, 2, 40, "Ctr: 0->3^20-1");
-                u8g2_DrawStr(&m1_u8g2, 2, 52, "Fixed:0x0 @ 315MHz");
-            } else {
-                max_code = (1UL << brute_bits[proto_idx]) - 1;
-                snprintf(line2, sizeof(line2), "Codes: 0-%lu", max_code);
-                u8g2_DrawStr(&m1_u8g2, 2, 40, line2);
-                u8g2_DrawStr(&m1_u8g2, 2, 52, "UP/DN:Proto OK:Start");
-            }
-            u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-        } while (m1_u8g2_nextpage());
-
         ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
         if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
         {
@@ -5220,14 +5215,17 @@ void sub_ghz_brute_force(void)
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                proto_idx = (proto_idx + NUM_BRUTE_PROTOS - 1) % NUM_BRUTE_PROTOS;
+                m1_submenu_event(&list_app, M1SceneEventUp, &model, NULL);
+                m1_submenu_draw(&model, "Brute Force", labels);
             }
             else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                proto_idx = (proto_idx + 1) % NUM_BRUTE_PROTOS;
+                m1_submenu_event(&list_app, M1SceneEventDown, &model, NULL);
+                m1_submenu_draw(&model, "Brute Force", labels);
             }
             else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
             {
+                proto_idx = model.selected;
                 state = 1;
                 code = 0;
                 is_secplus = (brute_protos[proto_idx] == SECPLUS_PROTO_SENTINEL);
@@ -5370,7 +5368,7 @@ void sub_ghz_brute_force(void)
             u8g2_DrawStr(&m1_u8g2, 2, 28, "Complete!");
             snprintf(line1, sizeof(line1), "%lu codes sent", max_code + 1);
             u8g2_DrawStr(&m1_u8g2, 2, 44, line1);
-            u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
+
         } while (m1_u8g2_nextpage());
 
         /* Wait for BACK */
@@ -5487,11 +5485,11 @@ void sub_ghz_rssi_meter(void)
                 u8g2_DrawVLine(&m1_u8g2, peak_x, 25, 16);
 
             /* Scale labels */
-            u8g2_DrawStr(&m1_u8g2, 0, 52, "-120");
-            u8g2_DrawStr(&m1_u8g2, 105, 52, "-30");
+            u8g2_DrawStr(&m1_u8g2, 0, 46, "-120");
+            u8g2_DrawStr(&m1_u8g2, 105, 46, "-30");
 
-            /* Controls */
-            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Band OK:Reset \x18:Freq");
+            subghz_button_bar_draw(arrowleft_8x8, "Band", ok_circle_8x8, "Reset",
+                                   arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 
@@ -5557,7 +5555,7 @@ void sub_ghz_rssi_meter(void)
 #define FREQ_SCANNER_MAX_HITS     16
 #define FREQ_SCANNER_THRESHOLD    -80   /* dBm threshold for "active" */
 #define FREQ_SCANNER_DEDUP_KHZ    50    /* Merge hits within 50 kHz */
-#define FREQ_SCANNER_VISIBLE_ROWS  5
+#define FREQ_SCANNER_VISIBLE_ROWS  4
 
 typedef struct {
     uint32_t freq_hz;
@@ -5681,12 +5679,12 @@ void sub_ghz_freq_scanner(void)
                 {
                     snprintf(info_str, sizeof(info_str), "%d/%d",
                              scroll_pos + 1, hit_count);
-                    u8g2_DrawStr(&m1_u8g2, 100, 64, info_str);
+                    u8g2_DrawStr(&m1_u8g2, 100, 48, info_str);
                 }
             }
 
-            /* Bottom controls */
-            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Band OK:Clr \x18\x19:Scrl");
+            subghz_button_bar_draw(arrowleft_8x8, "Band", ok_circle_8x8, "Clr",
+                                   arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 
@@ -6038,7 +6036,7 @@ static sigid_capture_result_t subghz_sigid_try_capture(uint32_t freq_hz,
 #define SIGID_THRESHOLD_DBM   (-80) /* default catch threshold (dBm) */
 #define SIGID_THRESHOLD_MIN   (-110)
 #define SIGID_THRESHOLD_MAX   (-40)
-#define SIGID_VISIBLE_ROWS    4U
+#define SIGID_VISIBLE_ROWS    3U
 #define SIGID_MIN_HITS        2U    /* require N hits before showing confidence */
 #define SIGID_REFINE_MAX      8U    /* Smart ID: fine-sweep refine the N strongest */
 
@@ -6317,11 +6315,12 @@ void sub_ghz_signal_identifier(void)
                 {
                     snprintf(info_str, sizeof(info_str), "%d/%d",
                              scroll_pos + 1, report.count);
-                    u8g2_DrawStr(&m1_u8g2, 104, 64, info_str);
+                    u8g2_DrawStr(&m1_u8g2, 104, 48, info_str);
                 }
             }
 
-            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Clr \x18\x19");
+            subghz_button_bar_draw(arrowleft_8x8, "Thr", ok_circle_8x8, "Clr",
+                                   arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 
@@ -6977,11 +6976,12 @@ void sub_ghz_smart_signal_id(void)
                 {
                     snprintf(info_str, sizeof(info_str), "%d/%d",
                              scroll_pos + 1, report.count);
-                    u8g2_DrawStr(&m1_u8g2, 104, 64, info_str);
+                    u8g2_DrawStr(&m1_u8g2, 104, 48, info_str);
                 }
             }
 
-            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Clr \x18\x19");
+            subghz_button_bar_draw(arrowleft_8x8, "Thr", ok_circle_8x8, "Clr",
+                                   arrowright_8x8, NULL);
 
         } while (m1_u8g2_nextpage());
 

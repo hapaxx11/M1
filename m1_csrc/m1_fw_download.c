@@ -32,6 +32,8 @@
 #include "m1_file_browser.h"
 #include "m1_log_debug.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
+#include "m1_button_bar.h"
 
 #define FW_DL_TAG "FW_DL"
 
@@ -39,7 +41,7 @@
 #define FW_DOWNLOAD_DIR     "0:/Firmware"
 
 /* Display layout constants */
-#define DL_CONFIRM_TITLE_Y   10  /* Text baseline within the 14px inverted title bar */
+#define DL_CONFIRM_TITLE_Y   10  /* Text baseline within the scene header */
 #define DL_PROGRESS_BAR_X    4
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
@@ -116,24 +118,17 @@ static bool dl_select_from_list(const char *title, const char **items, uint8_t c
 {
 	S_M1_Main_Q_t q_item;
 	S_M1_Buttons_Status btn;
-	uint8_t sel = 0;
-	uint8_t scroll = 0;
+	subghz_submenu_model_t model;
+	M1SceneApp app = {0};
 
 	if (count == 0)
 		return false;
 
-	const uint8_t visible = M1_MENU_VIS(count);
+	subghz_submenu_model_init(&model, count, M1_MENU_VIS(count));
+	m1_submenu_draw(&model, title, items);
 
 	for (;;)
 	{
-		/* Adjust scroll to keep selection visible */
-		if (sel < scroll)
-			scroll = sel;
-		if (sel >= scroll + visible)
-			scroll = sel - visible + 1;
-
-		m1_scene_draw_menu(title, items, count, sel, scroll, visible);
-
 		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE)
 		{
 			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
@@ -141,18 +136,12 @@ static bool dl_select_from_list(const char *title, const char **items, uint8_t c
 				xQueueReceive(button_events_q_hdl, &btn, 0);
 
 				if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (sel > 0) sel--;
-					else sel = count - 1;
-				}
+					m1_submenu_event(&app, M1SceneEventUp, &model, NULL);
 				else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (sel < count - 1) sel++;
-					else sel = 0;
-				}
+					m1_submenu_event(&app, M1SceneEventDown, &model, NULL);
 				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
-					*selected = sel;
+					*selected = model.selected;
 					xQueueReset(main_q_hdl);
 					return true;
 				}
@@ -161,6 +150,7 @@ static bool dl_select_from_list(const char *title, const char **items, uint8_t c
 					xQueueReset(main_q_hdl);
 					return false;
 				}
+				m1_submenu_draw(&model, title, items);
 			}
 		}
 	}
@@ -236,8 +226,8 @@ static bool dl_confirm_download(const fw_release_t *release)
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 		/* Title */
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
 		u8g2_DrawStr(&m1_u8g2, 2, DL_CONFIRM_TITLE_Y, "Confirm Download");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		/* File info */
 		u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
@@ -245,7 +235,7 @@ static bool dl_confirm_download(const fw_release_t *release)
 		u8g2_DrawStr(&m1_u8g2, 4, 44, release->tag);
 
 		/* Bottom bar: OK to download */
-		m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "OK:Download", NULL);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Fetch", NULL, NULL);
 	} while (m1_u8g2_nextpage());
 
 	return dl_wait_ok_or_back();
@@ -384,7 +374,7 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 30, msg);
 			u8g2_DrawStr(&m1_u8g2, 4, 42, release->asset_name);
-			m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "OK:Continue", NULL);
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Next", NULL, NULL);
 		} while (m1_u8g2_nextpage());
 
 		dl_wait_ok_or_back();

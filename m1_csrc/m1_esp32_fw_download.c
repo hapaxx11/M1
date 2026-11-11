@@ -35,6 +35,8 @@
 #include "m1_file_browser.h"
 #include "m1_log_debug.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
+#include "m1_button_bar.h"
 
 #define ESP32_DL_TAG "ESP32_DL"
 
@@ -111,30 +113,24 @@ static bool edl_wait_ok_or_back(void)
 
 /*
  * Generic list selection with scrolling.
- * Uses m1_scene_draw_menu() to honour the user's font size setting.
+ * Uses the shared submenu model to honour the user's font size setting.
  */
 static bool edl_select_from_list(const char *title, const char **items,
                                   uint8_t count, uint8_t *selected)
 {
 	S_M1_Main_Q_t q_item;
 	S_M1_Buttons_Status btn;
-	uint8_t sel = 0;
-	uint8_t scroll = 0;
+	subghz_submenu_model_t model;
+	M1SceneApp app = {0};
 
 	if (count == 0)
 		return false;
 
-	const uint8_t visible = M1_MENU_VIS(count);
+	subghz_submenu_model_init(&model, count, M1_MENU_VIS(count));
+	m1_submenu_draw(&model, title, items);
 
 	for (;;)
 	{
-		if (sel < scroll)
-			scroll = sel;
-		if (sel >= scroll + visible)
-			scroll = sel - visible + 1;
-
-		m1_scene_draw_menu(title, items, count, sel, scroll, visible);
-
 		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE)
 		{
 			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
@@ -142,18 +138,12 @@ static bool edl_select_from_list(const char *title, const char **items,
 				xQueueReceive(button_events_q_hdl, &btn, 0);
 
 				if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (sel > 0) sel--;
-					else sel = count - 1;
-				}
+					m1_submenu_event(&app, M1SceneEventUp, &model, NULL);
 				else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (sel < count - 1) sel++;
-					else sel = 0;
-				}
+					m1_submenu_event(&app, M1SceneEventDown, &model, NULL);
 				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
-					*selected = sel;
+					*selected = model.selected;
 					xQueueReset(main_q_hdl);
 					return true;
 				}
@@ -162,6 +152,7 @@ static bool edl_select_from_list(const char *title, const char **items,
 					xQueueReset(main_q_hdl);
 					return false;
 				}
+				m1_submenu_draw(&model, title, items);
 			}
 		}
 	}
@@ -421,7 +412,7 @@ source_selection:
 			u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 34, size_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 44, rel->tag);
-			m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "OK:Download", NULL);
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Fetch", NULL, NULL);
 		} while (m1_u8g2_nextpage());
 
 		if (!edl_wait_ok_or_back())
@@ -512,9 +503,9 @@ source_selection:
 			u8g2_DrawStr(&m1_u8g2, 4, 16, "Download complete!");
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 30, msg);
-			u8g2_DrawStr(&m1_u8g2, 4, 42, rel->asset_name);
-			u8g2_DrawStr(&m1_u8g2, 4, 54, "Flash via Image File");
-			m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "OK:Continue", NULL);
+			u8g2_DrawStr(&m1_u8g2, 4, 38, rel->asset_name);
+			u8g2_DrawStr(&m1_u8g2, 4, 48, "Flash via Image File");
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Next", NULL, NULL);
 		} while (m1_u8g2_nextpage());
 
 		edl_wait_ok_or_back();

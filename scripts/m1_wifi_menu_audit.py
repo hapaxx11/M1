@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 import zlib
 
+import m1_ux_audit
 from m1_hil import BUTTONS, M1Hil, connect
 from m1_resume import log_pass, resume_targets, should_run
 
@@ -158,6 +159,7 @@ def _audit_path(client: M1Hil, path: tuple[int, ...], wait_s: float = 5.0,
         if current == previous:
             raise AssertionError("destination did not change after OK")
         previous = current
+    m1_ux_audit.observe(previous)
     previous = exit_to_parent(previous)
     if reentry:
         for _selection in path:

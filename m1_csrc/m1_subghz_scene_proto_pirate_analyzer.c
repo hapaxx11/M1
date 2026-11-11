@@ -19,10 +19,10 @@
  * Layout (128×64, compact data display — not a selection list):
  *   Row  0–10: Header "Remote Analyzer" + separator
  *   Row 13–27: Big frequency line "433.920 MHz" / "Scanning..."
- *   Row 30–37: RSSI bar (live) + trigger cursor + dBm text
- *   Row 40–48: Modulation verdict: "Mod: AM" / "Mod: FM?" / "Mod: --"
- *   Row 50–58: Trigger level + Paused/scanning indicator
- *   Row 60–63: Legend: OK pause/resume, LEFT/RIGHT trigger ±3 dB
+ *   Row 27–35: RSSI bar (live) + trigger cursor + dBm text
+ *   Row 36–43: Modulation verdict
+ *   Row 44–51: Trigger level and paused/scanning status
+ *   Row 52–63: Rounded action bar: trigger ±3 dB and OK pause/resume
  *
  * Async model (200 ms tick, same cadence as the Timing Tuner scene):
  *   - COARSE: one hopper frequency per tick; after the 6th, if the
@@ -61,6 +61,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
 #include "m1_sub_ghz.h"
@@ -102,7 +103,7 @@ typedef enum {
 
 /** RSSI bar geometry */
 #define RA_BAR_X    2
-#define RA_BAR_Y    31
+#define RA_BAR_Y    29
 #define RA_BAR_W    88
 #define RA_BAR_H    5
 
@@ -282,29 +283,30 @@ static void draw(SubGhzApp *app)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     snprintf(line, sizeof(line), "Mod: %s",
              !s_disp_present ? "--" : (s_disp_is_am ? "AM" : "FM?"));
-    u8g2_DrawStr(&m1_u8g2, 2, 47, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 43, line);
 
     /* Signal RSSI of the delivered frame (when a signal is held) */
     if (s_disp_freq != 0)
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         snprintf(line, sizeof(line), "pk:%d", (int)s_disp_rssi);
-        u8g2_DrawStr(&m1_u8g2, 80, 47, line);
+        u8g2_DrawStr(&m1_u8g2, 80, 43, line);
     }
 
     /* ---- Trigger level + paused/scanning indicator ---------------------- */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
     snprintf(line, sizeof(line), "Trg:%d", (int)s_trigger);
-    u8g2_DrawStr(&m1_u8g2, 2, 57, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 51, line);
 
     static const char *anim_chars[] = { "|", "/", "-", "\\" };
     const char *state = s_paused ? "Paused"
                         : (s_stage == RA_STAGE_FINE) ? "Fine"
                         : anim_chars[s_anim & 0x03u];
-    u8g2_DrawStr(&m1_u8g2, 96, 57, state);
+    u8g2_DrawStr(&m1_u8g2, 96, 51, state);
 
-    /* ---- Legend ---------------------------------------------------------- */
-    u8g2_DrawStr(&m1_u8g2, 2, 63, s_paused ? "OK:Resume LR:Trg" : "OK:Pause LR:Trg");
+    m1_button_bar_draw(arrowleft_8x8, "Trg",
+                       ok_circle_8x8, s_paused ? "Resume" : "Pause",
+                       arrowright_8x8, NULL);
 
     m1_u8g2_nextpage();
 }

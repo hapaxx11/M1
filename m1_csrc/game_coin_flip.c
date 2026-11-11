@@ -165,11 +165,9 @@ void game_coin_flip_run(void)
             u8g2_SetDrawColor(&m1_u8g2, 1);
 
             /* Title bar */
-            u8g2_DrawBox(&m1_u8g2, 0, 0, 128, 12);
-            u8g2_SetDrawColor(&m1_u8g2, 0);
             u8g2_SetFont(&m1_u8g2, COIN_TEXT_FONT);
-            u8g2_DrawStr(&m1_u8g2, 30, 10, "Coin Flip");
-            u8g2_SetDrawColor(&m1_u8g2, 1);
+            u8g2_DrawStr(&m1_u8g2, 40, 10, "Coin Flip");
+            u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
 
             if (animating)
             {

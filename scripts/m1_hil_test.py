@@ -18,6 +18,7 @@ from typing import Callable
 import zlib
 
 import m1_resume
+import m1_ux_audit
 from m1_hil import BUTTONS, M1Hil, connect, write_png
 from m1_bt_menu_audit import run as run_bt_menu_tree
 from m1_misc_menu_audit import run as run_misc_menu_tree
@@ -25,6 +26,7 @@ from m1_nfc_menu_audit import run as run_nfc_menu_tree
 from m1_rfid_menu_audit import run as run_rfid_menu_tree
 from m1_settings_menu_audit import run as run_settings_menu_tree
 from m1_subghz_menu_audit import run as run_subghz_menu_tree
+from m1_tx_menu_audit import run as run_tx_menu_tree
 from m1_wifi_menu_audit import run as run_wifi_menu_tree
 
 RESULT_START = "<!-- M1_HIL_RESULTS:START -->"
@@ -278,7 +280,11 @@ def run_subghz_menu_audit(client: M1Hil, artifacts: Path) -> str:
     return run_subghz_menu_tree(client)
 
 
-OPT_IN_CASE_IDS = frozenset({"ble-spam"})
+def run_tx_menu_audit(client: M1Hil, artifacts: Path) -> str:
+    return run_tx_menu_tree(client)
+
+
+OPT_IN_CASE_IDS = frozenset({"ble-spam", "tx-menu-audit"})
 
 
 def select_cases(cases: tuple[HilCase, ...], requested: list[str] | None) -> list[HilCase]:
@@ -297,6 +303,7 @@ CASES = (
     HilCase("settings-menu-audit", "Recursive Settings menu responsiveness", run_settings_menu_audit),
     HilCase("misc-menu-audit", "Remaining non-SubGhz menu responsiveness", run_misc_menu_audit),
     HilCase("subghz-menu-audit", "Recursive SubGhz menu responsiveness", run_subghz_menu_audit),
+    HilCase("tx-menu-audit", "Authorized transmit-scene UX audit", run_tx_menu_audit),
     HilCase("ble-signal-finder", "BLE Signal Finder lifecycle", run_ble_signal_finder),
     HilCase("ble-gatt-discovery", "BLE GATT Discovery lifecycle", run_ble_gatt_discovery),
     HilCase("ble-airtag-monitor", "BLE AirTag Monitor lifecycle", run_ble_airtag_monitor),
@@ -420,7 +427,7 @@ def public_error(stage: str, error: BaseException) -> str:
 
 
 def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
-                 fresh: bool = False) -> dict:
+                 fresh: bool = False, ux_audit: bool = False) -> dict:
     started = time.monotonic()
     stage = "connect"
     status = "SKIP"
@@ -428,6 +435,8 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
     artifacts = output_dir / case.test_id
     artifacts.mkdir(parents=True, exist_ok=True)
     m1_resume.start(case.test_id, output_dir, fresh=fresh)
+    m1_ux_audit.start(case.test_id, output_dir, ux_audit,
+                      fresh=fresh, version=m1_resume._version(case.test_id))
     try:
         with connect(port, baud, timeout=10) as client:
             stage = "reboot"
@@ -447,13 +456,18 @@ def execute_case(case: HilCase, port: str, baud: int, output_dir: Path,
         status = "FAIL" if stage == "test" else "SKIP"
         detail = public_error(stage, error)
     finally:
-        if status != "PASS":
+        try:
+            m1_resume.finish(status == "PASS")
+        finally:
             try:
-                recover_device(port, baud)
-                detail += "; recovery reboot issued"
-            except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
-                detail += f"; {public_error('cleanup', cleanup_error)}"
-    m1_resume.finish(status == "PASS")
+                m1_ux_audit.finish()
+            finally:
+                if status != "PASS":
+                    try:
+                        recover_device(port, baud)
+                        detail += "; recovery reboot issued"
+                    except (OSError, RuntimeError, TimeoutError, ValueError) as cleanup_error:
+                        detail += f"; {public_error('cleanup', cleanup_error)}"
     return {
         "id": case.test_id,
         "title": case.title,
@@ -476,6 +490,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list", action="store_true", help="list tests without hardware")
     parser.add_argument("--fresh", action="store_true",
                         help="ignore checkpoints and rerun every destination")
+    parser.add_argument("--ux-audit", action="store_true",
+                        help="record privacy-preserving visual-geometry findings")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -499,7 +515,8 @@ def main() -> int:
         return 0
 
     selected = select_cases(CASES, args.test)
-    results = [execute_case(case, args.port, args.baud, args.output_dir, args.fresh)
+    results = [execute_case(case, args.port, args.baud, args.output_dir, args.fresh,
+                            args.ux_audit)
                for case in selected]
     markdown, report = write_reports(args.output_dir, results)
     for result in results:

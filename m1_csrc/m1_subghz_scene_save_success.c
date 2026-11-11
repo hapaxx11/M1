@@ -14,7 +14,6 @@
 #include "m1_lcd.h"
 #include "m1_lp5814.h"
 #include "m1_subghz_scene.h"
-#include "m1_subghz_button_bar.h"
 #include "uiView.h"
 
 /*============================================================================*/
@@ -75,12 +74,6 @@ static void draw(SubGhzApp *app)
     const char *slash = strrchr(fname, '/');
     if (slash) fname = slash + 1;
     m1_draw_text(&m1_u8g2, 2, 42, 124, fname, TEXT_ALIGN_CENTER);
-
-    /* Bottom bar */
-    subghz_button_bar_draw(
-        arrowleft_8x8, "OK",
-        NULL, NULL,
-        NULL, NULL);
 
     m1_u8g2_nextpage();
 }

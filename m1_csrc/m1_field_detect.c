@@ -398,7 +398,7 @@ void nfc_rfid_detect_run(void)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 12, "Field Detect");
         u8g2_DrawStr(&m1_u8g2, 2, 28, "Initialising...");
-        u8g2_DrawStr(&m1_u8g2, 2, 56, "BACK to exit");
+
     } while (m1_u8g2_nextpage());
 
     while (running)
@@ -449,7 +449,7 @@ void nfc_rfid_detect_run(void)
             if (rfid_det)
                 u8g2_DrawBox(&m1_u8g2, 3, 49, 122, 4);
 
-            u8g2_DrawStr(&m1_u8g2, 2, 63, "BACK to exit");
+
         } while (m1_u8g2_nextpage());
 
         /* Check for BACK button (non-blocking: poll already took ~50ms in NFC) */

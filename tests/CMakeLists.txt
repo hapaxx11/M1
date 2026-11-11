@@ -849,6 +849,18 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME submenu_widget_rollout COMMAND test_submenu_widget_rollout)
 
+add_executable(test_visual_ux
+    test_visual_ux.c
+)
+target_compile_definitions(test_visual_ux PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_visual_ux PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_visual_ux PRIVATE sanitizers)
+endif()
+add_test(NAME visual_ux COMMAND test_visual_ux)
+
 # ------------------------------------------------------------------
 # Source invariant: esp32_main_deinit() releases all heap held by the
 # legacy AT-over-SPI plumbing (task stack, trans_data, stream buffer,

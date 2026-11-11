@@ -37,6 +37,7 @@
 #include "stm32h5xx_hal.h"
 #include "ff.h"
 #include "m1_games.h"
+#include "m1_button_bar.h"
 #include "queens_logic.h"
 
 /*************************** D E F I N E S ************************************/
@@ -731,8 +732,8 @@ static void enter_initials(queens_ctx_t *ctx)
             }
         }
 
-        u8g2_SetFont(&m1_u8g2, Q_FONT_SMALL);
-        u8g2_DrawStr(&m1_u8g2, 8, 60, "UD:chr LR:pos OK:save");
+        m1_button_bar_draw(arrowleft_8x8, "Pos", ok_circle_8x8, "Save",
+                           arrowright_8x8, NULL);
         m1_u8g2_nextpage();
 
         game_button_t btn = game_poll_button(60000);

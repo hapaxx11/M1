@@ -213,8 +213,6 @@ void m1_diag_screen(void)
             u8g2_DrawStr(&m1_u8g2, 0, 53, line_hfsr);
         }
 
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 34, 63, "BACK: exit");
         m1_u8g2_nextpage();
 
         /* Wait for any button */
