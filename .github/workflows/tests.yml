@@ -46,16 +46,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install build tools
+      - name: Verify preinstalled build tools
         run: |
-          sudo sed -i \
-            -e 's|mirror+file:/etc/apt/apt-mirrors.txt|https://mirrors.edge.kernel.org/ubuntu|g' \
-            -e 's|http://azure.archive.ubuntu.com|https://mirrors.edge.kernel.org|g' \
-            -e 's|https://archive.ubuntu.com|https://mirrors.edge.kernel.org|g' \
-            -e 's|https://security.ubuntu.com|https://mirrors.edge.kernel.org|g' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/*
-          sudo apt-get update -y
-          sudo apt-get install -y cmake build-essential
+          cmake --version
+          gcc --version
+          g++ --version
+          make --version
 
       - name: Configure tests
         run: |
