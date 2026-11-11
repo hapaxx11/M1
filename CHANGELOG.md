@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6.2] - 2026-11-11
+
+### Changed
+
+- **HIL test selection** — use focused cases for isolated fixes, recursive module audits for structural or shared-lifecycle changes, and broad suites only for cross-cutting regression risk. Add `rfid-read-stability` for targeted RFID Read and Pet Scanner lifecycle validation.
+
+### Fixed
+
+- **125 kHz RFID: restore reliable tag reading** — fix the TIM5 interrupt priority that caused an IWDG reset, restore the stock FDX-B frame decoder for pet chips, and prevent EM4100 normalization from overflowing its temporary event buffer. Preserve complete protocol payloads through save/load, emulation, and T5577 writing, and keep FDX-B waveform edges intact across repeated emulation.
+- **USB CLI: use ISR-safe task notifications** — prevent invalid RTOS calls when USB CDC data arrives in CLI mode.
+
 ## [0.9.6.1] - 2026-11-11
 
 ### Added
