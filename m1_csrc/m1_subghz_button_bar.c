@@ -117,5 +117,5 @@ void subghz_rssi_bar_draw(int16_t rssi_dbm)
     /* Draw RSSI text */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
     snprintf(rssi_str, sizeof(rssi_str), "%d", rssi_dbm);
-    u8g2_DrawStr(&m1_u8g2, bar_max_w + 2, RSSI_BAR_Y + RSSI_BAR_H, rssi_str);
+    u8g2_DrawStr(&m1_u8g2, bar_max_w + 2, RSSI_BAR_Y + RSSI_BAR_H + 5, rssi_str);
 }

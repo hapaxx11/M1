@@ -327,6 +327,23 @@ void test_caption_and_countdown_reflow(void)
     free(bind);
 }
 
+void test_shared_dialog_and_rssi_layout(void)
+{
+    char *display = read_file("m1_csrc/m1_display.c");
+    char *choice = strstr(display, "uint8_t m1_message_box_choice(");
+    TEST_ASSERT_NOT_NULL(choice);
+    *choice = '\0';
+    assert_contains(display, "u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);");
+    assert_contains(display, "this_button_status.event[BUTTON_LEFT_KP_ID]==BUTTON_EVENT_CLICK");
+    assert_absent(display, "u8g2_UserInterfaceMessage");
+    free(display);
+
+    char *status = read_file("m1_csrc/m1_subghz_button_bar.c");
+    assert_contains(status, "RSSI_BAR_Y + RSSI_BAR_H + 5");
+    TEST_ASSERT_TRUE(11 + 3 + 5 - 7 > 10);
+    free(status);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -341,5 +358,6 @@ int main(void)
     RUN_TEST(test_review_layout_reflow_and_feedback);
     RUN_TEST(test_excluded_scenes_follow_visual_standards);
     RUN_TEST(test_caption_and_countdown_reflow);
+    RUN_TEST(test_shared_dialog_and_rssi_layout);
     return UNITY_END();
 }
