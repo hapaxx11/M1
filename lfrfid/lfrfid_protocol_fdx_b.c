@@ -376,6 +376,18 @@ static bool fdxb_encoder_begin(void *proto)
                                  lfrfid_encoded_data.data, ENCODED_DATA_MAX,
                                  FDXB_EMUL_GPIO_PIN);
     if(n == 0) { lfrfid_encoded_data.length = 0; return false; }
+    if((n & 1u) != 0u) {
+        if(n > ENCODED_DATA_MAX / 2u) {
+            lfrfid_encoded_data.length = 0;
+            return false;
+        }
+        for(uint16_t i = 0; i < n; i++) {
+            lfrfid_encoded_data.data[n + i] = lfrfid_encoded_data.data[i];
+            lfrfid_encoded_data.data[n + i].bsrr ^=
+                (1u << FDXB_EMUL_GPIO_PIN) | (1u << (FDXB_EMUL_GPIO_PIN + 16));
+        }
+        n = (uint16_t)(n * 2u);
+    }
     lfrfid_encoded_data.length = n;
     return true;
 }
