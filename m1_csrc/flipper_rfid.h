@@ -20,7 +20,7 @@
 
 typedef struct {
 	LFRFIDProtocol protocol;
-	uint8_t  data[8];    /* Raw protocol data */
+	uint8_t  data[LFRFID_TAG_DATA_MAX_SIZE];
 	uint8_t  data_len;
 	char     protocol_name[32];
 } flipper_rfid_tag_t;

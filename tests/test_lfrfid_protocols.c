@@ -7,6 +7,7 @@ LFRFID_TAG_INFO lfrfid_tag_info;
 LFRFIDProgram *lfrfid_program;
 EncodedTx_Data_t lfrfid_encoded_data;
 uint8_t rfid_rxtx_is_taking_this_irq;
+static Encoded_Data_t test_encoded_steps[ENCODED_DATA_MAX];
 
 void lfrfid_emul_hw_init(void) {}
 void bytes_to_u32_array(BitOrder order, const uint8_t in_data[], uint32_t out_data[], int size)
@@ -35,6 +36,10 @@ void t5577_execute_write(LFRFIDProgram *data, int block)
 void setUp(void)
 {
     memset(&lfrfid_tag_info, 0, sizeof(lfrfid_tag_info));
+    memset(test_encoded_steps, 0, sizeof(test_encoded_steps));
+    lfrfid_encoded_data.data = test_encoded_steps;
+    lfrfid_encoded_data.length = 0;
+    lfrfid_encoded_data.index = 0;
 }
 
 void tearDown(void) {}
@@ -125,10 +130,58 @@ void test_fdxb_decodes_stock_frame(void)
     protocol_fdx_b.decoder.begin(NULL);
     TEST_ASSERT_TRUE(protocol_fdx_b.decoder.execute(events, count));
     TEST_ASSERT_EQUAL_UINT16(32, lfrfid_tag_info.bitrate);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(test_payload, lfrfid_tag_info.uid,
+                                  FDX_B_DECODED_SIZE);
 
     const uint8_t *decoded = protocol_fdx_b.get_data(NULL);
     TEST_ASSERT_NOT_NULL(decoded);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(test_payload, decoded, 5);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(test_payload, decoded, FDX_B_DECODED_SIZE);
+}
+
+void test_fdxb_encoder_preserves_payload_and_repeat_edges(void)
+{
+    uint8_t expected_frame[FDX_B_ENCODED_SIZE];
+    Encoded_Data_t expected_steps[ENCODED_DATA_MAX];
+    build_fdxb_frame(test_payload, expected_frame);
+    memcpy(lfrfid_tag_info.uid, test_payload,
+           min(sizeof(lfrfid_tag_info.uid), (size_t)FDX_B_DECODED_SIZE));
+
+    TEST_ASSERT_TRUE(protocol_fdx_b.encoder.begin(NULL));
+    uint16_t expected_count = fdxb_build_wave(expected_frame, FDXB_ENCODED_BITS,
+                                              expected_steps, ENCODED_DATA_MAX,
+                                              FDXB_EMUL_GPIO_PIN);
+    TEST_ASSERT_EQUAL_UINT16(193, expected_count);
+    TEST_ASSERT_EQUAL_UINT16(expected_count * 2U, lfrfid_encoded_data.length);
+
+    for(uint16_t i = 0; i < expected_count; i++) {
+        TEST_ASSERT_EQUAL_UINT32(expected_steps[i].bsrr,
+                                 lfrfid_encoded_data.data[i].bsrr);
+        TEST_ASSERT_EQUAL_UINT16(expected_steps[i].time_us,
+                                 lfrfid_encoded_data.data[i].time_us);
+    }
+    for(uint16_t i = 0; i < lfrfid_encoded_data.length; i++) {
+        uint16_t next = (i + 1U) % lfrfid_encoded_data.length;
+        TEST_ASSERT_NOT_EQUAL(lfrfid_encoded_data.data[i].bsrr,
+                              lfrfid_encoded_data.data[next].bsrr);
+    }
+}
+
+void test_fdxb_write_preserves_all_payload_blocks(void)
+{
+    uint8_t expected_frame[FDX_B_ENCODED_SIZE];
+    uint32_t expected_blocks[4];
+    LFRFIDProgram program;
+    build_fdxb_frame(test_payload, expected_frame);
+    bytes_to_u32_array(BIT_ORDER_MSB_FIRST, expected_frame, expected_blocks, 4);
+    memcpy(lfrfid_tag_info.uid, test_payload,
+           min(sizeof(lfrfid_tag_info.uid), (size_t)FDX_B_DECODED_SIZE));
+    memset(&program, 0, sizeof(program));
+    program.type = LFRFIDProgramTypeT5577;
+
+    protocol_fdx_b.write.begin(&lfrfid_tag_info, &program);
+
+    TEST_ASSERT_EQUAL_UINT32(5, program.t5577.max_blocks);
+    TEST_ASSERT_EQUAL_UINT32_ARRAY(expected_blocks, &program.t5577.block_data[1], 4);
 }
 
 void test_fdxb_rejects_wrong_header(void)
@@ -159,6 +212,8 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_fdxb_decodes_stock_frame);
+    RUN_TEST(test_fdxb_encoder_preserves_payload_and_repeat_edges);
+    RUN_TEST(test_fdxb_write_preserves_all_payload_blocks);
     RUN_TEST(test_fdxb_rejects_wrong_header);
     RUN_TEST(test_em4100_rejects_normalization_overflow);
     return UNITY_END();

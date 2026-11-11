@@ -108,10 +108,7 @@ bool lfrfid_profile_load(const S_M1_file_info *f, const char* ext)
 		if(!GetPrivateProfileHex(&data,RFID_DATAFILE_DATA_KEYWORD, file_path))
 			return false;
 
-		/* Clamp to the destination size: data.buf holds up to data.max_len (200)
-		 * bytes but uid[] is only 5. Any .rfid with >5 data bytes (every legit
-		 * multi-byte protocol: HID=6, AWID=9, FDX-B=11, GProxII=12, ...) would
-		 * otherwise smash protocol/bitrate/filename/filepath and adjacent .bss. */
+		/* Clamp untrusted file data to the shared protocol-data capacity. */
 		{
 			size_t n = lfrfid_uid_copy_len(data.v.hex.out_len, sizeof(lfrfid_tag_info.uid));
 			memset(lfrfid_tag_info.uid, 0, sizeof(lfrfid_tag_info.uid));
@@ -143,7 +140,7 @@ bool lfrfid_profile_load(const S_M1_file_info *f, const char* ext)
 /*============================================================================*/
 bool lfrfid_profile_save(const char *fp, const PLFRFID_TAG_INFO data)
 {
-    char szString[32];
+    char szString[LFRFID_TAG_DATA_MAX_SIZE * 3];
 
     int uid_size = protocol_get_data_size(data->protocol);
     const char *protocol = protocol_get_name(data->protocol);

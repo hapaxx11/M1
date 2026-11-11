@@ -215,6 +215,26 @@ void test_rfid_fdx_b(void)
 		flipper_rfid_parse_protocol("FDX-B"));
 }
 
+void test_rfid_fdx_b_roundtrip_preserves_full_payload(void)
+{
+	enum { FDXB_TEST_PAYLOAD_SIZE = 11 };
+	static const uint8_t payload[FDXB_TEST_PAYLOAD_SIZE] = {
+		0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x55, 0xAA, 0x01,
+	};
+	const char *path = "test_fdxb_payload.rfid";
+	flipper_rfid_tag_t input = {0};
+	flipper_rfid_tag_t output;
+
+	input.protocol = LFRFIDProtocolFDX_B;
+	input.data_len = sizeof(payload);
+	memcpy(input.data, payload, sizeof(payload));
+	TEST_ASSERT_TRUE(flipper_rfid_save(path, &input));
+	TEST_ASSERT_TRUE(flipper_rfid_load(path, &output));
+	TEST_ASSERT_EQUAL_UINT8(sizeof(payload), output.data_len);
+	TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, output.data, sizeof(payload));
+	TEST_ASSERT_EQUAL_INT(0, remove(path));
+}
+
 void test_rfid_electra(void)
 {
 	TEST_ASSERT_EQUAL(LFRFIDProtocolElectra,
@@ -342,6 +362,7 @@ int main(void)
 	/* Manchester protocols */
 	RUN_TEST(test_rfid_viking);
 	RUN_TEST(test_rfid_fdx_b);
+	RUN_TEST(test_rfid_fdx_b_roundtrip_preserves_full_payload);
 	RUN_TEST(test_rfid_electra);
 	RUN_TEST(test_rfid_gallagher);
 	RUN_TEST(test_rfid_jablotron);

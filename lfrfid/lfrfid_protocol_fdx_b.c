@@ -60,7 +60,6 @@
 /***************************** V A R I A B L E S ******************************/
 
 static uint8_t g_fdxb_frame[FDXB_ENCODED_SIZE];   /* 144-bit shift register */
-static uint8_t g_fdxb_data[FDXB_DECODED_SIZE];     /* 11-byte credential */
 static bool    g_fdxb_last_short;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -242,7 +241,6 @@ static void fdxb_decoder_begin(void *proto)
 {
     (void)proto;
     memset(g_fdxb_frame, 0, sizeof(g_fdxb_frame));
-    memset(g_fdxb_data, 0, sizeof(g_fdxb_data));
     g_fdxb_last_short = false;
 }
 
@@ -278,9 +276,7 @@ static bool fdxb_decoder_execute(void *proto, uint16_t size)
         if(pushed) {
             fdxb_push_bit(g_fdxb_frame, FDXB_ENCODED_SIZE, bit);
             if(fdxb_can_be_decoded(g_fdxb_frame)) {
-                fdxb_decode(g_fdxb_frame, g_fdxb_data);
-                memcpy(lfrfid_tag_info.uid, g_fdxb_data,
-                       min(sizeof(lfrfid_tag_info.uid), (size_t)FDXB_DECODED_SIZE));
+                fdxb_decode(g_fdxb_frame, lfrfid_tag_info.uid);
                 lfrfid_tag_info.bitrate = 32;
                 return true;
             }
@@ -294,7 +290,7 @@ static bool fdxb_decoder_execute(void *proto, uint16_t size)
 static uint8_t *fdxb_get_data(void *proto)
 {
     (void)proto;
-    return g_fdxb_data;
+    return lfrfid_tag_info.uid;
 }
 
 static void fdxb_render_data(void *protocol, char *result)
