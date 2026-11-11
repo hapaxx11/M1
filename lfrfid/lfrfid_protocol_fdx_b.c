@@ -290,11 +290,11 @@ static bool fdxb_decoder_execute(void *proto, uint16_t size)
 }
 
 /*========================= D E T A I L S ====================================*/
-/* Canonical source is lfrfid_tag_info.uid (the 11-byte de-framed payload). */
+/* Canonical source is the full 11-byte decoded payload. */
 static uint8_t *fdxb_get_data(void *proto)
 {
     (void)proto;
-    return lfrfid_tag_info.uid;
+    return g_fdxb_data;
 }
 
 static void fdxb_render_data(void *protocol, char *result)
