@@ -488,7 +488,7 @@ static void g2048_draw_you_win(const state_2048_t *s)
     u8g2_SetFont(&m1_u8g2, u8g2_font_finderskeepers_tf);
     u8g2_DrawStr(&m1_u8g2, 6, 34, "You reached 2048!");
     u8g2_DrawStr(&m1_u8g2, 6, 46, "Keep going or quit.");
-    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Continue", NULL, NULL);
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Next", NULL, NULL);
 
     m1_u8g2_nextpage();
 }

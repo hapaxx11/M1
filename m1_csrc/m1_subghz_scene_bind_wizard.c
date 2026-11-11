@@ -426,7 +426,7 @@ static void draw_step(void)
 
     /* Instruction text */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text_box(&m1_u8g2, 2, 20, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
+    m1_draw_text_box(&m1_u8g2, 2, 11, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
 
     /* Countdown bar + hints */
     if (st->countdown_sec > 0)
@@ -447,15 +447,15 @@ static void draw_step(void)
         char cd[8];
         snprintf(cd, sizeof(cd), "%us", (unsigned)((remaining_ms + 999u) / 1000u));
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 4, 50, cd);
+        u8g2_DrawStr(&m1_u8g2, 4, 41, cd);
         if (bw_tx_failed && st->tx_step)
-            u8g2_DrawStr(&m1_u8g2, 30, 50, "TX failed");
+            u8g2_DrawStr(&m1_u8g2, 30, 41, "TX failed");
     }
     else
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         if (bw_tx_failed)
-            u8g2_DrawStr(&m1_u8g2, 4, 50, "TX failed");
+            u8g2_DrawStr(&m1_u8g2, 4, 41, "TX failed");
     }
     subghz_button_bar_draw(NULL, NULL,
                            ok_circle_8x8,

@@ -235,7 +235,7 @@ static bool dl_confirm_download(const fw_release_t *release)
 		u8g2_DrawStr(&m1_u8g2, 4, 44, release->tag);
 
 		/* Bottom bar: OK to download */
-		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Download", NULL, NULL);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Fetch", NULL, NULL);
 	} while (m1_u8g2_nextpage());
 
 	return dl_wait_ok_or_back();
@@ -374,7 +374,7 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 30, msg);
 			u8g2_DrawStr(&m1_u8g2, 4, 42, release->asset_name);
-			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Continue", NULL, NULL);
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Next", NULL, NULL);
 		} while (m1_u8g2_nextpage());
 
 		dl_wait_ok_or_back();

@@ -286,6 +286,25 @@ void test_excluded_scenes_follow_visual_standards(void)
     free(nfc);
 }
 
+void test_caption_and_countdown_reflow(void)
+{
+    char *download = read_file("m1_csrc/m1_fw_download.c");
+    assert_contains(download, "ok_circle_8x8, \"Fetch\"");
+    assert_contains(download, "ok_circle_8x8, \"Next\"");
+    free(download);
+    char *esp32 = read_file("m1_csrc/m1_esp32_fw_download.c");
+    assert_contains(esp32, "ok_circle_8x8, \"Fetch\"");
+    free(esp32);
+    char *game = read_file("m1_csrc/game_2048.c");
+    assert_contains(game, "ok_circle_8x8, \"Next\"");
+    free(game);
+    char *bind = read_file("m1_csrc/m1_subghz_scene_bind_wizard.c");
+    assert_contains(bind, "m1_draw_text_box(&m1_u8g2, 2, 11, 124");
+    assert_contains(bind, "u8g2_DrawStr(&m1_u8g2, 4, 41, cd);");
+    assert_contains(bind, "u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 5);");
+    free(bind);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -299,5 +318,6 @@ int main(void)
     RUN_TEST(test_subghz_hex_editors_use_standard_bars);
     RUN_TEST(test_review_layout_reflow_and_feedback);
     RUN_TEST(test_excluded_scenes_follow_visual_standards);
+    RUN_TEST(test_caption_and_countdown_reflow);
     return UNITY_END();
 }

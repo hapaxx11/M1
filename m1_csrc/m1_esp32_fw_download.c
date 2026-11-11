@@ -412,7 +412,7 @@ source_selection:
 			u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 34, size_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 44, rel->tag);
-			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Download", NULL, NULL);
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Fetch", NULL, NULL);
 		} while (m1_u8g2_nextpage());
 
 		if (!edl_wait_ok_or_back())
