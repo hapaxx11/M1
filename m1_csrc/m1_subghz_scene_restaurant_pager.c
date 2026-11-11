@@ -535,6 +535,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     }
 
     if (state->status_pending &&
+        (state->view == RESTAURANT_PAGER_VIEW_ACTIONS ||
+         state->view == RESTAURANT_PAGER_VIEW_SETTINGS) &&
         event != SubGhzEventRxData && event != SubGhzEventTick)
     {
         if (event == SubGhzEventBack || event == SubGhzEventOk)
