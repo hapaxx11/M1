@@ -354,20 +354,15 @@ void test_split_negative_min_preserves_signed_leftover(void)
 {
     SubGhzRawLineState state;
     subghz_raw_line_state_init(&state);
-    char input[32];
-    snprintf(input, sizeof(input), "%llu",
-             (unsigned long long)LONG_MAX + 1ULL);
-    strncpy(state.leftover, input, sizeof(state.leftover) - 1U);
-    const uint32_t expected = (uint32_t)((unsigned long)LONG_MAX + 1UL);
     uint32_t out[1];
+    TEST_ASSERT_EQUAL_UINT16(0,
+        subghz_parse_raw_data_line("-2147483648", false, &state, out, 1));
+    TEST_ASSERT_EQUAL_STRING("-2147483648", state.leftover);
 
-    const uint16_t count = subghz_parse_raw_data_line(" ", true, &state, out, 1);
-    if (expected == 0) {
-        TEST_ASSERT_EQUAL_UINT16(0, count);
-    } else {
-        TEST_ASSERT_EQUAL_UINT16(1, count);
-        TEST_ASSERT_EQUAL_UINT32(expected, out[0]);
-    }
+    TEST_ASSERT_EQUAL_UINT16(1,
+        subghz_parse_raw_data_line(" ", true, &state, out, 1));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_C(2147483648), out[0]);
+    TEST_ASSERT_EQUAL_CHAR('\0', state.leftover[0]);
 }
 
 /* ===================================================================
