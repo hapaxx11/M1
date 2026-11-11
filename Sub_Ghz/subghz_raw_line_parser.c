@@ -66,10 +66,16 @@ uint16_t subghz_parse_raw_data_line(const char *text,
         char combined[32];
         snprintf(combined, sizeof(combined), "%s%.*s",
                  state->leftover, (int)(tok_end - p), p);
+        const bool negative = state->leftover[0] == '-';
         state->leftover[0] = '\0';
 
-        const long val = strtol(combined, NULL, 10);
-        const uint32_t magnitude = raw_magnitude(val);
+        uint32_t magnitude;
+        if (negative) {
+            const long val = strtol(combined, NULL, 10);
+            magnitude = raw_magnitude(val);
+        } else {
+            magnitude = (uint32_t)strtoul(combined, NULL, 10);
+        }
         if (magnitude != 0 && count < max_samples)
             samples_out[count++] = magnitude;
 
@@ -95,8 +101,7 @@ uint16_t subghz_parse_raw_data_line(const char *text,
          * this number might be incomplete — save as leftover */
         if (!line_complete && *p == '\0')
         {
-            snprintf(state->leftover, sizeof(state->leftover),
-                     "%lu", (unsigned long)magnitude);
+            snprintf(state->leftover, sizeof(state->leftover), "%ld", val);
             break;
         }
 

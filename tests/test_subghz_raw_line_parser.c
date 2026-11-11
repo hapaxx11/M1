@@ -350,6 +350,26 @@ void test_parse_long_min_does_not_overflow_negation(void)
     }
 }
 
+void test_split_negative_min_preserves_signed_leftover(void)
+{
+    SubGhzRawLineState state;
+    subghz_raw_line_state_init(&state);
+    char input[32];
+    snprintf(input, sizeof(input), "%llu",
+             (unsigned long long)LONG_MAX + 1ULL);
+    strncpy(state.leftover, input, sizeof(state.leftover) - 1U);
+    const uint32_t expected = (uint32_t)((unsigned long)LONG_MAX + 1UL);
+    uint32_t out[1];
+
+    const uint16_t count = subghz_parse_raw_data_line(" ", true, &state, out, 1);
+    if (expected == 0) {
+        TEST_ASSERT_EQUAL_UINT16(0, count);
+    } else {
+        TEST_ASSERT_EQUAL_UINT16(1, count);
+        TEST_ASSERT_EQUAL_UINT32(expected, out[0]);
+    }
+}
+
 /* ===================================================================
  * State init
  * =================================================================== */
@@ -401,6 +421,7 @@ int main(void)
     /* Large values */
     RUN_TEST(test_parse_large_values);
     RUN_TEST(test_parse_long_min_does_not_overflow_negation);
+    RUN_TEST(test_split_negative_min_preserves_signed_leftover);
 
     /* Full-buffer capacity (replay truncation regression) */
     RUN_TEST(test_parse_full_line_not_truncated_at_64_samples);
