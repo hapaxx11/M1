@@ -1,1 +1,1 @@
-Documentation: CI uses preinstalled host tools for unit tests and the kernel.org Ubuntu mirror for ARM toolchain installation to avoid network-related setup failures.
+Documentation: CI uses preinstalled host tools and a direct ARM GNU toolchain archive to avoid package-mirror failures during setup.
