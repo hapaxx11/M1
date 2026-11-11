@@ -217,12 +217,22 @@ void test_flipper_conversion_sets_prepared_replay_path_before_success(void)
 void test_transmitter_polls_ok_release_before_burst_completion(void)
 {
     char *content = read_file("m1_csrc/m1_subghz_scene_transmitter.c");
+    char *handler = slice_between(content,
+                                  "case SubGhzEventTxComplete:",
+                                  "case SubGhzEventBack:");
+    const char *poll = strstr(handler, "HAL_GPIO_ReadPin");
+    const char *gate = strstr(handler, "subghz_transmitter_ctl_should_release");
+    const char *release = strstr(handler, "SUBGHZ_TXCTL_EVT_OK_RELEASE");
+    const char *complete = strstr(handler, "SUBGHZ_TXCTL_EVT_TX_BURST_COMPLETE");
 
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content, "subghz_transmitter_ctl_should_release"),
-                                 "Transmitter must poll the OK GPIO level");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content, "SUBGHZ_TXCTL_EVT_OK_RELEASE"),
-                                 "Transmitter must forward OK release to its controller");
+    TEST_ASSERT_NOT_NULL(poll);
+    TEST_ASSERT_NOT_NULL(gate);
+    TEST_ASSERT_NOT_NULL(release);
+    TEST_ASSERT_NOT_NULL(complete);
+    TEST_ASSERT_TRUE_MESSAGE(poll < gate && gate < release && release < complete,
+                             "OK polling and release must precede burst completion");
 
+    free(handler);
     free(content);
 }
 
