@@ -1,1 +1,0 @@
-**UI: Review follow-up** — Reflow analyzer labels and graphs without overlap, preserve Restaurant Pager status feedback, verify playlist start/stop and latest-client cleanup, observe manual HIL destinations, and retain visual findings across checkpoint resumes.

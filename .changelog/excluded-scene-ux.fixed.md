@@ -1,1 +1,0 @@
-**UI: Excluded-scene source audit** — Correct Back labels and action presentation in Bind, Remote, bank-swap, Pong, and 2048, with source-only regressions for transmitter, receiver, signal settings, and other HIL-excluded scenes.
