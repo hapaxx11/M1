@@ -357,7 +357,9 @@ static int8_t CDC_Receive_FS(uint8_t *Buf, uint32_t *Len)
     uint32_t u32buf = logdb_rx_buffer[0] + (TASK_NOTIFY_USBCDC << 8);
 
     //send the char to the command line task, one char
-    xTaskNotify(cmdLineTaskHandle, (uint32_t)u32buf, eSetValueWithOverwrite);
+    xTaskNotifyFromISR(cmdLineTaskHandle, (uint32_t)u32buf, eSetValueWithOverwrite,
+                       &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
   return (USBD_OK);
