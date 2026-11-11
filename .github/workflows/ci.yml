@@ -42,15 +42,18 @@ jobs:
       # ------------------------------------------------------------------ #
       # 2. Install toolchain and build tools
       # ------------------------------------------------------------------ #
-      - name: Install ARM toolchain and build tools
+      - name: Install ARM toolchain and verify build tools
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            gcc-arm-none-eabi \
-            binutils-arm-none-eabi \
-            cmake \
-            ninja-build \
-            python3
+          curl -fL --retry 3 --retry-delay 5 --retry-all-errors \
+            -o /tmp/arm-gnu-toolchain.tar.xz \
+            https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
+          sudo tar -xJf /tmp/arm-gnu-toolchain.tar.xz -C /opt
+          echo "/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+          export PATH="/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin:$PATH"
+          arm-none-eabi-gcc --version
+          cmake --version
+          ninja --version
+          python3 --version
 
       # ------------------------------------------------------------------ #
       # 3. Configure CMake

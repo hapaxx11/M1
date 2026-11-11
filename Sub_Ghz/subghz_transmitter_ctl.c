@@ -114,6 +114,13 @@ static subghz_transmitter_action_t cycle_button(
     return SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_PREV;
 }
 
+bool subghz_transmitter_ctl_should_release(const subghz_transmitter_ctl_t *c,
+                                           bool ok_held)
+{
+    return c != NULL && c->phase == SUBGHZ_TXCTL_PHASE_TX &&
+           c->mode == SUBGHZ_TX_MODE_ENDLESS && !ok_held;
+}
+
 /*----------------------------------------------------------------------------*/
 /* Event dispatcher                                                           */
 /*----------------------------------------------------------------------------*/

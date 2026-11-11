@@ -214,11 +214,8 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
              * OK is released.  Always pass repeat_on_idle=true here —
              * the controller drives mode-specific stopping by either
              * NOT calling us (SINGLE finished, returns TX_TEARDOWN
-             * directly) or by feeding OK_RELEASE first (ENDLESS).
-             *
-             * Note: in this scaffold we don't yet wire OK_RELEASE; the
-             * controller's SINGLE-mode tail-count accounting still
-             * works correctly and the scene completes as expected. */
+             * directly) or by feeding OK_RELEASE first (ENDLESS). The
+             * scene polls the OK GPIO before each burst-complete event. */
             (void)sub_ghz_replay_continue_async(true);
             return false;  /* anim handled on tick */
         }
@@ -382,6 +379,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventTxComplete:
         {
+            const bool ok_held = (HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port,
+                                                   BUTTON_OK_Pin) == BUTTON_PRESS_STATE);
+            if (subghz_transmitter_ctl_should_release(&s_ctl, ok_held))
+            {
+                subghz_transmitter_action_t release =
+                    subghz_transmitter_ctl_event(&s_ctl,
+                                                  SUBGHZ_TXCTL_EVT_OK_RELEASE);
+                if (perform_action(app, release)) app->need_redraw = true;
+            }
             subghz_transmitter_action_t a =
                 subghz_transmitter_ctl_event(
                     &s_ctl, SUBGHZ_TXCTL_EVT_TX_BURST_COMPLETE);

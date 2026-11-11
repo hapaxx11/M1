@@ -401,6 +401,26 @@ static void test_invariant_no_next_burst_outside_tx(void)
     TEST_ASSERT_NOT_EQUAL(SUBGHZ_TXCTL_ACT_TX_NEXT_BURST, a);
 }
 
+static void test_ok_release_gate_only_fires_for_active_endless_tx(void)
+{
+    TEST_ASSERT_FALSE(subghz_transmitter_ctl_should_release(NULL, false));
+
+    subghz_transmitter_ctl_init(&c, SUBGHZ_TX_MODE_ENDLESS, 3, false, 0);
+    TEST_ASSERT_FALSE(subghz_transmitter_ctl_should_release(&c, false));
+    subghz_transmitter_ctl_event(&c, SUBGHZ_TXCTL_EVT_OK_PRESS);
+    TEST_ASSERT_FALSE(subghz_transmitter_ctl_should_release(&c, true));
+    TEST_ASSERT_TRUE(subghz_transmitter_ctl_should_release(&c, false));
+
+    subghz_transmitter_ctl_init(&c, SUBGHZ_TX_MODE_SINGLE, 3, false, 0);
+    subghz_transmitter_ctl_event(&c, SUBGHZ_TXCTL_EVT_OK_PRESS);
+    TEST_ASSERT_FALSE(subghz_transmitter_ctl_should_release(&c, false));
+
+    subghz_transmitter_ctl_init(&c, SUBGHZ_TX_MODE_ENDLESS, 3, false, 0);
+    subghz_transmitter_ctl_event(&c, SUBGHZ_TXCTL_EVT_OK_PRESS);
+    subghz_transmitter_ctl_event(&c, SUBGHZ_TXCTL_EVT_BACK);
+    TEST_ASSERT_FALSE(subghz_transmitter_ctl_should_release(&c, false));
+}
+
 /*============================================================================*/
 
 int main(void)
@@ -422,6 +442,7 @@ int main(void)
     /* ENDLESS mode */
     RUN_TEST(test_endless_mode_loops_while_held);
     RUN_TEST(test_endless_mode_release_does_n_minus_1_tail);
+    RUN_TEST(test_ok_release_gate_only_fires_for_active_endless_tx);
     /* Abort */
     RUN_TEST(test_tx_back_aborts_engine_and_tears_down);
     RUN_TEST(test_exiting_phase_ignores_back_and_other_events);

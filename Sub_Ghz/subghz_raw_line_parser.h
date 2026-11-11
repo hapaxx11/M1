@@ -29,7 +29,7 @@
 
 /** Persistent state across multiple calls (for split-line handling) */
 typedef struct {
-    char leftover[16];     /**< Partial number from previous buffer boundary */
+    char leftover[32];     /**< Partial number from previous buffer boundary */
 } SubGhzRawLineState;
 
 /**
