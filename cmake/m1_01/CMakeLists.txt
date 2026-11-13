@@ -696,6 +696,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/subghz_saved_capture.c
     ../../m1_csrc/m1_subghz_scene_receiver_info.c
     ../../m1_csrc/subghz_config_cycle.c
+    ../../Sub_Ghz/subghz_guided_scan.c
+    ../../Sub_Ghz/subghz_modem_profile.c
     ../../m1_csrc/m1_subghz_scene_config.c
     ../../m1_csrc/m1_subghz_scene_saved.c
     ../../m1_csrc/m1_subghz_scene_save_name.c

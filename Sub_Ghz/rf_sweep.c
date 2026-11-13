@@ -65,6 +65,7 @@ static void merge_into(rf_sweep_hit_t *slot,
     if (rssi_stronger(fp->rssi_dbm, slot->rssi_dbm)) {
         slot->rssi_dbm = fp->rssi_dbm;
         slot->freq_hz  = fp->freq_hz;   /* track the strongest sample's freq */
+        slot->mod      = fp->mod;
     }
 }
 
@@ -77,6 +78,7 @@ static void fill_slot(rf_sweep_hit_t *slot,
     slot->confirmed_sig = NULL;
     slot->decode_name = NULL;
     slot->freq_hz    = fp->freq_hz;
+    slot->mod        = fp->mod;
     slot->band       = fp->band;
     slot->category   = match->sig->category;
     slot->security   = match->sig->security;
@@ -91,12 +93,14 @@ static void fill_slot_decoded(rf_sweep_hit_t *slot,
                               uint16_t        band,
                               int16_t         rssi_dbm,
                               const char     *protocol_name,
-                              const rf_protocol_sig_t *confirmed_sig)
+                              const rf_protocol_sig_t *confirmed_sig,
+                              rf_mod_family_t  mod)
 {
     slot->sig         = NULL;
     slot->confirmed_sig = confirmed_sig;
     slot->decode_name = protocol_name;
     slot->freq_hz     = freq_hz;
+    slot->mod         = mod;
     slot->band        = band;
     slot->category    = RF_CAT_UNKNOWN;
     slot->security    = RF_SEC_UNKNOWN;
@@ -120,6 +124,7 @@ static void merge_decoded_slot(rf_sweep_hit_t *decoded,
     if (rssi_stronger(other->rssi_dbm, decoded->rssi_dbm)) {
         decoded->rssi_dbm = other->rssi_dbm;
         decoded->freq_hz = other->freq_hz;
+        decoded->mod = other->mod;
     }
 }
 
@@ -190,12 +195,13 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep)
     return &rep->hits[0];
 }
 
-bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
+bool rf_sweep_report_add_decoded_with_mod(rf_sweep_report_t *rep,
                                  uint32_t           freq_hz,
                                  uint16_t           band,
                                  int16_t            rssi_dbm,
                                  const char        *protocol_name,
-                                 const rf_protocol_sig_t *confirmed_sig)
+                                 const rf_protocol_sig_t *confirmed_sig,
+                                 rf_mod_family_t     mod)
 {
     if (rep == NULL || protocol_name == NULL)
         return false;
@@ -226,6 +232,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
             if (rssi_stronger(rssi_dbm, slot->rssi_dbm)) {
                 slot->rssi_dbm = rssi_dbm;
                 slot->freq_hz  = freq_hz;
+                slot->mod      = mod;
             }
             if (slot->confirmed_sig == NULL)
                 slot->confirmed_sig = associated_sig;
@@ -268,6 +275,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                 if (rssi_stronger(rssi_dbm, slot->rssi_dbm)) {
                     slot->rssi_dbm = rssi_dbm;
                     slot->freq_hz = freq_hz;
+                    slot->mod = mod;
                 }
                 if (slot->hits < UINT16_MAX)
                     slot->hits++;
@@ -284,7 +292,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
     /* New decode-confirmed identity: take a free slot if available. */
     if (rep->count < RF_SWEEP_MAX_HITS) {
         fill_slot_decoded(&rep->hits[rep->count], freq_hz, band, rssi_dbm,
-                          protocol_name, associated_sig);
+                          protocol_name, associated_sig, mod);
         rep->count++;
         resort(rep);
         return true;
@@ -296,7 +304,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
     {
         rf_sweep_hit_t candidate;
         fill_slot_decoded(&candidate, freq_hz, band, rssi_dbm,
-                          protocol_name, associated_sig);
+                          protocol_name, associated_sig, mod);
         rf_sweep_hit_t *weakest = &rep->hits[RF_SWEEP_MAX_HITS - 1];
         if (hit_ranks_above(&candidate, weakest)) {
             *weakest = candidate;
@@ -306,4 +314,17 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
     }
 
     return false;
+}
+
+
+bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
+                                 uint32_t           freq_hz,
+                                 uint16_t           band,
+                                 int16_t            rssi_dbm,
+                                 const char        *protocol_name,
+                                 const rf_protocol_sig_t *confirmed_sig)
+{
+    return rf_sweep_report_add_decoded_with_mod(rep, freq_hz, band, rssi_dbm,
+                                                protocol_name, confirmed_sig,
+                                                RF_MOD_UNKNOWN);
 }

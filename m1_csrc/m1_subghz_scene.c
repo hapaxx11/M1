@@ -24,6 +24,7 @@
 #include "m1_sub_ghz_decenc.h"
 #include "m1_subghz_scene.h"
 #include "subghz_scene_polish.h"
+#include "subghz_freq_presets.h"
 #include "m1_esp32_hal.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -41,6 +42,7 @@ extern uint8_t subghz_record_mode_flag;
 extern uint8_t subghz_get_freq_idx_ext(void);
 extern uint8_t subghz_get_mod_idx_ext(void);
 extern bool    subghz_get_hopping_ext(void);
+extern bool    subghz_get_smart_scan_ext(void);
 extern bool    subghz_get_sound_ext(void);
 extern bool    subghz_get_autosave_ext(void);
 extern uint8_t subghz_get_tx_power_idx_ext(void);
@@ -112,6 +114,7 @@ void subghz_scene_init(SubGhzApp *app)
     app->freq_idx     = subghz_get_freq_idx_ext();
     app->mod_idx      = subghz_get_mod_idx_ext();
     app->hopping      = subghz_get_hopping_ext();
+    app->smart_scan   = subghz_get_smart_scan_ext();
     app->sound        = subghz_get_sound_ext();
     app->autosave     = subghz_get_autosave_ext();
     app->tx_power_idx = subghz_get_tx_power_idx_ext();
@@ -364,6 +367,13 @@ void subghz_scene_app_run(void)
     char *path_storage = malloc(4U * SUBGHZ_SAVED_PATH_MAX);
     if (path_storage == NULL)
         return;
+    memset(path_storage, 0, 4U * SUBGHZ_SAVED_PATH_MAX);
+    SubGhzGuidedPlan *guided_plan = malloc(sizeof(*guided_plan));
+    if (guided_plan == NULL)
+    {
+        free(path_storage);
+        return;
+    }
 
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
@@ -374,6 +384,8 @@ void subghz_scene_app_run(void)
     app.raw_filepath = path_storage + SUBGHZ_SAVED_PATH_MAX;
     app.tx_path = path_storage + 2U * SUBGHZ_SAVED_PATH_MAX;
     app.saved_filepath = path_storage + 3U * SUBGHZ_SAVED_PATH_MAX;
+    app.guided_plan = guided_plan;
+    subghz_guided_plan_reset(app.guided_plan);
 
     /* Sub-GHz is timing-sensitive and does not use the ESP32.  If a prior
      * WiFi/BLE tool left the ESP32 SPI/EXTI transport active, tear it down
@@ -394,7 +406,7 @@ void subghz_scene_app_run(void)
     app.need_redraw = false;
 
     /* Time-based hopper tick: tracks wall-clock time so the hopper advances
-     * every 200 ms even when the queue is saturated with Q_EVENT_SUBGHZ_RX
+     * on the shared long-frame dwell even when Q_EVENT_SUBGHZ_RX saturates the queue
      * noise pulses.  At 315/433 MHz the RF noise floor generates thousands of
      * edges per second, keeping xQueueReceive() returning pdTRUE continuously
      * and preventing the queue-timeout path from ever firing.
@@ -532,11 +544,11 @@ void subghz_scene_app_run(void)
                 subghz_scene_send_event(&app, evt);
         }
 
-        /* Time-based hopper tick: fire every 200 ms of real wall-clock time.
+        /* Time-based hopper tick: fire on the shared long-frame dwell.
          * This runs after every queue receive (or timeout), so the hopper
          * advances correctly even when the queue is saturated with noise.
          * On the false→true activation edge the timer is reset to now so
-         * the first hop always waits a full 200 ms dwell. */
+         * the first hop always waits a full shared dwell. */
         if (app.hopper_active)
         {
             uint32_t now = HAL_GetTick();
@@ -545,7 +557,7 @@ void subghz_scene_app_run(void)
                 /* Fresh activation edge — start the dwell interval from now */
                 last_hop_tick_ms = now;
             }
-            else if ((now - last_hop_tick_ms) >= 200U)
+            else if ((now - last_hop_tick_ms) >= SUBGHZ_HOPPER_DWELL_MS)
             {
                 last_hop_tick_ms = now;
                 subghz_scene_send_event(&app, SubGhzEventHopperTick);
@@ -581,5 +593,6 @@ void subghz_scene_app_run(void)
     menu_sub_ghz_exit();
     xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);
+    free(guided_plan);
     free(path_storage);
 }

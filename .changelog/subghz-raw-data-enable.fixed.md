@@ -1,0 +1,1 @@
+**Sub-GHz: direct-RX configuration** — Enabled WDS raw/nonstandard mode and direct asynchronous data sourcing for FM238, and switched FSK-family GPIO0 to `RX_DATA` (`0x14`) to match Silicon Labs' Direct RX demodulated-output example.

@@ -23,10 +23,13 @@
 #include "m1_cli.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
+#include "subghz_rx_edge_filter.h"
 //#include "spi_drv.h"
 #include "spi_master.h"
 #include "m1_rfid.h"
 #include "lfrfid.h"
+
+extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 
 /*************************** D E F I N E S ************************************/
 
@@ -739,37 +742,28 @@ void TIM1_CC_IRQHandler(void)
 	} // else
 
 	send_to_q = 1;
-	if ( subghz_record_mode_flag )
+	if ( !subghz_rx_edge_accept(cap_val, subghz_record_mode_flag,
+	                            subghz_scan_config.modulation >= MODULATION_FSK) )
 	{
-#ifdef M1_APP_SUB_GHZ_RAW_DATA_RX_NOISE_FILTER_ENABLE
-		if ( cap_val < M1_APP_SUB_GHZ_RAW_DATA_NOISE_PULSE_WIDTH ) // Possibly noise?
+		send_to_q = 0;
+		if ( subghz_decenc_ctl.pulse_det_pol==PULSE_DET_FALLING )
+			subghz_decenc_ctl.pulse_det_pol = PULSE_DET_RISING;
+		else
+			subghz_decenc_ctl.pulse_det_pol = PULSE_DET_FALLING;
+	}
+	else if ( subghz_record_mode_flag )
+	{
+		m1_ringbuffer_insert(&subghz_rx_rawdata_rb, (uint8_t *)&cap_val);
+		pulse_counter++;
+		if ( pulse_counter >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+		{
+			pulse_counter = 0;
+		}
+		else
 		{
 			send_to_q = 0;
-			// Because this bit is skipped due to the noise condition above,
-			// the next bit must be skipped so that polarity of the
-			// the following bits won't be inverted!
-			if ( subghz_decenc_ctl.pulse_det_pol==PULSE_DET_FALLING )
-				subghz_decenc_ctl.pulse_det_pol = PULSE_DET_RISING;
-			else
-				subghz_decenc_ctl.pulse_det_pol = PULSE_DET_FALLING;
-		} // if ( cap_val < M1_APP_SUB_GHZ_RAW_DATA_NOISE_PULSE_WIDTH )
-		else
-#else
-		if ( true )
-#endif // #ifdef M1_APP_SUB_GHZ_RAW_DATA_RX_NOISE_FILTER_ENABLE
-		{
-			m1_ringbuffer_insert(&subghz_rx_rawdata_rb, (uint8_t *)&cap_val);
-			pulse_counter++;
-			if ( pulse_counter >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
-			{
-				pulse_counter = 0;
-			} // if ( pulse_counter >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
-			else
-			{
-				send_to_q = 0; // Do not flood queue for the raw data
-			}
 		}
-	} // if ( subghz_record_mode_flag )
+	}
 	if ( send_to_q )
 	{
 		q_item.q_evt_type = Q_EVENT_SUBGHZ_RX;

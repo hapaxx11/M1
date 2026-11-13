@@ -217,6 +217,21 @@ load + config reset, restoring the radio to a known good state.
    Read Raw) call `menu_sub_ghz_init()` before configuring RX, so they
    recover from any prior powered-off state regardless of which scene
    the user was in before.
+4. **Read hopping** applies its first frequency before starting RX and dwells
+   for `SUBGHZ_HOPPER_DWELL_MS` (750 ms). Normal hops retain the lightweight
+   synthesizer-only retune; Smart ID-guided hops use
+   `subghz_retune_custom_config_ext()` to reconfigure OOK/FSK and re-arm TIM1.
+   Never restore the old behavior that skipped hopper entry zero or forced a
+   preset's default modulation regardless of `subghz_scan_config.modulation`.
+5. **FSK-family direct RX requires decode-mode edge filtering.** GPIO0 uses
+   `0x14` (RX_DATA), matching Silicon Labs' Direct RX example, while
+   `SI446x_Set_Modem_Profile()` streams the selected WDS-generated modem,
+   BCR/decimation, channel-filter, AGC, raw-data, and synthesizer blocks. FM238
+   additionally uses direct asynchronous data sourcing (`0x0A`).
+   `TIM1_CC_IRQHandler` must reject sub-20 µs edges
+   whenever FSK/GFSK/MSK is active (sub-80 µs remains the OOK threshold),
+   (`subghz_rx_edge_accept()`). Without that filter, raw noise can flood the
+   main queue and cause a watchdog boot loop.
 
 **Rules for new code:**
 - If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, call
@@ -421,6 +436,10 @@ scene_on_exit
 
 **Rules for new code in or around the Read Raw scene:**
 
+- `subghz_scene_app_run()` must zero the shared heap path storage before
+  assigning `raw_load_path`, `raw_filepath`, `tx_path`, and `saved_filepath`.
+  Uninitialized path bytes make a fresh scene enter Loaded/Send mode with a
+  garbage filename instead of Start/REC mode.
 1. **Never call `sub_ghz_rx_start_ext()` inside `start_passive_rx()`.**  The
    timer must only be started when recording actually begins.
 2. **In `start_raw_rx()`, set `subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE`
@@ -437,7 +456,15 @@ scene_on_exit
    scene exit), not inline teardown code.  `stop_raw_rx()` turns off the LED
    fast-blink — inline code that omits `m1_led_fast_blink(... OFF)` leaves the
    RGB LED blinking after leaving the scene.
-6. **When staying in the Read Raw scene after TX completion or BACK abort, restore
+6. **Displayed sample count must follow actual capture accounting, not RSSI.**
+   Full 512-duration flushes and the final partial flush both increment
+   `subghz_record_total_samples`, and the scene displays that total. The
+   waveform cursor advances for captured edges as well as for RSSI above
+   threshold; neither the count nor capture activity may be suppressed when
+   valid edges arrive below the configured RSSI threshold. Do not gate TIM1
+   capture on the scene's RSSI reading; valid FSK edges can be present even
+   when the metered RSSI path does not reflect them.
+7. **When staying in the Read Raw scene after TX completion or BACK abort, restore
    radio via `start_passive_rx(app)`** (not an inline restart block).  The scene calls
    `start_passive_rx(app)` from its `SubGhzEventTxComplete` handler (when
    `sub_ghz_replay_continue_async()` returns DONE/ERROR) and from its BACK handler

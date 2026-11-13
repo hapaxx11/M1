@@ -201,7 +201,7 @@ static void test_parse_missing_version_returns_false(void)
     TEST_ASSERT_FALSE(parse(text));
 }
 
-static void test_parse_unknown_preset_skipped(void)
+static void test_parse_all_flipper_presets_are_accepted(void)
 {
     const char *text =
         "Filetype: ProtoPirate Car Models Database\n"
@@ -220,10 +220,12 @@ static void test_parse_unknown_preset_skipped(void)
         "PresetName3: FuriHalSubGhzPreset2FSKDev238Async\n";
 
     TEST_ASSERT_TRUE(parse(text));
-    TEST_ASSERT_EQUAL_UINT8(2, db.count);
+    TEST_ASSERT_EQUAL_UINT8(3, db.count);
     TEST_ASSERT_EQUAL_STRING("Good", db.entries[0].name);
-    TEST_ASSERT_EQUAL_STRING("Also good", db.entries[1].name);
-    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_FM238, db.entries[1].mod);
+    TEST_ASSERT_EQUAL_STRING("Future preset", db.entries[1].name);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_FM12K, db.entries[1].mod);
+    TEST_ASSERT_EQUAL_STRING("Also good", db.entries[2].name);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_FM238, db.entries[2].mod);
 }
 
 static void test_parse_out_of_range_frequency_skipped(void)
@@ -380,6 +382,21 @@ static void test_map_preset_known_names(void)
                                                  false, &mod, &custom));
     TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_FM476, mod);
     TEST_ASSERT_FALSE(custom);
+
+    TEST_ASSERT_TRUE(subghz_models_db_map_preset("FuriHalSubGhzPreset2FSKDev12KAsync",
+                                                 false, &mod, &custom));
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_FM12K, mod);
+    TEST_ASSERT_FALSE(custom);
+
+    TEST_ASSERT_TRUE(subghz_models_db_map_preset("FuriHalSubGhzPresetMSK99_97KbAsync",
+                                                 false, &mod, &custom));
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_MSK100K, mod);
+    TEST_ASSERT_FALSE(custom);
+
+    TEST_ASSERT_TRUE(subghz_models_db_map_preset("FuriHalSubGhzPresetGFSK9_99KbAsync",
+                                                 false, &mod, &custom));
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_MODEL_MOD_GFSK10K, mod);
+    TEST_ASSERT_FALSE(custom);
 }
 
 static void test_map_preset_custom_with_and_without_data(void)
@@ -404,7 +421,7 @@ static void test_map_preset_unknown_returns_false(void)
     uint8_t mod = 0xAA;
     bool custom = true;
 
-    TEST_ASSERT_FALSE(subghz_models_db_map_preset("FuriHalSubGhzPreset2FSKDev12KAsync",
+    TEST_ASSERT_FALSE(subghz_models_db_map_preset("FuriHalSubGhzPreset2FSKDev12KAsyncPlus",
                                                   false, &mod, &custom));
     TEST_ASSERT_FALSE(subghz_models_db_map_preset("Custom", false, &mod, &custom));
     TEST_ASSERT_FALSE(subghz_models_db_map_preset("", false, &mod, &custom));
@@ -418,7 +435,10 @@ static void test_mod_label_strings(void)
     TEST_ASSERT_EQUAL_STRING("AM650", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_AM650));
     TEST_ASSERT_EQUAL_STRING("FM238", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_FM238));
     TEST_ASSERT_EQUAL_STRING("FM476", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_FM476));
-    TEST_ASSERT_EQUAL_STRING("?", subghz_models_db_mod_label(4));
+    TEST_ASSERT_EQUAL_STRING("FM12K", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_FM12K));
+    TEST_ASSERT_EQUAL_STRING("MSK100K", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_MSK100K));
+    TEST_ASSERT_EQUAL_STRING("GFSK10K", subghz_models_db_mod_label(SUBGHZ_MODEL_MOD_GFSK10K));
+    TEST_ASSERT_EQUAL_STRING("?", subghz_models_db_mod_label(99));
 }
 
 int main(void)
@@ -431,7 +451,7 @@ int main(void)
     RUN_TEST(test_parse_bad_filetype_returns_false);
     RUN_TEST(test_parse_wrong_version_returns_false);
     RUN_TEST(test_parse_missing_version_returns_false);
-    RUN_TEST(test_parse_unknown_preset_skipped);
+    RUN_TEST(test_parse_all_flipper_presets_are_accepted);
     RUN_TEST(test_parse_out_of_range_frequency_skipped);
     RUN_TEST(test_parse_all_entries_bad_returns_false);
     RUN_TEST(test_parse_long_name_truncated_safely);

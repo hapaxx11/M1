@@ -16,6 +16,7 @@
 #include "m1_io_defs.h"
 #include "m1_ring_buffer.h"
 #include "subghz_weather_app.h"
+#include "subghz_guided_scan.h"
 #include <stdbool.h>
 
 #define SUBGHZ_RX_TIMER                 TIM1        /*!< Timer used for Sub-GHz decoding */
@@ -133,6 +134,8 @@ typedef enum {
 	MODULATION_OOK = 0,
 	MODULATION_ASK,
 	MODULATION_FSK,
+	MODULATION_GFSK,
+	MODULATION_MSK,
 	MODULATION_UNKNOWN
 } S_M1_SubGHz_Modulation;
 
@@ -161,7 +164,8 @@ void sub_ghz_brute_force(void);
 void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);
 void sub_ghz_signal_identifier(void);
-void sub_ghz_smart_signal_id(void);
+void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
+                             SubGhzGuidedEntry *selection);
 
 /* Shared 31-point fine sweep (center +/-300 kHz, 20 kHz steps) — the Remote
  * Analyzer scene's radio-side measurement, shared with Smart ID refinement.

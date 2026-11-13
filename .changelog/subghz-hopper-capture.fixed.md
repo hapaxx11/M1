@@ -1,0 +1,1 @@
+**Sub-GHz: receiver hopping and modulation** — Apply the first hopper frequency before RX, use a long-frame-safe dwell, reset partial decodes between channels, and honor FSK/OOK selection on every preset so slow automotive and weather signals are not missed.

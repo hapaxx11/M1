@@ -28,8 +28,9 @@ void test_full_registry_includes_am_and_fm_modulations(void)
         subghz_protocol_registry, subghz_protocol_registry_count);
     TEST_ASSERT_BITS_HIGH_MESSAGE((1u << 0) | (1u << 1), mask,
         "Full registry must include AM270/AM650 (OOK)");
-    TEST_ASSERT_BITS_HIGH_MESSAGE((1u << 2) | (1u << 3), mask,
-        "Full registry must include FM238/FM476 (FSK)");
+    TEST_ASSERT_BITS_HIGH_MESSAGE((1u << 2) | (1u << 3) | (1u << 4) |
+                                  (1u << 5) | (1u << 6), mask,
+        "Full registry must include every FSK/GFSK/MSK profile");
 }
 
 void test_full_registry_am_frequency_mask_includes_300_315_433_868(void)
@@ -113,7 +114,8 @@ void test_proto_pirate_masks_follow_protocol_capabilities(void)
 {
     uint32_t mod_mask = subghz_protocol_proto_pirate_mod_mask();
     TEST_ASSERT_BITS_HIGH((1u << 0) | (1u << 1), mod_mask);
-    TEST_ASSERT_BITS_HIGH((1u << 2) | (1u << 3), mod_mask);
+    TEST_ASSERT_BITS_HIGH((1u << 2) | (1u << 3) | (1u << 4) |
+                          (1u << 5) | (1u << 6), mod_mask);
 
     uint64_t am_mask = subghz_protocol_proto_pirate_freq_mask(1);
     uint64_t fm_mask = subghz_protocol_proto_pirate_freq_mask(2);

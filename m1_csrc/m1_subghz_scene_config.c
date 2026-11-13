@@ -41,7 +41,7 @@
  * SUBGHZ_FREQ_PRESET_COUNT real entries (indices 0..COUNT-1) + 1 Custom entry
  * at index SUBGHZ_FREQ_PRESET_CUSTOM (== COUNT). */
 #define CFG_FREQ_COUNT  (SUBGHZ_FREQ_PRESET_COUNT + 1)
-#define CFG_MOD_COUNT    4
+#define CFG_MOD_COUNT    SUBGHZ_MOD_PRESET_CNT
 
 /* We need these string labels for display — pull from the same source */
 extern const char *subghz_freq_labels[CFG_FREQ_COUNT];
@@ -61,6 +61,7 @@ extern void    subghz_set_save_fmt_ext(uint8_t fmt);
 extern void subghz_set_freq_idx_ext(uint8_t idx);
 extern void subghz_set_mod_idx_ext(uint8_t idx);
 extern void subghz_set_hopping_ext(bool v);
+extern void subghz_set_smart_scan_ext(bool v);
 extern void subghz_set_sound_ext(bool v);
 extern void subghz_set_autosave_ext(bool v);
 extern int8_t subghz_get_rssi_threshold_ext(void);
@@ -81,19 +82,20 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS       12
+#define CFG_ITEMS       13
 #define CFG_FREQUENCY   0
 #define CFG_HOPPING     1
-#define CFG_MODULATION  2
-#define CFG_SOUND       3
-#define CFG_AUTOSAVE    4
-#define CFG_TX_POWER    5
-#define CFG_ISM_REGION  6
-#define CFG_SAVE_FMT    7
-#define CFG_RSSI_THRESH 8
-#define CFG_REMOVE_DUPS 9   /* Phase 12 */
-#define CFG_DELETE_OLD  10  /* Phase 12 */
-#define CFG_PROTOCOLS   11  /* Protocol Filter (ignore list) */
+#define CFG_SMART_SCAN  2
+#define CFG_MODULATION  3
+#define CFG_SOUND       4
+#define CFG_AUTOSAVE    5
+#define CFG_TX_POWER    6
+#define CFG_ISM_REGION  7
+#define CFG_SAVE_FMT    8
+#define CFG_RSSI_THRESH 9
+#define CFG_REMOVE_DUPS 10  /* Phase 12 */
+#define CFG_DELETE_OLD  11  /* Phase 12 */
+#define CFG_PROTOCOLS   12  /* Protocol Filter (ignore list) */
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -104,22 +106,22 @@ static SubGhzConfigFilterMode cfg_filter_mode = SubGhzConfigFilterNone;
 
 /* Cached allowed masks for the current filter mode.  Computed on enter so
  * cycling remains O(1). */
-static uint32_t cfg_allowed_mod_mask = 0;   /* bits 0..3 */
+static uint32_t cfg_allowed_mod_mask = 0;   /* bits 0..6 */
 static uint64_t cfg_allowed_freq_mask = 0;  /* bits 0..SUBGHZ_FREQ_PRESET_CUSTOM */
 
 /* Effective item count and display→real item index mapping.
- * When hopping is hidden (Read Raw context), the Hopping row is
- * skipped so display indices above it are shifted down by one. */
+ * When hopping is hidden (Read Raw context), the Hopping and Smart Scan rows
+ * are skipped so display indices above them are shifted down by two. */
 static uint8_t cfg_count(void)
 {
-    return cfg_hide_hopping ? CFG_ITEMS - 1 : CFG_ITEMS;
+    return cfg_hide_hopping ? CFG_ITEMS - 2 : CFG_ITEMS;
 }
 
 static uint8_t cfg_real(uint8_t display_idx)
 {
     if (!cfg_hide_hopping || display_idx < CFG_HOPPING)
         return display_idx;
-    return display_idx + 1;  /* skip the hidden Hopping slot */
+    return display_idx + 2;  /* skip Hopping and Smart Scan */
 }
 
 /* Layout constants — aligned with menu scene (no button bar) */
@@ -131,6 +133,7 @@ static uint8_t cfg_real(uint8_t display_idx)
 static const char *cfg_item_labels[CFG_ITEMS] = {
     "Frequency:",
     "Hopping:",
+    "Smart Scan:",
     "Modulation:",
     "Sound:",
     "Autosave:",
@@ -215,6 +218,8 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return freq_buf;
         case CFG_HOPPING:
             return app->hopping ? "ON" : "OFF";
+        case CFG_SMART_SCAN:
+            return app->smart_scan ? "ON" : "OFF";
         case CFG_MODULATION:
             if (subghz_mod_labels)
                 return subghz_mod_labels[app->mod_idx];
@@ -262,6 +267,9 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
             break;
         case CFG_HOPPING:
             app->hopping = !app->hopping;
+            break;
+        case CFG_SMART_SCAN:
+            app->smart_scan = !app->smart_scan;
             break;
         case CFG_MODULATION:
         {
@@ -423,6 +431,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             subghz_set_freq_idx_ext(app->freq_idx);
             subghz_set_mod_idx_ext(app->mod_idx);
             subghz_set_hopping_ext(app->hopping);
+            subghz_set_smart_scan_ext(app->smart_scan);
             subghz_set_sound_ext(app->sound);
             subghz_set_autosave_ext(app->autosave);
             /* TX power is already updated via its accessor when changed. */

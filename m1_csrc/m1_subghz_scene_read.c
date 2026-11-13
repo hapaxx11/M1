@@ -66,6 +66,9 @@ extern int16_t subghz_read_rssi_ext(void);
 
 /* Apply config to radio hardware */
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
+extern void subghz_apply_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx);
+extern void subghz_retune_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx);
+extern void subghz_set_user_custom_freq_ext(uint32_t hz);
 
 /* Get frequency in Hz for a preset index */
 extern uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx);
@@ -178,11 +181,41 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
 #define HISTORY_ROW_H      8  /* Pixels per history row */
 #define HISTORY_VISIBLE    3  /* Number of visible history items */
 
-/* Hopper */
-#define HOPPER_DWELL_MS        150
-
 /* SI4463 config */
 #define OOK_PDTC_VALUE  0x6C
+
+static bool hopper_is_guided(const SubGhzApp *app)
+{
+    return subghz_guided_scan_active(app->smart_scan, app->hopping,
+                                     app->guided_plan);
+}
+
+static uint8_t hopper_count(const SubGhzApp *app)
+{
+    return hopper_is_guided(app) ? app->guided_plan->count
+                                 : SUBGHZ_HOPPER_FREQ_COUNT;
+}
+
+static SubGhzGuidedEntry hopper_entry(const SubGhzApp *app, uint8_t index)
+{
+    SubGhzGuidedEntry entry;
+    if (hopper_is_guided(app))
+        return app->guided_plan->entries[index % app->guided_plan->count];
+
+    entry.freq_hz = subghz_get_hopper_freqs_ext()[index % SUBGHZ_HOPPER_FREQ_COUNT];
+    entry.mod_idx = app->mod_idx;
+    return entry;
+}
+
+static void apply_initial_hopper(SubGhzApp *app)
+{
+    SubGhzGuidedEntry entry = hopper_entry(app, app->hopper_idx);
+    app->hopper_freq = entry.freq_hz;
+    app->current_freq_hz = entry.freq_hz;
+    if (hopper_is_guided(app))
+        app->mod_idx = entry.mod_idx;
+    subghz_apply_custom_config_ext(app->hopper_freq, app->mod_idx);
+}
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -207,6 +240,21 @@ static void scene_on_enter(SubGhzApp *app)
      * from a previous session). */
     bool is_resume = app->resume_from_child;
     app->resume_from_child = false;
+
+    if (!is_resume && app->read_handoff_pending)
+    {
+        app->read_handoff_pending = false;
+        app->hopping = false;
+        app->mod_idx = app->read_handoff.mod_idx;
+        int16_t freq_idx = subghz_freq_preset_find_hz(app->read_handoff.freq_hz);
+        if (freq_idx >= 0)
+            app->freq_idx = (uint8_t)freq_idx;
+        else
+        {
+            app->freq_idx = SUBGHZ_FREQ_PRESET_CUSTOM;
+            subghz_set_user_custom_freq_ext(app->read_handoff.freq_hz);
+        }
+    }
 
     /* Reset view state but preserve history across child-scene navigation.
      * History is only cleared on the first enter from the Menu scene
@@ -264,10 +312,7 @@ static void start_rx(SubGhzApp *app)
     app->hopper_active = app->hopping;
     app->hopper_idx = 0;
     if (app->hopper_active)
-    {
-        app->hopper_freq = subghz_get_hopper_freqs_ext()[0];
-        app->current_freq_hz = app->hopper_freq;
-    }
+        apply_initial_hopper(app);
 
     /* Start RX */
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
@@ -305,16 +350,15 @@ static void resume_rx(SubGhzApp *app)
     /* Restore hopper from saved position (not reset to 0) */
     app->hopper_active = app->hopping;
     if (app->hopper_active)
-        app->current_freq_hz = app->hopper_freq;
+    {
+        app->hopper_idx %= hopper_count(app);
+        apply_initial_hopper(app);
+    }
 
-    /* Start RX — radio was in ISOLATED mode from stop_rx(),
-     * so we just need to switch back to RX mode + init capture.
-     * When hopping is active, explicitly retune to the saved hopper
-     * frequency so the hardware matches the restored app/UI state. */
+    /* Start RX — radio was in ISOLATED mode from stop_rx().  The initial
+     * hopper configuration above restores both frequency and modulation. */
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
-    if (app->hopper_active)
-        subghz_retune_freq_hz_ext(app->hopper_freq);
     SI446x_Change_Modem_OOK_PDTC(OOK_PDTC_VALUE);
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
@@ -460,14 +504,21 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventHopperTick:
             if (app->hopper_active && app->read_state == SubGhzReadStateRx)
             {
-                /* Always advance to the next hopper frequency unconditionally.
-                 * Cycling is time-based (200 ms dwell per frequency) so the
-                 * frequency display always rotates through the hop list,
-                 * regardless of ambient RSSI. */
-                app->hopper_idx = (app->hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
-                app->hopper_freq = subghz_get_hopper_freqs_ext()[app->hopper_idx];
-                app->current_freq_hz = app->hopper_freq;
-                subghz_retune_freq_hz_ext(app->hopper_freq);
+                /* Advance unconditionally after the shared long-frame dwell.
+                 * Guided entries also select their measured modulation. */
+                app->hopper_idx = subghz_guided_next_index(app->hopper_idx,
+                                                           hopper_count(app));
+                SubGhzGuidedEntry entry = hopper_entry(app, app->hopper_idx);
+                app->hopper_freq = entry.freq_hz;
+                app->current_freq_hz = entry.freq_hz;
+                subghz_pulse_handler_reset();
+                if (hopper_is_guided(app))
+                {
+                    app->mod_idx = entry.mod_idx;
+                    subghz_retune_custom_config_ext(entry.freq_hz, entry.mod_idx);
+                }
+                else
+                    subghz_retune_freq_hz_ext(entry.freq_hz);
                 app->need_redraw = true;
             }
             return true;

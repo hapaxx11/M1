@@ -37,6 +37,7 @@
 #include "subghz_weather_app.h"
 #include "tpms_receiver.h"
 #include "subghz_saved_path.h"
+#include "subghz_guided_scan.h"
 
 /*============================================================================*/
 /* Config filter mode — controls which frequencies/modulations are shown      */
@@ -173,7 +174,7 @@ typedef enum {
 /** Frequency presets (defined in m1_sub_ghz.c, referenced here) */
 #define SUBGHZ_FREQ_PRESET_CNT  17
 #define SUBGHZ_FREQ_DEFAULT_ID  10  /* 433.92 MHz */
-#define SUBGHZ_MOD_PRESET_CNT   4
+#define SUBGHZ_MOD_PRESET_CNT   7
 
 struct restaurant_pager_app_state;
 
@@ -192,6 +193,10 @@ typedef struct {
     uint8_t  freq_idx;                /**< Index into frequency presets */
     uint8_t  mod_idx;                 /**< Index into modulation presets */
     bool     hopping;                 /**< Frequency hopping enabled */
+    bool     smart_scan;              /**< Reuse Smart ID channels when hopping */
+    SubGhzGuidedPlan *guided_plan;    /**< Heap-owned Smart ID channel cache */
+    SubGhzGuidedEntry read_handoff;   /**< Selected Smart ID Read configuration */
+    bool     read_handoff_pending;
     bool     sound;                   /**< Beep on decode */
     bool     autosave;                /**< Auto-save decoded signals to SD */
     bool     bin_raw;                 /**< BIN_RAW decoder enabled */

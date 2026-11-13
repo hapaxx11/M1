@@ -13,6 +13,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+#include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_compile_cfg.h"
@@ -23,7 +24,7 @@
 #include "radio_config/si4463_revc2_300_rxtx_spacing250_bw200_baud10_error1_10_OOK.h"
 #include "radio_config/si4463_revc2_310_rxtx_spacing250_bw100_baud10_error1_10_OOK.h"
 #include "radio_config/si4463_revc2_315_rxtx_spacing250_bw100_baud10_error1_10_OOK.h"
-#include "radio_config/si4463_revc2_345_rxtx_spacing250_bw100_baud10_error1_10_OOK.h"
+#include "radio_config/si4463_revc2_345_rxtx_spacing250_bw200_baud10_error1_10_OOK.h"
 #include "radio_config/si4463_revc2_372_rxtx_spacing250_bw200_baud10_error1_10_OOK.h"
 #include "radio_config/si4463_revc2_390_rxtx_spacing250_bw100_baud10_error1_10_OOK.h"
 #include "radio_config/si4463_revc2_433_rxtx_spacing250_bw200_baud10_error1_10_OOK.h"
@@ -823,6 +824,30 @@ void SI446x_Change_ModType(uint8_t NEW_MOD_TYPE)
     si446x_cmd_buffer[4] = NEW_MOD_TYPE; // Values
     SI446x_Send_Cmd(5, si446x_cmd_buffer);
 } // void SI446x_Change_ModType(uint8_t NEW_MOD_TYPE)
+
+void SI446x_Set_Modem_Profile(const SubGhzModemProfile *profile)
+{
+    uint16_t offset = 0;
+
+    if (profile == NULL)
+        return;
+
+    while (offset < profile->commands_size)
+    {
+        uint16_t remaining = (uint16_t)(profile->commands_size - offset);
+        uint8_t command_size;
+
+        if (remaining < 4U)
+            return;
+        command_size = (uint8_t)(profile->commands[offset + 2U] + 4U);
+        if (command_size > RADIO_COMM_BUFFER_MAX || remaining < command_size)
+            return;
+
+        memcpy(si446x_cmd_buffer, &profile->commands[offset], command_size);
+        SI446x_Send_Cmd(command_size, si446x_cmd_buffer);
+        offset = (uint16_t)(offset + command_size);
+    }
+}
 
 
 

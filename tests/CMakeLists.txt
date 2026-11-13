@@ -1341,6 +1341,7 @@ add_test(NAME mazda_subaru_chrysler_decode COMMAND test_mazda_subaru_chrysler_de
 add_executable(test_models_db
     test_models_db.c
     ${M1_ROOT}/Sub_Ghz/subghz_models_db.c
+    ${M1_ROOT}/Sub_Ghz/subghz_modem_profile.c
 )
 target_include_directories(test_models_db PRIVATE
     ${STUBS_DIR}
@@ -4725,3 +4726,41 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_scene_lifecycle PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_scene_lifecycle COMMAND test_esp32_scene_lifecycle)
+
+# Shared Sub-GHz receiver wiring: initial hop frequency, modulation selection,
+# and a dwell long enough for the slowest audited protocol frames.
+add_executable(test_subghz_receiver_contract
+    test_subghz_receiver_contract.c
+)
+target_compile_definitions(test_subghz_receiver_contract PRIVATE M1_ROOT="${M1_ROOT}")
+target_include_directories(test_subghz_receiver_contract PRIVATE ${M1_ROOT}/Sub_Ghz ${M1_ROOT}/m1_csrc)
+target_link_libraries(test_subghz_receiver_contract PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_receiver_contract PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_receiver_contract COMMAND test_subghz_receiver_contract)
+
+add_executable(test_subghz_guided_scan
+    test_subghz_guided_scan.c
+    ${M1_ROOT}/Sub_Ghz/subghz_guided_scan.c
+    ${M1_ROOT}/Sub_Ghz/rf_smart_scan.c
+    ${M1_ROOT}/Sub_Ghz/rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_subghz_guided_scan PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_subghz_guided_scan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_guided_scan PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_guided_scan COMMAND test_subghz_guided_scan)
+
+add_executable(test_subghz_modem_profile
+    test_subghz_modem_profile.c
+    ${M1_ROOT}/Sub_Ghz/subghz_modem_profile.c
+)
+target_include_directories(test_subghz_modem_profile PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_subghz_modem_profile PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_modem_profile PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_modem_profile COMMAND test_subghz_modem_profile)

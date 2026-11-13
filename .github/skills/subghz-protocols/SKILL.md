@@ -371,6 +371,31 @@ drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function
 `on_enter`, then pops itself when the function returns.  This integrates legacy code with
 the scene manager without rewriting each tool.
 
+### Smart ID capture handoff and guided hopping
+
+- Smart ID keeps up to eight identified sub-GHz frequency/modulation pairs in a
+  heap-owned, session-lifetime `SubGhzGuidedPlan`. UP/DOWN selects a hit and OK
+  replaces the delegate with `SubGhzSceneRead` at that exact channel; BACK from
+  Read returns to the Analyzer menu. Off-preset frequencies use the Custom slot.
+- Read Config → **Smart Scan** controls whether hopping uses this cache. It is
+  persisted as `subghz_smart_scan=` and defaults ON, but has no effect until
+  Smart ID has identified channels and Hopping is enabled. With no cache, Read
+  and Proto Pirate Receiver use the normal regional hopper.
+- Normal hopping uses the lightweight retune path. Guided hopping reloads the
+  modem for each entry's measured OOK/FSK family and resets partial decoder
+  state on every hop. Both paths apply the first channel before starting RX.
+- `SUBGHZ_HOPPER_DWELL_MS` is 750 ms so slow automotive preambles and weather
+  frames are not truncated by the old 200 ms dwell. Named presets honor the
+  requested modulation: FSK on low bands and OOK on 915 use the custom
+  modem-profile-plus-retune path in `sub_ghz_set_opmode()`.
+- Single-device HIL covers Read Raw Start/REC entry and re-entry
+  (`subghz-read-raw-start`), FM238 Timing Tuner stability
+  (FM238 Timing Tuner plus all seven modem profiles in Read), Config toggle/restore
+  (`subghz-smart-scan-config`), and empty-cache hopper progression/re-entry
+  (`subghz-read-hopper`). Live Smart ID selection and Honda V1/Kia capture
+  require external transmitters and therefore remain guided, bounded on-device
+  validations.
+
 ---
 
 ## Protocol Filter (ignore protocol groups on capture)
@@ -429,6 +454,49 @@ protocols in an ignored group never produce a "decoded" hit there either.
    `m1_subghz_scene_config.c`.
 
 ---
+
+## Flipper modulation profiles on SI4463
+
+M1 exposes seven Flipper-compatible modulation presets. Indices 0–3 are frozen
+for settings, Smart ID, and saved-state compatibility. `subghz_modem_profile.c`
+is the single mapping used by radio setup and the Models DB. The FSK rates and
+asynchronous capture model are checked against Momentum's
+[`cc1101_configs.c`](https://github.com/Next-Flip/Momentum-Firmware/blob/dev/lib/subghz/devices/cc1101_configs.c).
+
+| Index | Label | SI4463 mode | Deviation | RX bandwidth | Data rate |
+|-------|-------|-------------|-----------|--------------|-----------|
+| 0 | AM270 | OOK | — | 270.833 kHz | 3.794 ksps |
+| 1 | AM650 | OOK | — | 650 kHz | 3.794 ksps |
+| 2 | FM238 | 2FSK | 2.380 kHz | 270.833 kHz | 4.798 ksps |
+| 3 | FM476 | 2FSK | 47.607 kHz | 270.833 kHz | 4.798 ksps |
+| 4 | FM12K | 2FSK | 12.695 kHz | 270.833 kHz | 4.798 ksps |
+| 5 | MSK100K | MSK | 47.607 kHz | 14.509 kHz | 99.97 ksps |
+| 6 | GFSK10K | 2GFSK | 19.043 kHz | 101.563 kHz | 9.996 ksps |
+
+`SI446x_Set_Modem_Profile()` streams the selected preset's complete constant
+command table from `subghz_modem_profile_data.h`. Silicon Labs WDS 3.2.11.0 /
+calculator 1.2.1.18 generated the modem, BCR/decimation, AGC, raw-data,
+channel-filter, and synthesizer blocks for a 32 MHz Si4463 C2. WDS does not
+expose MSK as a calculator input, so MSK100K uses its equivalent 2GFSK
+timing/filter calculation with the SI4463 MSK selector (`0x06`) applied
+explicitly. Frequency, PA power, GPIO, and M1's RSSI behavior remain under the
+existing band/settings paths. Host tests verify every complete command stream
+and its structure; do not replace these tables with calculated rate/deviation
+or decimation approximations.
+
+Every profile uses WDS `RAW_dout=1`. FSK/GFSK/MSK use `RX_DATA` (`0x14`)
+on GPIO0, matching Silicon Labs' Direct RX example, with a 20 µs decode-mode
+edge filter (80 µs remains the OOK RAW-recording threshold). FM238 also
+selects direct asynchronous data sourcing (`MODEM_MOD_TYPE=0x0A`). Never restore the shared 200
+kHz configuration for all FSK labels or drop the three newer presets from
+Config, settings parsing (`subghz_mod_idx=0..6`), or the Models DB. The
+registry and Proto Pirate modulation masks must likewise enable every FSK-family
+index (2–6) when a protocol has `SubGhzProtocolFlag_FM`.
+
+The band-specific OOK and FSK/TX headers were also audited against fresh WDS
+calculations. Their modem/filter/BCR/synthesizer/frequency/PA values match;
+M1-specific RSSI threshold/averaging differences are intentional. The 345 MHz
+header filename uses `bw200`, matching its actual 200 kHz input.
 
 ## Weather Station modulation coverage — do not "optimise" FSK away
 

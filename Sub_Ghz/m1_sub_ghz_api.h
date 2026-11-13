@@ -15,6 +15,7 @@
 
 #include "si446x_cmd.h"
 #include "m1_sub_ghz.h"
+#include "subghz_modem_profile.h"
 
 #define SI446X_GRP_ID_0x22                      0x22
 #define SI446X_GRP_ID_0x22_PA_PWR_LVL           0x01 // PA output power level.
@@ -91,6 +92,7 @@ void Radio_Start_Tx(uint8_t CHANNEL, uint8_t CONDITION, uint16_t TX_LEN);
 void SI446x_PowerUp(void);
 uint8_t SI446x_Get_Reset_Stat(void);
 void SI446x_Change_ModType(uint8_t NEW_MOD_TYPE);
+void SI446x_Set_Modem_Profile(const SubGhzModemProfile *profile);
 void SI446x_Change_Modem_OOK_PDTC(uint8_t NEW_PDTC);
 void SI446x_Get_IntStatus(uint8_t PH_CLR_PEND, uint8_t MODEM_CLR_PEND, uint8_t CHIP_CLR_PEND);
 void SI446x_Change_State(uint8_t NEXT_STATE1);

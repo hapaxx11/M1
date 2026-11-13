@@ -57,6 +57,7 @@
 // Command:                  RF_915_GPIO_PIN_CFG
 // Description:              Configures the GPIO pins.
 */
+/* GPIO0 = RX_DATA; matches Silicon Labs' Direct RX demodulated-data output. */
 #define RF_915_GPIO_PIN_CFG 0x13, 0x14, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00
 
 /*

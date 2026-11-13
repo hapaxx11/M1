@@ -1,0 +1,1 @@
+**Sub-GHz: Read Raw sample display** — Show the actual captured duration count and advance the waveform whenever edges are captured, even below the RSSI threshold; include the final partial flush so recordings no longer display zero samples while their files contain data.

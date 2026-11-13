@@ -28,13 +28,16 @@
 #define SUBGHZ_MODELS_DB_NAME_MAX    40u  /* bytes including the NUL */
 
 /* M1 modulation choices — the values match the subghz_mod_presets[] order in
- * m1_csrc/m1_sub_ghz.c (0=AM270, 1=AM650, 2=FM238, 3=FM476) so a value can be
- * passed straight to subghz_apply_config_ext()/subghz_set_mod_idx_ext(). */
+ * m1_csrc/m1_sub_ghz.c (0=AM270, 1=AM650, 2=FM238, 3=FM476, 4=FM12K,
+ * 5=MSK100K, 6=GFSK10K) so a value can be passed directly to the radio config. */
 typedef enum {
     SUBGHZ_MODEL_MOD_AM270 = 0,
     SUBGHZ_MODEL_MOD_AM650 = 1,
     SUBGHZ_MODEL_MOD_FM238 = 2,
     SUBGHZ_MODEL_MOD_FM476 = 3,
+    SUBGHZ_MODEL_MOD_FM12K = 4,
+    SUBGHZ_MODEL_MOD_MSK100K = 5,
+    SUBGHZ_MODEL_MOD_GFSK10K = 6,
 } subghz_model_mod_t;
 
 typedef struct {
@@ -75,7 +78,7 @@ bool subghz_models_db_parse(const char *text, size_t len, subghz_models_db_t *ou
 bool subghz_models_db_map_preset(const char *preset_name, bool has_custom_data,
                                  uint8_t *mod_out, bool *is_custom_out);
 
-/** Display label for a modulation index ("AM270"/"AM650"/"FM238"/"FM476"). */
+/** Display label for a modulation index (AM270/AM650/FM238/FM476/FM12K/MSK100K/GFSK10K). */
 const char *subghz_models_db_mod_label(uint8_t mod);
 
 #endif /* SUBGHZ_MODELS_DB_H */

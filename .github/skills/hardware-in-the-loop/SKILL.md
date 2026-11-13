@@ -144,6 +144,17 @@ fixture. Keep reporting logic covered by ordinary `unittest`; do not run HIL in
 cloud CI. Unsuitable scenarios need a documented reason in the PR instead of a
 flaky or manual-only registered test.
 
+Sub-GHz has four registered receiver cases: `subghz-read-raw-start`
+(fresh entry/re-entry in Start/REC mode), `subghz-fsk-tuner-stability`
+(FM238 Timing Tuner plus all seven modem profiles in Read, with the original setting restored),
+`subghz-smart-scan-config` (toggle/restore plus clean Read exit), and
+`subghz-read-hopper` (empty-cache frequency progression, exit/re-entry, and
+original-setting restoration). The hopper case compares title-region CRCs so
+RSSI changes cannot count as hops; Read Raw uses the action-bar CRC to reject
+Loaded/Send startup regressions.
+Smart ID handoff and live Honda V1/Kia decoding need an external transmitter
+and must use a bounded guided validation, not an automated single-device case.
+
 PR descriptions carry specific unchecked cases between `M1_HIL_RESULTS`
 markers. Before marking a draft ready/non-draft, strongly recommend running the
 suite locally and recording the results. With the user's connected M1 and

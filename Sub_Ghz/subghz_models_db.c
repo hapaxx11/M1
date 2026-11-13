@@ -13,6 +13,7 @@
  */
 
 #include "subghz_models_db.h"
+#include "subghz_modem_profile.h"
 
 #include <string.h>
 
@@ -235,21 +236,16 @@ bool subghz_models_db_map_preset(const char *preset_name, bool has_custom_data,
     if(preset_name == NULL || mod_out == NULL || is_custom_out == NULL) {
         return false;
     }
-    uint8_t mod;
     bool is_custom = false;
-    if(strcmp(preset_name, "FuriHalSubGhzPresetOok270Async") == 0) {
-        mod = SUBGHZ_MODEL_MOD_AM270;
-    } else if(strcmp(preset_name, "FuriHalSubGhzPresetOok650Async") == 0) {
-        mod = SUBGHZ_MODEL_MOD_AM650;
-    } else if(strcmp(preset_name, "FuriHalSubGhzPreset2FSKDev238Async") == 0) {
-        mod = SUBGHZ_MODEL_MOD_FM238;
-    } else if(strcmp(preset_name, "FuriHalSubGhzPreset2FSKDev476Async") == 0) {
-        mod = SUBGHZ_MODEL_MOD_FM476;
-    } else if(strcmp(preset_name, "FuriHalSubGhzPresetCustom") == 0) {
+    uint8_t mod;
+    if(strcmp(preset_name, "FuriHalSubGhzPresetCustom") == 0) {
         mod = SUBGHZ_MODEL_MOD_FM476;
         is_custom = true;
     } else {
-        return false; /* outputs untouched */
+        int16_t profile_index = subghz_modem_profile_find_flipper(preset_name);
+        if(profile_index < 0)
+            return false; /* outputs untouched */
+        mod = (uint8_t)profile_index;
     }
     *mod_out = mod;
     *is_custom_out = is_custom;
@@ -267,6 +263,12 @@ const char *subghz_models_db_mod_label(uint8_t mod)
         return "FM238";
     case SUBGHZ_MODEL_MOD_FM476:
         return "FM476";
+    case SUBGHZ_MODEL_MOD_FM12K:
+        return "FM12K";
+    case SUBGHZ_MODEL_MOD_MSK100K:
+        return "MSK100K";
+    case SUBGHZ_MODEL_MOD_GFSK10K:
+        return "GFSK10K";
     default:
         return "?";
     }

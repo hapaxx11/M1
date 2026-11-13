@@ -64,6 +64,42 @@ def title_crc(framebuffer: bytes) -> int:
     return zlib.crc32(region)
 
 
+def config_modulation_crc(framebuffer: bytes) -> int:
+    if len(framebuffer) != 1024:
+        raise ValueError("expected a 1024-byte framebuffer")
+    region = bytes(
+        (framebuffer[x + (y // 8) * 128] >> (y % 8)) & 1
+        for y in range(36, 44)
+        for x in range(48, 112)
+    )
+    return zlib.crc32(region)
+
+
+SUBGHZ_MOD_PRESET_COUNT = 7
+
+
+def config_set_modulation(
+    client: M1Hil, artifacts: Path, prefix: str, target_crc: int
+) -> None:
+    for _ in range(SUBGHZ_MOD_PRESET_COUNT):
+        current = capture(client, artifacts, prefix)
+        if config_modulation_crc(current) == target_crc:
+            return
+        click(client, "right")
+    raise AssertionError(f"{prefix}: modulation setting did not reach target")
+
+
+def bottom_crc(framebuffer: bytes) -> int:
+    if len(framebuffer) != 1024:
+        raise ValueError("expected a 1024-byte framebuffer")
+    region = bytes(
+        (framebuffer[x + (y // 8) * 128] >> (y % 8)) & 1
+        for y in range(52, 64)
+        for x in range(128)
+    )
+    return zlib.crc32(region)
+
+
 def assert_title(framebuffer: bytes, expected: int | tuple[int, ...], label: str) -> None:
     accepted = (expected,) if isinstance(expected, int) else expected
     if title_crc(framebuffer) not in accepted:
@@ -88,6 +124,23 @@ def capture_until_change(
                 raise AssertionError(f"{name}: screen changed after {timeout_s:.1f} s")
             return current
         time.sleep(0.1)
+
+
+def capture_until_title_change(
+    client: M1Hil,
+    directory: Path,
+    name: str,
+    previous: bytes,
+    timeout_s: float,
+) -> bytes:
+    deadline = time.monotonic() + timeout_s
+    previous_crc = title_crc(previous)
+    while time.monotonic() < deadline:
+        current = capture(client, directory, name)
+        if title_crc(current) != previous_crc:
+            return current
+        time.sleep(0.1)
+    raise AssertionError(f"{name}: frequency did not advance within {timeout_s:.1f} s")
 
 
 def open_wifi(client: M1Hil) -> None:
@@ -194,7 +247,152 @@ def run_ble_airtag_monitor(client: M1Hil, artifacts: Path) -> str:
     )
 
 
+def open_subghz_read(client: M1Hil) -> None:
+    click(client, "ok")
+    click(client, "ok")
+    click(client, "ok")
+
+
+def run_subghz_read_raw_start(client: M1Hil, artifacts: Path) -> str:
+    click(client, "ok")
+    click(client, "ok")
+    click(client, "down")
+    click(client, "ok")
+    first = capture(client, artifacts, "read-raw-start")
+    if bottom_crc(first) != 0xD57273C9:
+        raise AssertionError("fresh Read Raw did not open in Start/REC mode")
+    click(client, "ok")
+    time.sleep(1)
+    click(client, "ok")
+    click(client, "left")
+    click(client, "back")
+    click(client, "ok")
+    second = capture(client, artifacts, "read-raw-reentry")
+    if bottom_crc(second) != 0xD57273C9:
+        raise AssertionError("Read Raw re-entry did not restore Start/REC mode")
+    click(client, "back")
+    client.info()
+    return "fresh entry and re-entry both open in Start/REC mode"
+
+
+def run_subghz_fsk_tuner_stability(client: M1Hil, artifacts: Path) -> str:
+    open_subghz_read(client)
+    click(client, "left")
+    click(client, "down", 3)
+    original = capture(client, artifacts, "fsk-original-mod")
+    original_crc = config_modulation_crc(original)
+    config_set_modulation(client, artifacts, "fsk-select-fm238", 0x36647CD5)
+    click(client, "back")
+    click(client, "back")
+    click(client, "down", 4)
+    click(client, "ok")
+    click(client, "down", 5)
+    click(client, "ok")
+    click(client, "down", 2)
+    click(client, "ok")
+    time.sleep(3)
+    capture(client, artifacts, "fsk-tuner-stable")
+    client.info()
+    click(client, "back")
+    click(client, "back")
+    click(client, "back")
+    click(client, "up", 4)
+    click(client, "ok")
+    click(client, "left")
+    click(client, "down", 3)
+    click(client, "left", 2)
+    seen_crcs = set()
+    for index in range(SUBGHZ_MOD_PRESET_COUNT):
+        configured = capture(client, artifacts, f"modem-{index}-config")
+        configured_crc = config_modulation_crc(configured)
+        if configured_crc in seen_crcs:
+            raise AssertionError(f"modem profile {index}: duplicate modulation selection")
+        seen_crcs.add(configured_crc)
+        click(client, "back")
+        time.sleep(1)
+        capture(client, artifacts, f"modem-{index}-read-stable")
+        client.info()
+        click(client, "back")
+        click(client, "ok")
+        click(client, "left")
+        click(client, "down", 3)
+        if index + 1 < SUBGHZ_MOD_PRESET_COUNT:
+            click(client, "right")
+    config_set_modulation(client, artifacts, "fsk-restore-mod", original_crc)
+    click(client, "back")
+    click(client, "back")
+    return "FM238 tuner and all seven Read profiles remained responsive; original modulation restored"
+
+
+def run_subghz_smart_scan_config(client: M1Hil, artifacts: Path) -> str:
+    open_subghz_read(client)
+    click(client, "left")
+    click(client, "down", 2)
+    before = capture(client, artifacts, "smart-scan-before")
+    click(client, "right")
+    changed = capture(client, artifacts, "smart-scan-changed")
+    if changed == before:
+        raise AssertionError("Smart Scan toggle did not change the Config row")
+    click(client, "right")
+    restored = capture(client, artifacts, "smart-scan-restored")
+    if restored != before:
+        raise AssertionError("Smart Scan did not restore its original value")
+    click(client, "back")
+    click(client, "back")
+    client.info()
+    return "Smart Scan toggled and restored; Read exited cleanly"
+
+
+def run_subghz_read_hopper(client: M1Hil, artifacts: Path) -> str:
+    open_subghz_read(client)
+    first = capture(client, artifacts, "hopper-initial")
+    time.sleep(1.2)
+    second = capture(client, artifacts, "hopper-initial-later")
+    originally_enabled = title_crc(first) != title_crc(second)
+    changed = not originally_enabled
+    location = "read"
+    try:
+        if changed:
+            click(client, "left")
+            click(client, "down")
+            click(client, "right")
+            location = "config"
+            click(client, "back")
+            location = "read"
+
+        current = capture_until_title_change(
+            client, artifacts, "hopper-active", second, 3.5
+        )
+        click(client, "back")
+        location = "menu"
+        click(client, "ok")
+        location = "read"
+        capture_until_title_change(client, artifacts, "hopper-reentry", current, 3.5)
+        click(client, "back")
+        location = "menu"
+        client.info()
+    finally:
+        if changed:
+            if location == "config":
+                click(client, "right")
+                click(client, "back")
+                location = "read"
+            if location == "menu":
+                click(client, "ok")
+                location = "read"
+            click(client, "left")
+            click(client, "down")
+            click(client, "right")
+            click(client, "back")
+            click(client, "back")
+    return "empty-cache hopper advanced; re-entry passed; original setting restored"
+
+
 CASES = (
+    HilCase("subghz-read-raw-start", "Sub-GHz Read Raw startup lifecycle", run_subghz_read_raw_start),
+    HilCase("subghz-fsk-tuner-stability", "Sub-GHz modem profile RX stability", run_subghz_fsk_tuner_stability),
+    HilCase("subghz-smart-scan-config", "Sub-GHz Smart Scan configuration", run_subghz_smart_scan_config),
+    HilCase("subghz-read-hopper", "Sub-GHz Read hopper lifecycle", run_subghz_read_hopper),
     HilCase("wifi-airtime", "WiFi Channel Airtime lifecycle", run_wifi_airtime),
     HilCase("wifi-peer-link", "WiFi Peer Link lifecycle", run_wifi_peer_link),
     HilCase("ble-signal-finder", "BLE Signal Finder lifecycle", run_ble_signal_finder),

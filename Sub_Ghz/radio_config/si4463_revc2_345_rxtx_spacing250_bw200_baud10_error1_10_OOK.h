@@ -2,7 +2,7 @@
 
 /*
 *
-*  si4463_revc2_345_rxtx_spacing250_bw100_baud10_error1_10_OOK.h
+*  si4463_revc2_345_rxtx_spacing250_bw200_baud10_error1_10_OOK.h
 *
 *  M1 sub-ghz config for 345 RxTx mode
 *

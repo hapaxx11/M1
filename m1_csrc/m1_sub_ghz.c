@@ -40,6 +40,7 @@
 #include "subghz_button_override.h"
 #include "subghz_static_tx.h"
 #include "subghz_rssi_history.h"
+#include "subghz_radio_config.h"
 #include "rf_fingerprint.h"
 #include "rf_match.h"
 #include "rf_sweep.h"
@@ -263,22 +264,16 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 #include "subghz_freq_presets.h"
 
 /* Flipper-style modulation presets */
-#define SUBGHZ_MOD_PRESET_COUNT     4
-static const struct {
-	const char *label;
-	S_M1_SubGHz_Modulation mod;
-} subghz_mod_presets[SUBGHZ_MOD_PRESET_COUNT] = {
-	{ "AM270", MODULATION_OOK },
-	{ "AM650", MODULATION_OOK },
-	{ "FM238", MODULATION_FSK },
-	{ "FM476", MODULATION_FSK }
-};
+#include "subghz_modem_profile.h"
+#include "m1_subghz_read_raw_state.h"
+#define subghz_mod_presets  subghz_modem_profiles
 
 /* Sub-GHz config state (shared between Read / Read RAW / Config screen) */
 typedef struct {
 	uint8_t freq_idx;       /* Index into subghz_freq_presets[] */
 	uint8_t mod_idx;        /* Index into subghz_mod_presets[] */
 	bool    hopping;
+	bool    smart_scan;
 	bool    bin_raw;
 	bool    sound;
 	bool    autosave;       /* Auto-save decoded signals to SD */
@@ -292,6 +287,7 @@ static SubGHz_Config_t subghz_cfg = {
 	.freq_idx       = SUBGHZ_FREQ_DEFAULT_IDX,
 	.mod_idx        = 1,    /* AM650 — Flipper default */
 	.hopping        = false,
+	.smart_scan     = true,
 	.bin_raw        = false,
 	.sound          = true,
 	.autosave       = false,
@@ -344,7 +340,6 @@ static bool    subghz_history_detail_active = false; /* true = showing signal de
 static uint8_t  subghz_hopper_idx  = 0;   /* Current index into subghz_hopper_freqs[] */
 static uint32_t subghz_hopper_freq = 0;   /* Frequency currently tuned (Hz) */
 static bool     subghz_hopper_active = false; /* true while hopping during ACTIVE record */
-#define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
 #define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
 
 /* RAW RSSI history visualization (Flipper-style spectrogram).
@@ -653,6 +648,11 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 	S_M1_SubGHz_Band init_freq;   /* Band used to load radio config */
 	uint32_t retune_freq_hz = 0;  /* Non-zero → retune after init */
 
+	if (band != SUB_GHZ_BAND_CUSTOM &&
+	    subghz_radio_force_custom_config(band == SUB_GHZ_BAND_915,
+	        subghz_scan_config.modulation >= MODULATION_FSK))
+		band = SUB_GHZ_BAND_CUSTOM;
+
 	switch(band)
 	{
 		case SUB_GHZ_BAND_300:
@@ -708,6 +708,16 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 	} // switch(band)
 
 	radio_init_rx_tx(init_freq, mod_type, SI446x_Get_Reset_Stat());
+
+	if (subghz_scan_config.modulation >= MODULATION_FSK)
+	{
+		const SubGhzModemProfile *profile = subghz_modem_profile_get(subghz_cfg.mod_idx);
+		if (profile != NULL)
+		{
+			SI446x_Set_Modem_Profile(profile);
+			mod_type = profile->si446x_mod_type;
+		}
+	}
 
 	/* For CUSTOM band, select the antenna frontend based on the actual
 	 * target frequency — init_freq may differ (e.g. 915 FSK config loaded
@@ -6155,7 +6165,7 @@ void sub_ghz_signal_identifier(void)
                     threshold, SIGID_SAMPLE_PERIOD_US,
                     timing_buf, SIGID_BURST_SAMPLES);
 
-                rf_fingerprint_t fp;
+                rf_fingerprint_t fp = { .mod = mc.mod };
                 bool decoded = false;
                 if (timing_count >= 4)
                 {
@@ -6172,10 +6182,10 @@ void sub_ghz_signal_identifier(void)
                             subghz_protocol_get_name(decode_res.protocol);
                         if (proto_name != NULL)
                         {
-                            rf_sweep_report_add_decoded(
+                            rf_sweep_report_add_decoded_with_mod(
                                 &report, pt->freq_hz,
                                 rf_band_from_freq(pt->freq_hz),
-                                peak, proto_name, NULL);
+                                peak, proto_name, NULL, fp.mod);
                             decoded = true;
                         }
                     }
@@ -6258,9 +6268,9 @@ void sub_ghz_signal_identifier(void)
                                     subghz_protocol_get_name(cap.protocol);
                                 if (name != NULL)
                                 {
-                                    rf_sweep_report_add_decoded(
+                                    rf_sweep_report_add_decoded_with_mod(
                                         &report, pt->freq_hz, fp.band,
-                                        peak, name, m.sig);
+                                        peak, name, m.sig, fp.mod);
                                     reported = true;
                                     decoded  = true;
                                 }
@@ -6382,8 +6392,12 @@ void sub_ghz_signal_identifier(void)
 /* transparently falls back to the standard fixed probe plan.                 */
 /*============================================================================*/
 
-void sub_ghz_smart_signal_id(void)
+void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
+                             SubGhzGuidedEntry *selection)
 {
+    if (selection != NULL)
+        memset(selection, 0, sizeof(*selection));
+    subghz_guided_plan_reset(guided_plan);
     S_M1_Buttons_Status this_button_status;
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
@@ -6402,7 +6416,7 @@ void sub_ghz_smart_signal_id(void)
     /* Signal ID state */
     rf_sweep_report_t report;
     int16_t  rssi_burst[SIGID_BURST_SAMPLES];
-    uint8_t  scroll_pos = 0;
+    uint8_t  selected_pos = 0;
     bool     running = true;
     int8_t   threshold = subghz_sigid_default_threshold();
 
@@ -6656,7 +6670,7 @@ void sub_ghz_smart_signal_id(void)
                         threshold, SIGID_SAMPLE_PERIOD_US,
                         timing_buf, SIGID_BURST_SAMPLES);
 
-                    rf_fingerprint_t fp;
+                    rf_fingerprint_t fp = { .mod = mc.mod };
                     bool decoded = false;
                     if (timing_count >= 4)
                     {
@@ -6671,10 +6685,10 @@ void sub_ghz_smart_signal_id(void)
                                 subghz_protocol_get_name(decode_res.protocol);
                             if (proto_name != NULL)
                             {
-                                rf_sweep_report_add_decoded(
+                                rf_sweep_report_add_decoded_with_mod(
                                     &report, pt->freq_hz,
                                     rf_band_from_freq(pt->freq_hz),
-                                    peak, proto_name, NULL);
+                                    peak, proto_name, NULL, fp.mod);
                                 decoded = true;
                             }
                         }
@@ -6757,9 +6771,9 @@ void sub_ghz_smart_signal_id(void)
                                         subghz_protocol_get_name(cap.protocol);
                                     if (name != NULL)
                                     {
-                                        rf_sweep_report_add_decoded(
+                                        rf_sweep_report_add_decoded_with_mod(
                                             &report, pt->freq_hz, fp.band,
-                                            peak, name, m.sig);
+                                            peak, name, m.sig, fp.mod);
                                         reported = true;
                                         decoded  = true;
                                     }
@@ -6824,7 +6838,7 @@ void sub_ghz_smart_signal_id(void)
                         threshold, SIGID_SAMPLE_PERIOD_US,
                         timing_buf, SIGID_BURST_SAMPLES);
 
-                    rf_fingerprint_t fp;
+                    rf_fingerprint_t fp = { .mod = mc.mod };
                     bool decoded = false;
                     if (timing_count >= 4)
                     {
@@ -6839,10 +6853,10 @@ void sub_ghz_smart_signal_id(void)
                                 subghz_protocol_get_name(decode_res.protocol);
                             if (proto_name != NULL)
                             {
-                                rf_sweep_report_add_decoded(
+                                rf_sweep_report_add_decoded_with_mod(
                                     &report, pt->freq_hz,
                                     rf_band_from_freq(pt->freq_hz),
-                                    peak, proto_name, NULL);
+                                    peak, proto_name, NULL, fp.mod);
                                 decoded = true;
                             }
                         }
@@ -6913,9 +6927,9 @@ void sub_ghz_smart_signal_id(void)
                                         subghz_protocol_get_name(cap.protocol);
                                     if (name != NULL)
                                     {
-                                        rf_sweep_report_add_decoded(
+                                        rf_sweep_report_add_decoded_with_mod(
                                             &report, pt->freq_hz, fp.band,
-                                            peak, name, m.sig);
+                                            peak, name, m.sig, fp.mod);
                                         reported = true;
                                         decoded  = true;
                                     }
@@ -6960,28 +6974,31 @@ void sub_ghz_smart_signal_id(void)
             }
             else
             {
+                if (selected_pos >= report.count)
+                    selected_pos = report.count - 1U;
+                uint8_t first_pos = selected_pos >= SIGID_VISIBLE_ROWS
+                                    ? selected_pos - SIGID_VISIBLE_ROWS + 1U : 0U;
                 for (uint8_t row = 0; row < SIGID_VISIBLE_ROWS; row++)
                 {
-                    uint8_t idx = scroll_pos + row;
+                    uint8_t idx = first_pos + row;
                     if (idx >= report.count) break;
 
                     const rf_sweep_hit_t *h = &report.hits[idx];
                     uint8_t y = 20 + row * 11;
 
+                    if (idx == selected_pos)
+                    {
+                        u8g2_DrawRBox(&m1_u8g2, 0, y - 8, 128, 10, 2);
+                        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+                    }
                     rf_sweep_display_format_hit(info_str, sizeof(info_str),
                                                h, SIGID_MIN_HITS);
                     u8g2_DrawStr(&m1_u8g2, 2, y, info_str);
-                }
-
-                if (report.count > SIGID_VISIBLE_ROWS)
-                {
-                    snprintf(info_str, sizeof(info_str), "%d/%d",
-                             scroll_pos + 1, report.count);
-                    u8g2_DrawStr(&m1_u8g2, 104, 64, info_str);
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
                 }
             }
 
-            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Clr \x18\x19");
+            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Read \x18\x19");
 
         } while (m1_u8g2_nextpage());
 
@@ -6995,20 +7012,20 @@ void sub_ghz_smart_signal_id(void)
             {
                 running = false;
             }
-            else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+            else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK &&
+                     report.count > 0U)
             {
-                rf_sweep_report_reset(&report);
-                rf_scan_cursor_reset(&cursor);
-                capture_attempt_count = 0;
-                scroll_pos = 0;
+                if (subghz_guided_entry_from_hit(selection,
+                                                 &report.hits[selected_pos]))
+                    running = false;
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                if (scroll_pos > 0) scroll_pos--;
+                if (selected_pos > 0) selected_pos--;
             }
             else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                if (scroll_pos + SIGID_VISIBLE_ROWS < report.count) scroll_pos++;
+                if (selected_pos + 1U < report.count) selected_pos++;
             }
             else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
             {
@@ -7021,6 +7038,7 @@ void sub_ghz_smart_signal_id(void)
         }
     }
 
+    subghz_guided_plan_from_report(guided_plan, &report);
     radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
     SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
     menu_sub_ghz_exit();
@@ -7077,6 +7095,16 @@ void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx)
 	subghz_apply_config();
 }
 
+void subghz_apply_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)
+{
+	if (mod_idx >= SUBGHZ_MOD_PRESET_COUNT)
+		mod_idx = 1;
+	subghz_cfg.mod_idx = mod_idx;
+	subghz_custom_freq_hz = freq_hz;
+	subghz_scan_config.band = subghz_freq_hz_to_band(freq_hz);
+	subghz_scan_config.modulation = subghz_mod_presets[mod_idx].mod;
+}
+
 /* Protocol static check */
 bool subghz_protocol_is_static_ext(uint16_t protocol)
 {
@@ -7110,7 +7138,7 @@ uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx)
  * Why we don't call sub_ghz_set_opmode() here: that function unconditionally
  * reloads the full SI4463 config from SPI on every invocation, and when the
  * target frequency falls in the 915 MHz band it forces a swap to the FSK
- * radio config.  Doing that on a 200 ms hopper tick churns hundreds of SPI
+ * radio config.  Doing that on every normal hopper tick churns hundreds of SPI
  * writes per second, repeatedly mode-swaps the modem from OOK→FSK→OOK as
  * the hopper crosses the 850 MHz boundary, and could lock up the device
  * (the hopper would visibly hang on 915 MHz and the watchdog would then
@@ -7141,6 +7169,17 @@ void subghz_retune_freq_hz_ext(uint32_t freq_hz)
 	SI446x_Set_Frequency(freq_hz);
 	SI446x_Start_Rx(0);
 
+	sub_ghz_rx_start();
+}
+
+void subghz_retune_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)
+{
+	sub_ghz_rx_pause();
+	sub_ghz_rx_deinit_impl(false);
+	subghz_apply_custom_config_ext(freq_hz, mod_idx);
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+	sub_ghz_rx_init();
 	sub_ghz_rx_start();
 }
 
@@ -7279,6 +7318,8 @@ uint8_t subghz_get_mod_idx_ext(void)         { return subghz_cfg.mod_idx; }
 void    subghz_set_mod_idx_ext(uint8_t idx)  { if (idx < SUBGHZ_MOD_PRESET_COUNT) subghz_cfg.mod_idx = idx; }
 bool    subghz_get_hopping_ext(void)         { return subghz_cfg.hopping; }
 void    subghz_set_hopping_ext(bool v)       { subghz_cfg.hopping = v; }
+bool    subghz_get_smart_scan_ext(void)      { return subghz_cfg.smart_scan; }
+void    subghz_set_smart_scan_ext(bool v)    { subghz_cfg.smart_scan = v; }
 bool    subghz_get_sound_ext(void)           { return subghz_cfg.sound; }
 void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
 bool    subghz_get_autosave_ext(void)        { return subghz_cfg.autosave; }
@@ -7351,7 +7392,8 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
 	uint32_t avail = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
 	if (avail >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW)
 	{
-		subghz_record_total_samples += SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
+		subghz_record_total_samples = subghz_read_raw_recording_total_update(
+			subghz_record_total_samples, SUBGHZ_RAW_DATA_SAMPLES_TO_RW);
 		sub_ghz_rx_raw_save(false, false);
 
 		/* RSSI visualization is now updated by the scene via
@@ -7369,9 +7411,13 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
  */
 void sub_ghz_raw_recording_stop_ext(void)
 {
-	/* Flush whatever remains in the ring buffer */
-	if (ringbuffer_get_data_slots(&subghz_rx_rawdata_rb) > 0)
+	uint32_t remaining = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
+	if (remaining > 0)
+	{
+		subghz_record_total_samples = subghz_read_raw_recording_total_update(
+			subghz_record_total_samples, remaining);
 		sub_ghz_rx_raw_save(false, true);
+	}
 
 	m1_sdm_task_stop();
 	m1_sdm_task_deinit();
