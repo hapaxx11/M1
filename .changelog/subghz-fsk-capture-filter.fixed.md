@@ -1,0 +1,1 @@
+**Sub-GHz: FSK capture stability** — Route demodulated FSK data to TIM1 and filter only very short noise edges in decode mode, preventing queue-flood watchdog resets without discarding valid 50–71 µs protocol symbols.

@@ -1,0 +1,1 @@
+**Sub-GHz: WDS radio-configuration audit** — Validated the band-specific OOK and FSK/TX headers against fresh Silicon Labs WDS calculations; preserved M1-specific RSSI behavior and corrected the 345 MHz header metadata to match its actual 200 kHz receive bandwidth.

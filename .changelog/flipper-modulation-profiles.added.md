@@ -1,0 +1,1 @@
+**Sub-GHz: Flipper modulation profiles** — Added FM12K, MSK100K, and GFSK10K presets and implemented complete WDS-generated SI4463 profiles for all seven Momentum modulations, including exact data-rate/deviation settings, BCR/decimation, raw-data path, AGC, channel filters, and synthesizer configuration, plus Models DB and persistent Config support.

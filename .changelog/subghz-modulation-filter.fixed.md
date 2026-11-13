@@ -1,0 +1,1 @@
+**Sub-GHz: modulation filtering** — Read and Proto Pirate configuration now allow FM12K, MSK100K, and GFSK10K whenever a protocol supports the FM family, instead of restricting selection to FM238 and FM476.

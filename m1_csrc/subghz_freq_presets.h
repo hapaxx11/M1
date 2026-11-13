@@ -99,6 +99,9 @@ extern const SubGhzFreqPreset subghz_freq_presets[SUBGHZ_FREQ_PRESET_COUNT];
  */
 #define SUBGHZ_HOPPER_FREQ_COUNT  6
 
+/* Covers Honda V1's full preamble+data and the slower audited weather frames. */
+#define SUBGHZ_HOPPER_DWELL_MS  750U
+
 /**
  * Per-region hopper frequency tables.
  * All entries must be present in subghz_freq_presets[] — enforced by

@@ -9,7 +9,9 @@
  * runs the Signal Identifier loop restricted to those channels.  If no active
  * frequencies are found, it falls back to the standard fixed ISM probe plan.
  *
- * Scene integration mirrors SubGhzSceneSignalIdentifier.
+ * Scene integration mirrors SubGhzSceneSignalIdentifier.  OK on an identified
+ * hit replaces this delegate with Read at the measured frequency/modulation;
+ * the identified channels also remain available to guided hopping.
  */
 
 #include <stdint.h>
@@ -25,11 +27,19 @@
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    (void)app;
-    sub_ghz_smart_signal_id();
+    SubGhzGuidedEntry selection;
+    sub_ghz_smart_signal_id(app->guided_plan, &selection);
 
-    /* After the blocking call returns, pop this scene */
     app->running = true;
+    if (selection.freq_hz != 0U)
+    {
+        app->read_handoff = selection;
+        app->read_handoff_pending = true;
+        app->hopping = false;
+        app->config_filter_mode = SubGhzConfigFilterFullRegistry;
+        subghz_scene_replace(app, SubGhzSceneRead);
+        return;
+    }
     subghz_scene_pop(app);
 }
 
