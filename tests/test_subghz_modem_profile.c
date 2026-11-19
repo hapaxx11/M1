@@ -108,6 +108,18 @@ void test_flipper_lookup_covers_new_and_existing_presets(void)
     TEST_ASSERT_EQUAL_INT16(6, subghz_modem_profile_find_flipper("FuriHalSubGhzPresetGFSK9_99KbAsync"));
 }
 
+void test_operation_profile_resolution_has_explicit_family_fallbacks(void)
+{
+    TEST_ASSERT_EQUAL_INT16(3, subghz_modem_profile_resolve(2, 1));
+    TEST_ASSERT_EQUAL_INT16(1, subghz_modem_profile_resolve(0, 2));
+    TEST_ASSERT_EQUAL_INT16(6, subghz_modem_profile_resolve(3, 6));
+    TEST_ASSERT_EQUAL_INT16(5, subghz_modem_profile_resolve(4, 6));
+    TEST_ASSERT_EQUAL_INT16(3, subghz_modem_profile_resolve(2, -1));
+    TEST_ASSERT_EQUAL_INT16(6, subghz_modem_profile_resolve(3, 2));
+    TEST_ASSERT_EQUAL_INT16(5, subghz_modem_profile_resolve(4, 6));
+    TEST_ASSERT_EQUAL_INT16(-1, subghz_modem_profile_resolve(99, 1));
+}
+
 void test_invalid_indices_and_unknown_names_are_rejected(void)
 {
     TEST_ASSERT_NULL(subghz_modem_profile_get(SUBGHZ_MOD_PRESET_COUNT));
@@ -121,6 +133,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_all_flipper_presets_have_distinct_si4463_profiles);
     RUN_TEST(test_complete_wds_profile_streams_are_preserved);
+    RUN_TEST(test_operation_profile_resolution_has_explicit_family_fallbacks);
     RUN_TEST(test_flipper_lookup_covers_new_and_existing_presets);
     RUN_TEST(test_invalid_indices_and_unknown_names_are_rejected);
     return UNITY_END();

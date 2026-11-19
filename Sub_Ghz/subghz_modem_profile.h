@@ -23,5 +23,6 @@ extern const SubGhzModemProfile subghz_modem_profiles[SUBGHZ_MOD_PRESET_COUNT];
 
 const SubGhzModemProfile *subghz_modem_profile_get(uint8_t index);
 int16_t subghz_modem_profile_find_flipper(const char *flipper_name);
+int16_t subghz_modem_profile_resolve(uint8_t requested_mod, int16_t profile_idx);
 
 #endif /* SUBGHZ_MODEM_PROFILE_H */

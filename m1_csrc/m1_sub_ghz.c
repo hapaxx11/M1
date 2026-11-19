@@ -439,7 +439,8 @@ S_M1_Q_Union_t *subghz_rx_q = NULL;
 S_M1_SubGHz_Scan_Config subghz_scan_config =
 {
 	.band = SUB_GHZ_BAND_300,
-	.modulation = MODULATION_OOK
+	.modulation = MODULATION_OOK,
+	.profile_idx = -1
 };
 
 /* Map Hz frequency to stock band when possible — stock bands have
@@ -474,6 +475,7 @@ static void subghz_apply_config(void)
 	}
 	subghz_scan_config.band = subghz_freq_hz_to_band(subghz_custom_freq_hz);
 	subghz_scan_config.modulation = subghz_mod_presets[subghz_cfg.mod_idx].mod;
+	subghz_scan_config.profile_idx = subghz_cfg.mod_idx;
 }
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -710,14 +712,15 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 
 	radio_init_rx_tx(init_freq, mod_type, SI446x_Get_Reset_Stat());
 
-	if (subghz_scan_config.modulation >= MODULATION_FSK)
+	const SubGhzModemProfile *profile = subghz_modem_profile_get(
+		subghz_modem_profile_resolve(subghz_scan_config.modulation,
+		                             subghz_scan_config.profile_idx));
+	if (profile != NULL)
 	{
-		const SubGhzModemProfile *profile = subghz_modem_profile_get(subghz_cfg.mod_idx);
-		if (profile != NULL)
-		{
-			SI446x_Set_Modem_Profile(profile);
-			mod_type = profile->si446x_mod_type;
-		}
+		SI446x_Set_Modem_Profile(profile);
+		mod_type = profile->si446x_mod_type;
+		if (band != SUB_GHZ_BAND_CUSTOM)
+			retune_freq_hz = subghz_band_steps[band][0] * 1000000UL;
 	}
 
 	/* For CUSTOM band, select the antenna frontend based on the actual
@@ -1996,6 +1999,7 @@ uint8_t sub_ghz_replay_prepare_datafile(const char *sgh_path,
 	subghz_replay_band    = subghz_freq_hz_to_band(frequency);
 	subghz_replay_channel = 0;
 	subghz_scan_config.modulation = modulation;
+	subghz_scan_config.profile_idx = -1;
 
 	/* Force CUSTOM band for FSK (same logic as sub_ghz_replay_flipper_file) */
 	if (modulation == MODULATION_FSK && subghz_replay_band != SUB_GHZ_BAND_CUSTOM)
@@ -2045,6 +2049,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint32_t *sample_buf;
 	uint32_t frequency = 0;
 	uint8_t modulation = MODULATION_OOK;
+	int16_t profile_idx = -1;
 	bool is_raw = false;
 	bool is_key = false;
 	bool has_data = false;
@@ -2187,6 +2192,10 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		}
 		else if (strncmp(line_buf, "Preset:", 7) == 0)
 		{
+			const char *preset_name = line_buf + 7;
+			while (*preset_name == ' ' || *preset_name == '\t')
+				preset_name++;
+			profile_idx = subghz_modem_profile_find_flipper(preset_name);
 			if (stristr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
 			else if (stristr(line_buf, "ASK"))
@@ -2714,6 +2723,13 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	}
 
 	/* ── 4. Use exact frequency via CUSTOM mode ── */
+	if (profile_idx >= 0)
+	{
+		const SubGhzModemProfile *profile = subghz_modem_profile_get(profile_idx);
+		if (profile != NULL)
+			modulation = profile->mod;
+	}
+
 	freq_mhz = (float)frequency / 1000000.0f;
 	subghz_replay_freq = freq_mhz;
 	subghz_replay_mod  = modulation;
@@ -2729,6 +2745,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	subghz_replay_channel = 0;
 	/* Propagate parsed modulation so sub_ghz_set_opmode uses it for CUSTOM band */
 	subghz_scan_config.modulation = modulation;
+	subghz_scan_config.profile_idx = profile_idx;
 
 	/* Standard band configs (300–433.92 MHz) are OOK-only.  Force CUSTOM
 	 * band for FSK so the modulation-aware CUSTOM handler loads the 915
@@ -4045,17 +4062,11 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 		else
 			freq32 = subghz_band_steps[subghz_scan_config.band][0]*1000000;
 
-		/* Map M1 modulation to the closest Flipper preset string */
-		const char *preset;
-		switch (subghz_scan_config.modulation)
-		{
-			case MODULATION_FSK:
-				preset = "FuriHalSubGhzPreset2FSKDev47_6KhzAsync";
-				break;
-			default: /* OOK, ASK */
-				preset = "FuriHalSubGhzPresetOok650Async";
-				break;
-		}
+		const SubGhzModemProfile *profile = subghz_modem_profile_get(
+			subghz_modem_profile_resolve(subghz_scan_config.modulation,
+			                             subghz_scan_config.profile_idx));
+		const char *preset = profile ? profile->flipper_name :
+			"FuriHalSubGhzPresetOok650Async";
 
 		sprintf((char *)pfillbuffer, "Filetype: " FLIPPER_SUBGHZ_RAW_FILETYPE "\r\nVersion: 1\r\n");
 		sprintf(prn_buffer, "Frequency: %lu\r\n", freq32);
@@ -4701,6 +4712,7 @@ void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz)
          * (sub_ghz_set_opmode handles the load + retune + frontend select). */
         subghz_scan_config.band       = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.modulation = MODULATION_FSK;
+        subghz_scan_config.profile_idx = -1;
         subghz_custom_freq_hz         = frequency_hz;
         sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_CUSTOM, 0, 0);
     }
@@ -4711,6 +4723,7 @@ void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz)
             band = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.band       = band;
         subghz_scan_config.modulation = MODULATION_OOK;
+        subghz_scan_config.profile_idx = -1;
         subghz_custom_freq_hz         = frequency_hz;
         sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, band, 0, 0);
         if (band == SUB_GHZ_BAND_433_92)
@@ -5875,6 +5888,7 @@ static void subghz_sigid_capture_rx_arm(bool is_am, uint32_t frequency_hz)
          * load + retune + frontend select). */
         subghz_scan_config.band       = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.modulation = MODULATION_FSK;
+        subghz_scan_config.profile_idx = -1;
         subghz_custom_freq_hz         = frequency_hz;
         sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_CUSTOM, 0, 0);
     }
@@ -5883,6 +5897,7 @@ static void subghz_sigid_capture_rx_arm(bool is_am, uint32_t frequency_hz)
         S_M1_SubGHz_Band band = subghz_freq_hz_to_band(frequency_hz);
         subghz_scan_config.band       = band;
         subghz_scan_config.modulation = MODULATION_OOK;
+        subghz_scan_config.profile_idx = -1;
         subghz_custom_freq_hz         = frequency_hz;
         sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, band, 0, 0);
         SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
@@ -7118,6 +7133,7 @@ void subghz_apply_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)
 	subghz_custom_freq_hz = freq_hz;
 	subghz_scan_config.band = subghz_freq_hz_to_band(freq_hz);
 	subghz_scan_config.modulation = subghz_mod_presets[mod_idx].mod;
+	subghz_scan_config.profile_idx = mod_idx;
 }
 
 /* Protocol static check */

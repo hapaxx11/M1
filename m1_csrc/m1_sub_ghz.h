@@ -144,6 +144,7 @@ typedef struct
 	uint8_t channel;
 	S_M1_SubGHz_Band band;
 	S_M1_SubGHz_Modulation modulation;
+	int16_t profile_idx;
 } S_M1_SubGHz_Scan_Config;
 
 void menu_sub_ghz_init(void);

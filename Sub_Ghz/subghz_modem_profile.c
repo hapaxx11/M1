@@ -44,6 +44,27 @@ const SubGhzModemProfile *subghz_modem_profile_get(uint8_t index)
     return index < SUBGHZ_MOD_PRESET_COUNT ? &subghz_modem_profiles[index] : 0;
 }
 
+int16_t subghz_modem_profile_resolve(uint8_t requested_mod, int16_t profile_idx)
+{
+    const SubGhzModemProfile *profile = subghz_modem_profile_get((uint8_t)profile_idx);
+    if (profile != 0 && profile->mod == requested_mod)
+        return profile_idx;
+
+    switch (requested_mod)
+    {
+        case SCAN_MOD_OOK:
+            return 1;
+        case SCAN_MOD_FSK:
+            return 3;
+        case SCAN_MOD_GFSK:
+            return 6;
+        case SCAN_MOD_MSK:
+            return 5;
+        default:
+            return -1;
+    }
+}
+
 int16_t subghz_modem_profile_find_flipper(const char *flipper_name)
 {
     if (flipper_name == 0)

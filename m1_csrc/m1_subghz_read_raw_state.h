@@ -141,6 +141,12 @@ static inline uint32_t subghz_read_raw_recording_total_update(
     return current_total + flushed;
 }
 
+static inline uint32_t subghz_read_raw_stop_chunk_size(uint32_t remaining,
+                                                        uint32_t chunk_max)
+{
+    return remaining < chunk_max ? remaining : chunk_max;
+}
+
 static inline bool subghz_read_raw_capture_active(bool rssi_signal, bool edges_seen)
 {
     return rssi_signal || edges_seen;

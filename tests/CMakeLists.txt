@@ -704,6 +704,7 @@ add_executable(test_flipper_subghz
     test_flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/Sub_Ghz/subghz_modem_profile.c
     ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
     ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
 )

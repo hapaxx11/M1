@@ -160,7 +160,10 @@ void test_radio_init_applies_selected_flipper_profile(void)
         "static bool sub_ghz_custom_freq_entry(void)");
 
     TEST_ASSERT_NOT_NULL(strstr(opmode,
-        "subghz_modem_profile_get(subghz_cfg.mod_idx)"));
+        "subghz_modem_profile_resolve(subghz_scan_config.modulation"));
+    TEST_ASSERT_NOT_NULL(strstr(opmode, "subghz_scan_config.profile_idx"));
+    TEST_ASSERT_NOT_NULL(strstr(opmode,
+        "retune_freq_hz = subghz_band_steps[band][0] * 1000000UL"));
     TEST_ASSERT_NOT_NULL(strstr(opmode, "SI446x_Set_Modem_Profile("));
     TEST_ASSERT_NOT_NULL(strstr(opmode,
         "subghz_scan_config.modulation >= MODULATION_FSK"));
@@ -229,6 +232,9 @@ void test_raw_partial_flush_reaches_displayed_sample_count(void)
     char *scene = read_file("m1_csrc/m1_subghz_scene_read_raw.c");
     TEST_ASSERT_NOT_NULL(strstr(recording,
         "uint32_t remaining = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);"));
+    TEST_ASSERT_NOT_NULL(strstr(recording, "while (remaining > 0)"));
+    TEST_ASSERT_NOT_NULL(strstr(recording,
+        "subghz_read_raw_stop_chunk_size("));
     TEST_ASSERT_NOT_NULL(strstr(recording,
         "subghz_record_total_samples, remaining"));
     TEST_ASSERT_NOT_NULL(strstr(scene,
@@ -236,6 +242,17 @@ void test_raw_partial_flush_reaches_displayed_sample_count(void)
     TEST_ASSERT_NULL(strstr(scene, "s_signal_seen_in_chunk"));
     free(scene);
     free(recording);
+}
+
+void test_raw_recording_and_replay_preserve_exact_profile(void)
+{
+    char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    TEST_ASSERT_NOT_NULL(strstr(content, "profile->flipper_name"));
+    TEST_ASSERT_NOT_NULL(strstr(content,
+        "subghz_modem_profile_find_flipper(preset_name)"));
+    TEST_ASSERT_NOT_NULL(strstr(content,
+        "subghz_scan_config.profile_idx = profile_idx"));
+    free(content);
 }
 
 void test_modulation_custom_path_decision_covers_all_profiles(void)
@@ -252,6 +269,7 @@ int main(void)
     RUN_TEST(test_modulation_custom_path_decision_covers_all_profiles);
     RUN_TEST(test_345mhz_header_name_matches_its_wds_bandwidth);
     RUN_TEST(test_raw_partial_flush_reaches_displayed_sample_count);
+    RUN_TEST(test_raw_recording_and_replay_preserve_exact_profile);
     RUN_TEST(test_fsk_decode_edges_use_raw_noise_filter_without_changing_ook);
     RUN_TEST(test_fsk_raw_output_and_decode_filter_are_wired);
     RUN_TEST(test_radio_init_applies_selected_flipper_profile);

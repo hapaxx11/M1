@@ -191,6 +191,21 @@ void test_display_count_tracks_every_flush(void)
     TEST_ASSERT_EQUAL_UINT32(5132u, subghz_read_raw_display_count_update(total));
 }
 
+void test_stop_drains_multiple_pending_chunks(void)
+{
+    uint32_t total = 0;
+    uint32_t remaining = 1024;
+    while (remaining > 0)
+    {
+        uint32_t chunk = subghz_read_raw_stop_chunk_size(remaining, 512);
+        total = subghz_read_raw_recording_total_update(total, chunk);
+        remaining -= chunk;
+    }
+    TEST_ASSERT_EQUAL_UINT32(1024, total);
+    TEST_ASSERT_EQUAL_UINT32(512, subghz_read_raw_stop_chunk_size(1000, 512));
+    TEST_ASSERT_EQUAL_UINT32(488, subghz_read_raw_stop_chunk_size(488, 512));
+}
+
 void test_cursor_advances_for_rssi_or_captured_edges(void)
 {
     TEST_ASSERT_FALSE(subghz_read_raw_capture_active(false, false));
@@ -237,6 +252,7 @@ int main(void)
     RUN_TEST(test_recording_total_includes_full_and_partial_flushes);
     RUN_TEST(test_display_count_tracks_every_flush);
     RUN_TEST(test_cursor_advances_for_rssi_or_captured_edges);
+    RUN_TEST(test_stop_drains_multiple_pending_chunks);
     RUN_TEST(test_psa_handoff_returns_to_fresh_raw_load_path);
     RUN_TEST(test_renault_v1_handoff_returns_to_fresh_raw_load_path);
     return UNITY_END();

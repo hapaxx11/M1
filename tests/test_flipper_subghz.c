@@ -27,6 +27,7 @@
 
 /* Declaration from flipper_subghz.h — we include the header directly */
 #include "flipper_subghz.h"
+#include "subghz_modem_profile.h"
 #include "subghz_psa_bruteforce.h"  /* subghz_psa_bf_result_t */
 #include "ff.h"
 
