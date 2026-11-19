@@ -1,0 +1,1 @@
+**Sub-GHz: Smart ID-guided capture** — Select an identified signal to open Read at its exact frequency and modulation, or enable Smart Scan to guide Read and Proto Pirate hopping with the identified channels.

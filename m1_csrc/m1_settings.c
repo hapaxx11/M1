@@ -105,6 +105,8 @@ extern uint8_t subghz_get_mod_idx_ext(void);
 extern void    subghz_set_mod_idx_ext(uint8_t idx);
 extern bool    subghz_get_hopping_ext(void);
 extern void    subghz_set_hopping_ext(bool v);
+extern bool    subghz_get_smart_scan_ext(void);
+extern void    subghz_set_smart_scan_ext(bool v);
 extern bool    subghz_get_sound_ext(void);
 extern void    subghz_set_sound_ext(bool v);
 extern bool    subghz_get_autosave_ext(void);
@@ -654,6 +656,8 @@ void settings_save_to_sd(void)
 
     SETTINGS_WRITE("subghz_hopping=%d\n", subghz_get_hopping_ext() ? 1 : 0);
 
+    SETTINGS_WRITE("subghz_smart_scan=%d\n", subghz_get_smart_scan_ext() ? 1 : 0);
+
     SETTINGS_WRITE("subghz_sound=%d\n", subghz_get_sound_ext() ? 1 : 0);
 
     SETTINGS_WRITE("subghz_autosave=%d\n", subghz_get_autosave_ext() ? 1 : 0);
@@ -891,12 +895,12 @@ void settings_load_from_sd(void)
             subghz_set_freq_idx_ext((uint8_t)lval);  /* bounds enforced by setter */
     }
 
-    /* Parse "subghz_mod_idx=X" (0–3) */
+    /* Parse "subghz_mod_idx=X" (0–6) */
     p = strstr(buf, "subghz_mod_idx=");
     if (p != NULL)
     {
         val = (int)(*(p + 15) - '0');
-        if (val >= 0 && val <= 3)
+        if (val >= 0 && val <= 6)
             subghz_set_mod_idx_ext((uint8_t)val);
     }
 
@@ -907,6 +911,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 15) - '0');
         if (val == 0 || val == 1)
             subghz_set_hopping_ext(val == 1);
+    }
+
+    /* Parse "subghz_smart_scan=X" (0 or 1) */
+    p = strstr(buf, "subghz_smart_scan=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 18) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_smart_scan_ext(val == 1);
     }
 
     /* Parse "subghz_sound=X" (0 or 1) */

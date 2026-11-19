@@ -16,6 +16,8 @@
 #include "m1_io_defs.h"
 #include "m1_ring_buffer.h"
 #include "subghz_weather_app.h"
+#include "subghz_guided_scan.h"
+#include "subghz_modem_profile.h"
 #include <stdbool.h>
 
 #define SUBGHZ_RX_TIMER                 TIM1        /*!< Timer used for Sub-GHz decoding */
@@ -133,6 +135,8 @@ typedef enum {
 	MODULATION_OOK = 0,
 	MODULATION_ASK,
 	MODULATION_FSK,
+	MODULATION_GFSK,
+	MODULATION_MSK,
 	MODULATION_UNKNOWN
 } S_M1_SubGHz_Modulation;
 
@@ -141,6 +145,7 @@ typedef struct
 	uint8_t channel;
 	S_M1_SubGHz_Band band;
 	S_M1_SubGHz_Modulation modulation;
+	int16_t profile_idx;
 } S_M1_SubGHz_Scan_Config;
 
 void menu_sub_ghz_init(void);
@@ -161,7 +166,8 @@ void sub_ghz_brute_force(void);
 void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);
 void sub_ghz_signal_identifier(void);
-void sub_ghz_smart_signal_id(void);
+void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
+                             SubGhzGuidedEntry *selection);
 
 /* Shared 31-point fine sweep (center +/-300 kHz, 20 kHz steps) — the Remote
  * Analyzer scene's radio-side measurement, shared with Smart ID refinement.
@@ -353,4 +359,5 @@ extern uint8_t subghz_tx_tc_flag;
 extern volatile uint16_t subghz_tx_tc_count;
 extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 extern uint8_t subghz_record_mode_flag;
+extern const SubGhzModemProfile *subghz_active_modem_profile;
 #endif /* M1_SUB_GHZ_H_ */

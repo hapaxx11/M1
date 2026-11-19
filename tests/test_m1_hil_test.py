@@ -609,6 +609,34 @@ class TestTransmitReview(unittest.TestCase):
         ):
             settings_audit._audit_lcd_row(client, 0)
         observe.assert_called_once_with(b"lcd")
+    def test_subghz_guided_capture_cases_are_registered(self):
+        ids = {case.test_id for case in hil.CASES}
+        self.assertIn("subghz-smart-scan-config", ids)
+        self.assertIn("subghz-read-hopper", ids)
+        self.assertIn("subghz-read-raw-start", ids)
+        self.assertIn("subghz-fsk-tuner-stability", ids)
+        for profile in ("am270", "am650", "fm476", "fm12k", "msk100k", "gfsk10k"):
+            self.assertIn(f"subghz-{profile}-rx", ids)
+        self.assertEqual(hil.SUBGHZ_MOD_PRESET_COUNT, 7)
+
+
+    def test_protocol_filter_audit_uses_row_12_and_verifies_destination(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(subghz_audit, "_click") as click,
+            mock.patch.object(subghz_audit, "_frame", return_value=b"frame"),
+            mock.patch.object(subghz_audit, "_title_crc",
+                              return_value=subghz_audit.PROTOCOL_FILTER_TITLE_CRC),
+        ):
+            subghz_audit._audit_protocol_filter(client)
+        self.assertEqual([
+            mock.call(client, "ok"),
+            mock.call(client, "left"),
+            mock.call(client, "down", 12),
+            mock.call(client, "ok"),
+            mock.call(client, "back"),
+        ], click.call_args_list)
 
 
 class TestScreenTransitions(unittest.TestCase):
@@ -624,6 +652,22 @@ class TestScreenTransitions(unittest.TestCase):
     def test_unchanged_screen_times_out(self, _capture, _monotonic):
         with self.assertRaisesRegex(AssertionError, "did not change"):
             hil.capture_until_change(None, pathlib.Path("."), "scene", b"same", 1.0)
+
+    @mock.patch("m1_hil_test.title_crc", side_effect=[10, 10, 10, 11])
+    @mock.patch("m1_hil_test.time.sleep", return_value=None)
+    @mock.patch("m1_hil_test.capture", side_effect=[b"old", b"old", b"new"])
+    def test_hopper_waits_for_frequency_not_rssi_changes(self, capture, _sleep, _crc):
+        actual = hil.capture_until_title_change(None, pathlib.Path("."), "hopper", b"old", 1.0)
+        self.assertEqual(actual, b"new")
+        self.assertEqual(capture.call_count, 3)
+
+    def test_bottom_crc_isolates_action_bar(self):
+        framebuffer = bytearray(1024)
+        expected = hil.bottom_crc(framebuffer)
+        framebuffer[128 * 6 + 3] = 1  # y=48, outside the action bar
+        self.assertEqual(hil.bottom_crc(framebuffer), expected)
+        framebuffer[128 * 7 + 3] = 1  # y=59, inside the action bar
+        self.assertNotEqual(hil.bottom_crc(framebuffer), expected)
 
     def test_wrong_screen_identity_is_rejected(self):
         framebuffer = bytearray(1024)
