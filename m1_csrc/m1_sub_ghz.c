@@ -652,10 +652,13 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 	S_M1_SubGHz_Band init_freq;   /* Band used to load radio config */
 	uint32_t retune_freq_hz = 0;  /* Non-zero → retune after init */
 
-	if (band != SUB_GHZ_BAND_CUSTOM &&
+	if (band < SUB_GHZ_BAND_EOL &&
 	    subghz_radio_force_custom_config(band == SUB_GHZ_BAND_915,
 	        subghz_scan_config.modulation >= MODULATION_FSK))
+	{
+		subghz_custom_freq_hz = subghz_band_steps[band][0] * 1000000UL;
 		band = SUB_GHZ_BAND_CUSTOM;
+	}
 
 	switch(band)
 	{
