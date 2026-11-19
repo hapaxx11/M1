@@ -417,8 +417,8 @@ def run_subghz_profile_stability(client: M1Hil, artifacts: Path, profile_index: 
     if profile_index:
         click(client, "right", profile_index)
     configured = capture(client, artifacts, "profile-config")
-    if config_modulation_crc(configured) == original_crc and original_crc != 0x7F90BE40:
-        raise AssertionError("profile did not advance from original modulation")
+    if profile_index and config_modulation_crc(configured) == 0x7F90BE40:
+        raise AssertionError("profile did not advance from AM270")
     click(client, "back")
     time.sleep(1)
     capture(client, artifacts, "profile-read-stable")
