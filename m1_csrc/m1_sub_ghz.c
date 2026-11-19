@@ -721,7 +721,7 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 		subghz_active_modem_profile = profile;
 		SI446x_Set_Modem_Profile(profile);
 		mod_type = profile->si446x_mod_type;
-		if (band != SUB_GHZ_BAND_CUSTOM)
+		if (band < SUB_GHZ_BAND_EOL)
 			retune_freq_hz = subghz_band_steps[band][0] * 1000000UL;
 	}
 
