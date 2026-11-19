@@ -620,6 +620,25 @@ class TestTransmitReview(unittest.TestCase):
         self.assertEqual(hil.SUBGHZ_MOD_PRESET_COUNT, 7)
 
 
+    def test_protocol_filter_audit_uses_row_12_and_verifies_destination(self):
+        client = mock.MagicMock()
+        with (
+            mock.patch.object(subghz_audit, "_reboot_menu", return_value=client),
+            mock.patch.object(subghz_audit, "_click") as click,
+            mock.patch.object(subghz_audit, "_frame", return_value=b"frame"),
+            mock.patch.object(subghz_audit, "_title_crc",
+                              return_value=subghz_audit.PROTOCOL_FILTER_TITLE_CRC),
+        ):
+            subghz_audit._audit_protocol_filter(client)
+        self.assertEqual([
+            mock.call(client, "ok"),
+            mock.call(client, "left"),
+            mock.call(client, "down", 12),
+            mock.call(client, "ok"),
+            mock.call(client, "back"),
+        ], click.call_args_list)
+
+
 class TestScreenTransitions(unittest.TestCase):
     @mock.patch("m1_hil_test.time.sleep", return_value=None)
     @mock.patch("m1_hil_test.capture", side_effect=[b"old", b"old", b"new"])

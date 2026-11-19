@@ -200,9 +200,11 @@ Read checks for every other modem profile (`subghz-am270-rx`,
 `subghz-msk100k-rx`, and `subghz-gfsk10k-rx`),
 `subghz-smart-scan-config` (toggle/restore plus clean Read exit), and
 `subghz-read-hopper` (empty-cache frequency progression, exit/re-entry, and
-original-setting restoration). The hopper case compares title-region CRCs so
-RSSI changes cannot count as hops; Read Raw uses the action-bar CRC to reject
-Loaded/Send startup regressions.
+original-setting restoration). The recursive `subghz-menu-audit` also covers
+Protocol Filter, which is Config row 12 and must be identity-checked before a
+pass is recorded. The hopper case compares title-region CRCs so RSSI changes
+cannot count as hops; Read Raw uses the action-bar CRC to reject Loaded/Send
+startup regressions.
 Smart ID handoff and live Honda V1/Kia decoding need an external transmitter
 and must use a bounded guided validation, not an automated single-device case.
 

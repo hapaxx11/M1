@@ -233,7 +233,10 @@ load + config reset, restoring the radio to a known good state.
    GFSK10K raw capture, while slower FSK retains the 20/80 µs limits. Without
    filtering, raw noise can flood the main queue and cause a watchdog boot
    loop. The active operation's `profile_idx`, not the Read UI preset, drives
-   this selection and named-band retuning.
+   this selection and named-band retuning. CUSTOM conversion uses the FSK base
+   for all three FSK-family modulations (FSK/GFSK/MSK), preserves the selected
+   named band's base frequency, and never indexes `subghz_band_steps` with
+   `SUB_GHZ_BAND_EOL` during replay completion or abort.
 
 **Rules for new code:**
 - If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, call

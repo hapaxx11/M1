@@ -453,7 +453,9 @@ protocols in an ignored group never produce a "decoded" hit there either.
    groups at the end.
 3. **The Config scene shows the ignored-group count** ("All On" / "N off") and
    opens the filter on OK/RIGHT; keep that entry when editing
-   `m1_subghz_scene_config.c`.
+   `m1_subghz_scene_config.c`. It is Config row 12. The recursive HIL audit must
+  navigate with 12 DOWN presses and verify the Ignore scene's title CRC before
+  logging a pass (`scripts/m1_subghz_menu_audit.py::_audit_protocol_filter`).
 
 ---
 

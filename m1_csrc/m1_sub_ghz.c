@@ -685,7 +685,7 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 			 * the 915 config is the only one with 2FSK modem settings.
 			 * For OOK: BAND_315 for <420MHz, BAND_433_92 for 420-849MHz,
 			 * BAND_915 for 850+MHz. */
-			if (subghz_scan_config.modulation == MODULATION_FSK)
+			if (subghz_scan_config.modulation >= MODULATION_FSK)
 			{
 				init_freq = SUB_GHZ_BAND_915;
 				mod_type = MODEM_MOD_TYPE_FSK;

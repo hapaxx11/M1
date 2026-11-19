@@ -174,6 +174,22 @@ def _run_keeloq_editor_chain(client: M1Hil) -> M1Hil:
     return client
 
 
+PROTOCOL_FILTER_TITLE_CRC = 0x268B430A
+
+
+def _audit_protocol_filter(client: M1Hil) -> M1Hil:
+    client = _reboot_menu(client, 0)
+    _click(client, "ok")
+    _click(client, "left")
+    _click(client, "down", 12)
+    _click(client, "ok")
+    if _title_crc(_frame(client)) != PROTOCOL_FILTER_TITLE_CRC:
+        raise AssertionError("Protocol Filter destination identity mismatch")
+    _click(client, "back")
+    _frame(client)
+    return client
+
+
 def run(client: M1Hil) -> str:
     skipped = list(SKIPPED_RF) + ["SignalSettings (requires compatible saved file)"]
     try:
@@ -190,14 +206,7 @@ def run(client: M1Hil) -> str:
 
         if should_run("Read/Config/Protocol Filter"):
             print("RUN  Read/Config/Protocol Filter", flush=True)
-            client = _reboot_menu(client, 0)
-            _click(client, "ok")
-            _click(client, "left")
-            _click(client, "down", 11)
-            _click(client, "ok")
-            m1_ux_audit.observe(_frame(client))
-            _click(client, "back")
-            _frame(client)
+            client = _audit_protocol_filter(client)
             log_pass("Read/Config/Protocol Filter")
 
         for label, selection in resume_targets(ADD_MANUALLY_TARGETS):

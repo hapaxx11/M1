@@ -84,6 +84,24 @@ void test_initial_hopper_frequency_is_applied_before_rx_start(void)
     free(content);
 }
 
+void test_band_conversion_preserves_frequency_and_fsk_family(void)
+{
+    char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    char *opmode = slice_between(
+        content,
+        "static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power)\n{",
+        "static bool sub_ghz_custom_freq_entry(void)");
+    TEST_ASSERT_NOT_NULL(strstr(opmode, "band < SUB_GHZ_BAND_EOL"));
+    TEST_ASSERT_NOT_NULL(strstr(opmode,
+        "subghz_custom_freq_hz = subghz_band_steps[band][0] * 1000000UL"));
+    TEST_ASSERT_NOT_NULL(strstr(opmode,
+        "if (subghz_scan_config.modulation >= MODULATION_FSK)"));
+    TEST_ASSERT_NULL(strstr(opmode,
+        "subghz_scan_config.modulation == MODULATION_FSK"));
+    free(opmode);
+    free(content);
+}
+
 void test_named_presets_honor_requested_modulation(void)
 {
     char *content = read_file("m1_csrc/m1_sub_ghz.c");
@@ -306,6 +324,7 @@ int main(void)
     RUN_TEST(test_guided_hop_uses_full_modem_reconfiguration_and_resets_decoder);
     RUN_TEST(test_initial_hopper_frequency_is_applied_before_rx_start);
     RUN_TEST(test_named_presets_honor_requested_modulation);
+    RUN_TEST(test_band_conversion_preserves_frequency_and_fsk_family);
     RUN_TEST(test_hopper_dwell_covers_slow_protocol_frames);
     return UNITY_END();
 }
