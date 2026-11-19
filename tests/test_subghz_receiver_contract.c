@@ -197,6 +197,32 @@ void test_fsk_decode_edges_use_raw_noise_filter_without_changing_ook(void)
     TEST_ASSERT_TRUE(subghz_rx_edge_accept(80, true, false));
 }
 
+void test_msk_symbol_edges_pass_rate_aware_filters(void)
+{
+    const SubGhzModemProfile *msk = subghz_modem_profile_get(5);
+    const SubGhzModemProfile *gfsk = subghz_modem_profile_get(6);
+    const SubGhzModemProfile *fm238 = subghz_modem_profile_get(2);
+    TEST_ASSERT_NOT_NULL(msk);
+    TEST_ASSERT_NOT_NULL(gfsk);
+    TEST_ASSERT_NOT_NULL(fm238);
+
+    TEST_ASSERT_FALSE(subghz_rx_edge_accept_profile(4, false, msk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(5, false, msk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(10, false, msk));
+    TEST_ASSERT_FALSE(subghz_rx_edge_accept_profile(4, true, msk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(5, true, msk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(10, true, msk));
+
+    TEST_ASSERT_FALSE(subghz_rx_edge_accept_profile(49, true, gfsk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(50, true, gfsk));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(20, false, gfsk));
+
+    TEST_ASSERT_FALSE(subghz_rx_edge_accept_profile(19, false, fm238));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(20, false, fm238));
+    TEST_ASSERT_FALSE(subghz_rx_edge_accept_profile(79, true, fm238));
+    TEST_ASSERT_TRUE(subghz_rx_edge_accept_profile(80, true, fm238));
+}
+
 void test_fsk_raw_output_and_decode_filter_are_wired(void)
 {
     char *profile = read_file(
@@ -204,7 +230,8 @@ void test_fsk_raw_output_and_decode_filter_are_wired(void)
     char *isr = read_file("m1_csrc/m1_int_hdl.c");
 
     TEST_ASSERT_NOT_NULL(strstr(profile, "#define RF_915_GPIO_PIN_CFG 0x13, 0x14,"));
-    TEST_ASSERT_NOT_NULL(strstr(isr, "subghz_rx_edge_accept(cap_val, subghz_record_mode_flag,"));
+    TEST_ASSERT_NOT_NULL(strstr(isr,
+        "subghz_rx_edge_accept_profile(cap_val, subghz_record_mode_flag,"));
     free(isr);
     free(profile);
 
@@ -236,7 +263,7 @@ void test_raw_partial_flush_reaches_displayed_sample_count(void)
     TEST_ASSERT_NOT_NULL(strstr(recording,
         "subghz_read_raw_stop_chunk_size("));
     TEST_ASSERT_NOT_NULL(strstr(recording,
-        "subghz_record_total_samples, remaining"));
+        "subghz_record_total_samples, chunk"));
     TEST_ASSERT_NOT_NULL(strstr(scene,
         "app->raw_sample_count = subghz_read_raw_display_count_update("));
     TEST_ASSERT_NULL(strstr(scene, "s_signal_seen_in_chunk"));
@@ -271,6 +298,7 @@ int main(void)
     RUN_TEST(test_raw_partial_flush_reaches_displayed_sample_count);
     RUN_TEST(test_raw_recording_and_replay_preserve_exact_profile);
     RUN_TEST(test_fsk_decode_edges_use_raw_noise_filter_without_changing_ook);
+    RUN_TEST(test_msk_symbol_edges_pass_rate_aware_filters);
     RUN_TEST(test_fsk_raw_output_and_decode_filter_are_wired);
     RUN_TEST(test_radio_init_applies_selected_flipper_profile);
     RUN_TEST(test_raw_path_heap_storage_is_zero_initialized);

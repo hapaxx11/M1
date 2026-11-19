@@ -17,6 +17,7 @@
 #include "m1_ring_buffer.h"
 #include "subghz_weather_app.h"
 #include "subghz_guided_scan.h"
+#include "subghz_modem_profile.h"
 #include <stdbool.h>
 
 #define SUBGHZ_RX_TIMER                 TIM1        /*!< Timer used for Sub-GHz decoding */
@@ -358,4 +359,5 @@ extern uint8_t subghz_tx_tc_flag;
 extern volatile uint16_t subghz_tx_tc_count;
 extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 extern uint8_t subghz_record_mode_flag;
+extern const SubGhzModemProfile *subghz_active_modem_profile;
 #endif /* M1_SUB_GHZ_H_ */

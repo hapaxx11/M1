@@ -745,8 +745,8 @@ void TIM1_CC_IRQHandler(void)
 	} // else
 
 	send_to_q = 1;
-	if ( !subghz_rx_edge_accept(cap_val, subghz_record_mode_flag,
-	                            subghz_scan_config.modulation >= MODULATION_FSK) )
+	if ( !subghz_rx_edge_accept_profile(cap_val, subghz_record_mode_flag,
+	                                    subghz_active_modem_profile) )
 	{
 		send_to_q = 0;
 		if ( subghz_decenc_ctl.pulse_det_pol==PULSE_DET_FALLING )

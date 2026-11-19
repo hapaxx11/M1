@@ -615,6 +615,8 @@ class TestTransmitReview(unittest.TestCase):
         self.assertIn("subghz-read-hopper", ids)
         self.assertIn("subghz-read-raw-start", ids)
         self.assertIn("subghz-fsk-tuner-stability", ids)
+        for profile in ("am270", "am650", "fm476", "fm12k", "msk100k", "gfsk10k"):
+            self.assertIn(f"subghz-{profile}-rx", ids)
         self.assertEqual(hil.SUBGHZ_MOD_PRESET_COUNT, 7)
 
 

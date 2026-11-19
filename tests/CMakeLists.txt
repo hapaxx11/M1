@@ -4811,6 +4811,7 @@ add_test(NAME pocsag_scene_lifecycle COMMAND test_pocsag_scene_lifecycle)
 # and a dwell long enough for the slowest audited protocol frames.
 add_executable(test_subghz_receiver_contract
     test_subghz_receiver_contract.c
+    ${M1_ROOT}/Sub_Ghz/subghz_modem_profile.c
 )
 target_compile_definitions(test_subghz_receiver_contract PRIVATE M1_ROOT="${M1_ROOT}")
 target_include_directories(test_subghz_receiver_contract PRIVATE ${M1_ROOT}/Sub_Ghz ${M1_ROOT}/m1_csrc)

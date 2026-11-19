@@ -86,8 +86,7 @@ void test_preset_fsk_2fsk_476(void)
 
 void test_preset_fsk_gfsk(void)
 {
-	/* GFSK variant — should also match "FSK" substring */
-	TEST_ASSERT_EQUAL_UINT8(MODULATION_FSK,
+	TEST_ASSERT_EQUAL_UINT8(MODULATION_GFSK,
 		flipper_subghz_preset_to_modulation("FuriHalSubGhzPresetGFSK9_99KbAsync"));
 }
 
@@ -95,6 +94,12 @@ void test_preset_fsk_lowercase(void)
 {
 	TEST_ASSERT_EQUAL_UINT8(MODULATION_FSK,
 		flipper_subghz_preset_to_modulation("furihalsubghzpreset2fskdev238async"));
+}
+
+void test_preset_msk(void)
+{
+	TEST_ASSERT_EQUAL_UINT8(MODULATION_MSK,
+		flipper_subghz_preset_to_modulation("FuriHalSubGhzPresetMSK99_97KbAsync"));
 }
 
 void test_preset_ask(void)
@@ -453,6 +458,45 @@ void test_load_flipper_raw_not_m1_native(void)
 	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
 
 	remove(path);
+}
+
+static void assert_raw_preset_roundtrip(const char *preset,
+                                        uint8_t expected_mod,
+                                        int16_t expected_idx)
+{
+    const char *path = "/tmp/test_flipper_profile.sub";
+    char content[512];
+    snprintf(content, sizeof(content),
+        "Filetype: Flipper SubGhz RAW File\r\n"
+        "Version: 1\r\n"
+        "Frequency: 433920000\r\n"
+        "Preset: %s\r\n"
+        "Protocol: RAW\r\n"
+        "RAW_Data: 100 -200 300 -400\r\n", preset);
+    write_tmp(path, content);
+
+    flipper_subghz_signal_t sig;
+    memset(&sig, 0, sizeof(sig));
+    TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+    TEST_ASSERT_EQUAL_STRING(preset, sig.preset);
+    TEST_ASSERT_EQUAL_UINT8(expected_mod,
+        flipper_subghz_preset_to_modulation(preset));
+    TEST_ASSERT_EQUAL_INT16(expected_idx,
+        subghz_modem_profile_find_flipper(preset));
+    const SubGhzModemProfile *profile = subghz_modem_profile_get(expected_idx);
+    TEST_ASSERT_NOT_NULL(profile);
+    TEST_ASSERT_EQUAL_UINT8(expected_mod, profile->mod);
+    remove(path);
+}
+
+void test_gfsk_raw_preset_roundtrip(void)
+{
+    assert_raw_preset_roundtrip("FuriHalSubGhzPresetGFSK9_99KbAsync", 3, 6);
+}
+
+void test_msk_raw_preset_roundtrip(void)
+{
+    assert_raw_preset_roundtrip("FuriHalSubGhzPresetMSK99_97KbAsync", 4, 5);
 }
 
 void test_load_flipper_key_packet_fields(void)
@@ -1955,6 +1999,7 @@ int main(void)
 	RUN_TEST(test_preset_fsk_2fsk_476);
 	RUN_TEST(test_preset_fsk_gfsk);
 	RUN_TEST(test_preset_fsk_lowercase);
+	RUN_TEST(test_preset_msk);
 	RUN_TEST(test_preset_ask);
 	RUN_TEST(test_preset_ask_lowercase);
 	RUN_TEST(test_preset_unknown);
@@ -1993,6 +2038,8 @@ int main(void)
 	RUN_TEST(test_load_m1_native_noise_lf_only);
 	RUN_TEST(test_load_m1_native_noise_long_data_line);
 	RUN_TEST(test_load_flipper_raw_not_m1_native);
+	RUN_TEST(test_gfsk_raw_preset_roundtrip);
+	RUN_TEST(test_msk_raw_preset_roundtrip);
 	RUN_TEST(test_load_flipper_key_packet_fields);
 	RUN_TEST(test_load_m1_native_packet_not_noise);
 

@@ -1,1 +1,1 @@
-**Sub-GHz: hardware-in-the-loop coverage** — Added single-device Read Raw startup, FSK tuner stability, Smart Scan configuration, and empty-cache hopper lifecycle tests, with guided live-transmitter plans for Smart ID handoff and Honda V1/Kia capture.
+**Sub-GHz: hardware-in-the-loop coverage** — Added single-device Read Raw startup, FM238 tuner stability, independent clean-boot checks for the other six modem profiles, Smart Scan configuration, and empty-cache hopper lifecycle tests, with guided live-transmitter plans for Smart ID handoff and Honda V1/Kia capture.

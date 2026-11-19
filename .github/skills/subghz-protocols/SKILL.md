@@ -390,11 +390,13 @@ the scene manager without rewriting each tool.
   modem-profile-plus-retune path in `sub_ghz_set_opmode()`.
 - Single-device HIL covers Read Raw Start/REC entry and re-entry
   (`subghz-read-raw-start`), FM238 Timing Tuner stability
-  (FM238 Timing Tuner plus all seven modem profiles in Read), Config toggle/restore
-  (`subghz-smart-scan-config`), and empty-cache hopper progression/re-entry
-  (`subghz-read-hopper`). Live Smart ID selection and Honda V1/Kia capture
-  require external transmitters and therefore remain guided, bounded on-device
-  validations.
+  (`subghz-fsk-tuner-stability`), independent clean-boot Read checks for the
+  other six modem profiles (`subghz-am270-rx`, `subghz-am650-rx`,
+  `subghz-fm476-rx`, `subghz-fm12k-rx`, `subghz-msk100k-rx`, and
+  `subghz-gfsk10k-rx`), Config toggle/restore (`subghz-smart-scan-config`), and
+  empty-cache hopper progression/re-entry (`subghz-read-hopper`). Live Smart ID
+  selection and Honda V1/Kia capture require external transmitters and
+  therefore remain guided, bounded on-device validations.
 
 ---
 
@@ -497,6 +499,22 @@ The band-specific OOK and FSK/TX headers were also audited against fresh WDS
 calculations. Their modem/filter/BCR/synthesizer/frequency/PA values match;
 M1-specific RSSI threshold/averaging differences are intentional. The 345 MHz
 header filename uses `bw200`, matching its actual 200 kHz input.
+
+`subghz_scan_config.profile_idx` belongs to the active operation, not the Read
+UI preset. `subghz_modem_profile_resolve()` preserves an exact matching profile
+and otherwise selects an explicit family fallback (AM650 for OOK, FM476 for
+generic FSK, GFSK10K for GFSK, or MSK100K for MSK). This prevents Weather,
+Smart ID, and replay from inheriting an unrelated UI setting. After loading a
+profile, named bands are retuned with `SI446x_Set_Frequency()` so
+`MODEM_CLKGEN_BAND` and the carrier agree; channel-step registers are not
+rewritten. Raw recording serializes `profile->flipper_name`, and replay parses
+it back to the exact profile instead of collapsing GFSK/MSK to generic FSK.
+
+Decode and raw-recording edge thresholds are profile/rate-aware. MSK100K accepts
+single-symbol 10 µs transitions (5 µs cutoff), GFSK10K uses 50 µs for raw
+capture, and slower FSK retains the 20/80 µs limits. Stop drains every pending
+512-duration chunk and increments the displayed total only after each
+successful write.
 
 ## Weather Station modulation coverage — do not "optimise" FSK away
 

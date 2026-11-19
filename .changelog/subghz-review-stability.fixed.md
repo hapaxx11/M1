@@ -1,0 +1,1 @@
+**Sub-GHz: review stability fixes** — Resolve operation-specific modem profiles and named-band retuning, drain the complete Read Raw backlog on Stop, preserve GFSK/MSK presets through recording and replay, and scale edge filters for high-rate GFSK/MSK signals.

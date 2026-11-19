@@ -436,6 +436,7 @@ static float subghz_replay_freq;
 static S_M1_file_info *f_info = NULL;
 static S_M1_SDM_DatFileInfo_t datfile_info;
 S_M1_Q_Union_t *subghz_rx_q = NULL;
+const SubGhzModemProfile *subghz_active_modem_profile = NULL;
 S_M1_SubGHz_Scan_Config subghz_scan_config =
 {
 	.band = SUB_GHZ_BAND_300,
@@ -717,6 +718,7 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 		                             subghz_scan_config.profile_idx));
 	if (profile != NULL)
 	{
+		subghz_active_modem_profile = profile;
 		SI446x_Set_Modem_Profile(profile);
 		mod_type = profile->si446x_mod_type;
 		if (band != SUB_GHZ_BAND_CUSTOM)

@@ -228,10 +228,12 @@ load + config reset, restoring the radio to a known good state.
    `SI446x_Set_Modem_Profile()` streams the selected WDS-generated modem,
    BCR/decimation, channel-filter, AGC, raw-data, and synthesizer blocks. FM238
    additionally uses direct asynchronous data sourcing (`0x0A`).
-   `TIM1_CC_IRQHandler` must reject sub-20 µs edges
-   whenever FSK/GFSK/MSK is active (sub-80 µs remains the OOK threshold),
-   (`subghz_rx_edge_accept()`). Without that filter, raw noise can flood the
-   main queue and cause a watchdog boot loop.
+   `TIM1_CC_IRQHandler` uses profile/rate-aware filtering
+   (`subghz_rx_edge_accept_profile()`): 5 µs for MSK100K and 50 µs for
+   GFSK10K raw capture, while slower FSK retains the 20/80 µs limits. Without
+   filtering, raw noise can flood the main queue and cause a watchdog boot
+   loop. The active operation's `profile_idx`, not the Read UI preset, drives
+   this selection and named-band retuning.
 
 **Rules for new code:**
 - If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, call
@@ -458,8 +460,9 @@ scene_on_exit
    RGB LED blinking after leaving the scene.
 6. **Displayed sample count must follow actual capture accounting, not RSSI.**
    Full 512-duration flushes and the final partial flush both increment
-   `subghz_record_total_samples`, and the scene displays that total. The
-   waveform cursor advances for captured edges as well as for RSSI above
+   `subghz_record_total_samples` after each successful write. Stop first drains
+   all full chunks and then every partial chunk; no backlog is counted before
+   it has been written. The waveform cursor advances for captured edges as well as for RSSI above
    threshold; neither the count nor capture activity may be suppressed when
    valid edges arrive below the configured RSSI threshold. Do not gate TIM1
    capture on the scene's RSSI reading; valid FSK edges can be present even

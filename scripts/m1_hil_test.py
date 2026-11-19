@@ -395,35 +395,40 @@ def run_subghz_fsk_tuner_stability(client: M1Hil, artifacts: Path) -> str:
     time.sleep(3)
     capture(client, artifacts, "fsk-tuner-stable")
     client.info()
+    click(client, "back", 3)
     click(client, "back")
-    click(client, "back")
-    click(client, "back")
-    click(client, "up", 4)
-    click(client, "ok")
+    open_subghz_read(client)
     click(client, "left")
     click(client, "down", 3)
-    click(client, "left", 2)
-    seen_crcs = set()
-    for index in range(SUBGHZ_MOD_PRESET_COUNT):
-        configured = capture(client, artifacts, f"modem-{index}-config")
-        configured_crc = config_modulation_crc(configured)
-        if configured_crc in seen_crcs:
-            raise AssertionError(f"modem profile {index}: duplicate modulation selection")
-        seen_crcs.add(configured_crc)
-        click(client, "back")
-        time.sleep(1)
-        capture(client, artifacts, f"modem-{index}-read-stable")
-        client.info()
-        click(client, "back")
-        click(client, "ok")
-        click(client, "left")
-        click(client, "down", 3)
-        if index + 1 < SUBGHZ_MOD_PRESET_COUNT:
-            click(client, "right")
     config_set_modulation(client, artifacts, "fsk-restore-mod", original_crc)
     click(client, "back")
     click(client, "back")
-    return "FM238 tuner and all seven Read profiles remained responsive; original modulation restored"
+    return "FM238 tuner remained responsive; original modulation restored"
+
+
+def run_subghz_profile_stability(client: M1Hil, artifacts: Path, profile_index: int) -> str:
+    labels = ("AM270", "AM650", "FM238", "FM476", "FM12K", "MSK100K", "GFSK10K")
+    open_subghz_read(client)
+    click(client, "left")
+    click(client, "down", 3)
+    original = capture(client, artifacts, "profile-original-mod")
+    original_crc = config_modulation_crc(original)
+    config_set_modulation(client, artifacts, "profile-select-am270", 0x7F90BE40)
+    if profile_index:
+        click(client, "right", profile_index)
+    configured = capture(client, artifacts, "profile-config")
+    if config_modulation_crc(configured) == original_crc and original_crc != 0x7F90BE40:
+        raise AssertionError("profile did not advance from original modulation")
+    click(client, "back")
+    time.sleep(1)
+    capture(client, artifacts, "profile-read-stable")
+    client.info()
+    click(client, "left")
+    click(client, "down", 3)
+    config_set_modulation(client, artifacts, "profile-restore-mod", original_crc)
+    click(client, "back")
+    click(client, "back")
+    return f"{labels[profile_index]} Read remained responsive; original modulation restored"
 
 
 def run_subghz_smart_scan_config(client: M1Hil, artifacts: Path) -> str:
@@ -492,7 +497,13 @@ def run_subghz_read_hopper(client: M1Hil, artifacts: Path) -> str:
 
 CASES = (
     HilCase("subghz-read-raw-start", "Sub-GHz Read Raw startup lifecycle", run_subghz_read_raw_start),
-    HilCase("subghz-fsk-tuner-stability", "Sub-GHz modem profile RX stability", run_subghz_fsk_tuner_stability),
+    HilCase("subghz-fsk-tuner-stability", "Sub-GHz FM238 Timing Tuner stability", run_subghz_fsk_tuner_stability),
+    HilCase("subghz-am270-rx", "Sub-GHz AM270 RX stability", lambda c, a: run_subghz_profile_stability(c, a, 0)),
+    HilCase("subghz-am650-rx", "Sub-GHz AM650 RX stability", lambda c, a: run_subghz_profile_stability(c, a, 1)),
+    HilCase("subghz-fm476-rx", "Sub-GHz FM476 RX stability", lambda c, a: run_subghz_profile_stability(c, a, 3)),
+    HilCase("subghz-fm12k-rx", "Sub-GHz FM12K RX stability", lambda c, a: run_subghz_profile_stability(c, a, 4)),
+    HilCase("subghz-msk100k-rx", "Sub-GHz MSK100K RX stability", lambda c, a: run_subghz_profile_stability(c, a, 5)),
+    HilCase("subghz-gfsk10k-rx", "Sub-GHz GFSK10K RX stability", lambda c, a: run_subghz_profile_stability(c, a, 6)),
     HilCase("subghz-smart-scan-config", "Sub-GHz Smart Scan configuration", run_subghz_smart_scan_config),
     HilCase("subghz-read-hopper", "Sub-GHz Read hopper lifecycle", run_subghz_read_hopper),
     HilCase("wifi-airtime", "WiFi Channel Airtime lifecycle", run_wifi_airtime),
