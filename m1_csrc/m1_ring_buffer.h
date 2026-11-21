@@ -32,6 +32,7 @@ uint8_t *m1_ringbuffer_get_read_address(S_M1_RingBuffer *prb_handle);
 uint16_t m1_ringbuffer_write(S_M1_RingBuffer *prb_handle, uint8_t *indata, uint16_t n_slots);
 uint16_t m1_ringbuffer_insert(S_M1_RingBuffer *prb_handle, uint8_t *indata);
 uint16_t m1_ringbuffer_read(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t bytes_n);
+uint16_t m1_ringbuffer_peek(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots);
 uint16_t m1_ringbuffer_advance_read(S_M1_RingBuffer *prb_handle, uint16_t bytes_n);
 uint8_t m1_ringbuffer_check_empty_state(S_M1_RingBuffer *prb_handle);
 uint32_t ringbuffer_get_empty_slots(S_M1_RingBuffer *prb_handle);

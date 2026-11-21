@@ -136,6 +136,27 @@ void test_next_index_wraps_and_handles_empty_plan(void)
     TEST_ASSERT_EQUAL_UINT8(0, subghz_guided_next_index(5, 6));
 }
 
+void test_smart_id_short_ok_reads_only_after_release(void)
+{
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_PENDING,
+                      subghz_smart_id_ok_action(false, true, false, false));
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_NONE,
+                      subghz_smart_id_ok_action(true, false, false, false));
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_READ,
+                      subghz_smart_id_ok_action(true, false, false, true));
+}
+
+void test_smart_id_click_then_long_click_clears_without_reading(void)
+{
+    SubGhzSmartIdOkAction action = subghz_smart_id_ok_action(
+        false, true, false, false);
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_PENDING, action);
+    action = subghz_smart_id_ok_action(true, false, true, false);
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_CLEAR, action);
+    TEST_ASSERT_EQUAL(SUBGHZ_SMART_ID_OK_NONE,
+                      subghz_smart_id_ok_action(false, false, false, true));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -147,5 +168,7 @@ int main(void)
     RUN_TEST(test_decode_confirmed_modulation_is_available_for_handoff);
     RUN_TEST(test_guided_mode_requires_setting_hopping_and_cached_channels);
     RUN_TEST(test_next_index_wraps_and_handles_empty_plan);
+    RUN_TEST(test_smart_id_short_ok_reads_only_after_release);
+    RUN_TEST(test_smart_id_click_then_long_click_clears_without_reading);
     return UNITY_END();
 }

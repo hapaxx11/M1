@@ -30,4 +30,15 @@ bool subghz_guided_scan_active(bool enabled, bool hopping,
                                const SubGhzGuidedPlan *plan);
 uint8_t subghz_guided_next_index(uint8_t current, uint8_t count);
 
+typedef enum {
+    SUBGHZ_SMART_ID_OK_NONE = 0,
+    SUBGHZ_SMART_ID_OK_PENDING,
+    SUBGHZ_SMART_ID_OK_READ,
+    SUBGHZ_SMART_ID_OK_CLEAR,
+} SubGhzSmartIdOkAction;
+
+SubGhzSmartIdOkAction subghz_smart_id_ok_action(bool pending, bool clicked,
+                                                 bool long_clicked,
+                                                 bool released);
+
 #endif /* SUBGHZ_GUIDED_SCAN_H */

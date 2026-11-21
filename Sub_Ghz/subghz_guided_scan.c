@@ -76,3 +76,16 @@ uint8_t subghz_guided_next_index(uint8_t current, uint8_t count)
         return 0U;
     return (uint8_t)((current + 1U) % count);
 }
+
+SubGhzSmartIdOkAction subghz_smart_id_ok_action(bool pending, bool clicked,
+                                                 bool long_clicked,
+                                                 bool released)
+{
+    if (long_clicked)
+        return SUBGHZ_SMART_ID_OK_CLEAR;
+    if (pending && released)
+        return SUBGHZ_SMART_ID_OK_READ;
+    if (clicked)
+        return SUBGHZ_SMART_ID_OK_PENDING;
+    return SUBGHZ_SMART_ID_OK_NONE;
+}

@@ -289,6 +289,54 @@ void test_raw_partial_flush_reaches_displayed_sample_count(void)
     free(recording);
 }
 
+void test_raw_stop_preserves_chunks_until_sd_accepts_them(void)
+{
+    char *recording = read_file("m1_csrc/m1_sub_ghz.c");
+    char *save = slice_between(recording,
+        "static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)\n{",
+        "/*============================================================================*/");
+    char *peek = strstr(save, "m1_ringbuffer_peek(");
+    char *enqueue = strstr(peek, "sub_ghz_rx_raw_sd_write(pfillbuffer");
+    char *advance = strstr(save, "m1_ringbuffer_advance_read(");
+
+    TEST_ASSERT_NOT_NULL(peek);
+    TEST_ASSERT_NOT_NULL(enqueue);
+    TEST_ASSERT_NOT_NULL(advance);
+    TEST_ASSERT_TRUE(peek < enqueue);
+    TEST_ASSERT_TRUE(enqueue < advance);
+    TEST_ASSERT_NOT_NULL(strstr(recording, "subghz_read_raw_sd_write_retry(attempt, ret)"));
+    TEST_ASSERT_NOT_NULL(strstr(recording,
+        "if (sub_ghz_rx_raw_save(false, true) != 0U)\n\t\t\tbreak;"));
+    TEST_ASSERT_NOT_NULL(strstr(recording,
+        "subghz_record_total_samples, chunk"));
+
+    char *sd = read_file("m1_csrc/m1_sdcard_man.c");
+    TEST_ASSERT_NOT_NULL(strstr(sd, "if ( xQueueSend(sdmtaskqueue, &q_item, 0) != pdPASS )"));
+    free(sd);
+    free(save);
+    free(recording);
+}
+
+void test_guided_retune_discards_only_bounded_stale_rx_events(void)
+{
+    char *recording = read_file("m1_csrc/m1_sub_ghz.c");
+    char *drain = slice_between(recording,
+        "static void subghz_discard_stale_rx_events(void)\n{",
+        "void subghz_retune_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)");
+    char *retune = strstr(recording,
+        "void subghz_retune_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)");
+
+    TEST_ASSERT_NOT_NULL(strstr(drain, "uxQueueMessagesWaiting(main_q_hdl)"));
+    TEST_ASSERT_NOT_NULL(strstr(drain, "while (pending-- > 0U)"));
+    TEST_ASSERT_NOT_NULL(strstr(drain, "q_item.q_evt_type == Q_EVENT_SUBGHZ_RX"));
+    TEST_ASSERT_NOT_NULL(strstr(drain, "xQueueSend(main_q_hdl, &q_item, 0)"));
+    TEST_ASSERT_NOT_NULL(strstr(drain, "taskENTER_CRITICAL()"));
+    TEST_ASSERT_NOT_NULL(strstr(drain, "taskEXIT_CRITICAL()"));
+    TEST_ASSERT_NOT_NULL(strstr(retune, "subghz_discard_stale_rx_events();"));
+    free(drain);
+    free(recording);
+}
+
 void test_raw_recording_and_replay_preserve_exact_profile(void)
 {
     char *content = read_file("m1_csrc/m1_sub_ghz.c");
@@ -314,6 +362,8 @@ int main(void)
     RUN_TEST(test_modulation_custom_path_decision_covers_all_profiles);
     RUN_TEST(test_345mhz_header_name_matches_its_wds_bandwidth);
     RUN_TEST(test_raw_partial_flush_reaches_displayed_sample_count);
+    RUN_TEST(test_raw_stop_preserves_chunks_until_sd_accepts_them);
+    RUN_TEST(test_guided_retune_discards_only_bounded_stale_rx_events);
     RUN_TEST(test_raw_recording_and_replay_preserve_exact_profile);
     RUN_TEST(test_fsk_decode_edges_use_raw_noise_filter_without_changing_ook);
     RUN_TEST(test_msk_symbol_edges_pass_rate_aware_filters);

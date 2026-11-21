@@ -147,6 +147,14 @@ static inline uint32_t subghz_read_raw_stop_chunk_size(uint32_t remaining,
     return remaining < chunk_max ? remaining : chunk_max;
 }
 
+#define SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS 3U
+
+static inline bool subghz_read_raw_sd_write_retry(uint8_t attempt,
+                                                   uint8_t result)
+{
+    return result != 0U && attempt + 1U < SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS;
+}
+
 static inline bool subghz_read_raw_capture_active(bool rssi_signal, bool edges_seen)
 {
     return rssi_signal || edges_seen;

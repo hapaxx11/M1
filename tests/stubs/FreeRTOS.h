@@ -41,6 +41,12 @@ typedef void *    SemaphoreHandle_t;
 #endif
 
 /* Scheduler / task stubs: no-ops on the host. */
+#ifndef taskENTER_CRITICAL
+#define taskENTER_CRITICAL() ((void)0)
+#endif
+#ifndef taskEXIT_CRITICAL
+#define taskEXIT_CRITICAL() ((void)0)
+#endif
 static inline void vTaskDelay(TickType_t t) { (void)t; }
 
 /* Semaphore stubs: single-element flag backed by malloc. */

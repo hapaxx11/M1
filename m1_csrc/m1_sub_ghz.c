@@ -4042,11 +4042,23 @@ static void sub_ghz_transmit_raw_restart(uint32_t source, uint32_t len)
   * @retval None
   */
 /*============================================================================*/
+static uint8_t sub_ghz_rx_raw_sd_write(uint8_t *data, uint16_t size)
+{
+	uint8_t ret = 1;
+	for (uint8_t attempt = 0; attempt < SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS; attempt++)
+	{
+		ret = m1_sdm_fill_buffer(data, size);
+		if (!subghz_read_raw_sd_write_retry(attempt, ret))
+			break;
+	}
+	return ret;
+}
+
 static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 {
 	char *prn_buffer;
 	uint32_t freq32;
-	uint16_t count, n_samples_to_rw, *pdata;
+	uint16_t count, n_samples_to_rw, n_samples_captured, *pdata;
 	/* Flipper RAW_Data format: positive values for HIGH periods, negative for LOW.
 	 * sign_text[0] = no sign (HIGH = first edge after rising-edge sync),
 	 * sign_text[1] = "-"   (LOW  = second edge). */
@@ -4079,9 +4091,9 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 		sprintf(prn_buffer, "Preset: %s\r\n", preset);
 		strcat((char *)pfillbuffer, prn_buffer);
 		strcat((char *)pfillbuffer, "Protocol: RAW\r\n");
-		m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
+		uint8_t ret = sub_ghz_rx_raw_sd_write(pfillbuffer, strlen((char *)pfillbuffer));
 		vPortFree(prn_buffer);
-		return 0;
+		return ret;
 	} // if ( header_init )
 
 	/* Data lines use Flipper's "RAW_Data:" keyword and signed integers.
@@ -4095,7 +4107,13 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 		if ( n_samples_to_rw > SUBGHZ_RAW_DATA_SAMPLES_TO_RW ) // This should never happen!
 			n_samples_to_rw = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	} // if ( last_data )
-	m1_ringbuffer_read(&subghz_rx_rawdata_rb, subghz_ring_read_buffer, n_samples_to_rw);
+	n_samples_captured = n_samples_to_rw;
+	if (m1_ringbuffer_peek(&subghz_rx_rawdata_rb, subghz_ring_read_buffer,
+	                       n_samples_captured) != n_samples_captured)
+	{
+		vPortFree(prn_buffer);
+		return 1;
+	}
 	pdata = (uint16_t *)subghz_ring_read_buffer;
 	if ( n_samples_to_rw & 0x01 ) // Odd number of samples?
 	{
@@ -4112,11 +4130,14 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	}
 	strcat((char *)pfillbuffer, "\r\n");
 
-	m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
+	uint8_t ret = sub_ghz_rx_raw_sd_write(pfillbuffer, strlen((char *)pfillbuffer));
+	if (ret == 0U &&
+	    m1_ringbuffer_advance_read(&subghz_rx_rawdata_rb, n_samples_captured) != n_samples_captured)
+		ret = 1;
 
 	if ( prn_buffer!=NULL )
 		vPortFree(prn_buffer);
-	return 0;
+	return ret;
 } // static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 
 
@@ -6437,6 +6458,9 @@ void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
     int16_t  rssi_burst[SIGID_BURST_SAMPLES];
     uint8_t  selected_pos = 0;
     bool     running = true;
+    bool     ok_handoff_pending = false;
+    bool     ok_clicked = false;
+    bool     ok_long_clicked = false;
     int8_t   threshold = subghz_sigid_default_threshold();
 
     /* RAW-capture confirmation state (see sub_ghz_signal_identifier) */
@@ -6640,6 +6664,39 @@ void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
 
     while (running)
     {
+        S_M1_Buttons_Status queued_button_status;
+        bool ok_long_queued =
+            xQueuePeek(button_events_q_hdl, &queued_button_status, 0) == pdTRUE &&
+            queued_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_LCLICK;
+        bool ok_released =
+            HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin) != BUTTON_PRESS_STATE &&
+            !ok_long_queued;
+        SubGhzSmartIdOkAction ok_action = subghz_smart_id_ok_action(
+            ok_handoff_pending, ok_clicked, ok_long_clicked, ok_released);
+        ok_clicked = false;
+        ok_long_clicked = false;
+        if (ok_action == SUBGHZ_SMART_ID_OK_PENDING)
+        {
+            ok_handoff_pending = true;
+        }
+        else if (ok_action == SUBGHZ_SMART_ID_OK_CLEAR)
+        {
+            ok_handoff_pending = false;
+            rf_sweep_report_reset(&report);
+            rf_scan_cursor_reset(&cursor);
+            capture_attempt_count = 0;
+            selected_pos = 0;
+        }
+        else if (ok_action == SUBGHZ_SMART_ID_OK_READ)
+        {
+            ok_handoff_pending = false;
+            if (report.count > 0U &&
+                subghz_guided_entry_from_hit(selection, &report.hits[selected_pos]))
+                running = false;
+        }
+        if (!running)
+            break;
+
         /* ---- one pass over whichever probe list is active ---- */
         bool pass_done = false;
         capture_spent_ms = 0;   /* per-pass capture budget resets each pass */
@@ -7042,17 +7099,12 @@ void sub_ghz_smart_signal_id(SubGhzGuidedPlan *guided_plan,
             else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK &&
                      report.count > 0U)
             {
-                if (subghz_guided_entry_from_hit(selection,
-                                                 &report.hits[selected_pos]))
-                    running = false;
+                ok_clicked = true;
             }
             else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_LCLICK &&
                      report.count > 0U)
             {
-                rf_sweep_report_reset(&report);
-                rf_scan_cursor_reset(&cursor);
-                capture_attempt_count = 0;
-                selected_pos = 0;
+                ok_long_clicked = true;
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
             {
@@ -7208,10 +7260,33 @@ void subghz_retune_freq_hz_ext(uint32_t freq_hz)
 	sub_ghz_rx_start();
 }
 
+static void subghz_discard_stale_rx_events(void)
+{
+	S_M1_Main_Q_t q_item;
+	UBaseType_t pending;
+
+	taskENTER_CRITICAL();
+	pending = uxQueueMessagesWaiting(main_q_hdl);
+	while (pending-- > 0U)
+	{
+		if (xQueueReceive(main_q_hdl, &q_item, 0) != pdTRUE)
+			break;
+		if (q_item.q_evt_type == Q_EVENT_SUBGHZ_RX)
+			continue;
+		if (xQueueSend(main_q_hdl, &q_item, 0) != pdPASS)
+		{
+			M1_LOG_N(M1_LOGDB_TAG, "SubGHz retune event requeue failed\r\n");
+			break;
+		}
+	}
+	taskEXIT_CRITICAL();
+}
+
 void subghz_retune_custom_config_ext(uint32_t freq_hz, uint8_t mod_idx)
 {
 	sub_ghz_rx_pause();
 	sub_ghz_rx_deinit_impl(false);
+	subghz_discard_stale_rx_events();
 	subghz_apply_custom_config_ext(freq_hz, mod_idx);
 	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
 	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
@@ -7405,7 +7480,13 @@ uint8_t sub_ghz_raw_recording_init_ext(void)
 	m1_sdm_task_start();
 
 	/* Write header (filetype, version, frequency, modulation) */
-	sub_ghz_rx_raw_save(true, false);
+	ret = sub_ghz_rx_raw_save(true, false);
+	if (ret)
+	{
+		m1_sdm_task_stop();
+		m1_sdm_task_deinit();
+		return ret;
+	}
 
 	/* Reset ring buffer so we start clean */
 	xQueueReset(main_q_hdl);

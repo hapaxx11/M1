@@ -179,6 +179,21 @@ void test_recording_total_includes_full_and_partial_flushes(void)
     TEST_ASSERT_EQUAL_UINT32(549u, total);
 }
 
+void test_sd_queue_full_retries_are_bounded(void)
+{
+    TEST_ASSERT_TRUE(subghz_read_raw_sd_write_retry(0, 1));
+    TEST_ASSERT_TRUE(subghz_read_raw_sd_write_retry(1, 1));
+    TEST_ASSERT_FALSE(subghz_read_raw_sd_write_retry(2, 1));
+    TEST_ASSERT_EQUAL_UINT8(3, SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS);
+}
+
+void test_sd_write_success_stops_retrying_immediately(void)
+{
+    TEST_ASSERT_FALSE(subghz_read_raw_sd_write_retry(0, 0));
+    TEST_ASSERT_FALSE(subghz_read_raw_sd_write_retry(1, 0));
+    TEST_ASSERT_FALSE(subghz_read_raw_sd_write_retry(2, 0));
+}
+
 void test_display_count_tracks_every_flush(void)
 {
     uint32_t total = 0u;
@@ -250,6 +265,8 @@ int main(void)
     RUN_TEST(test_to_repeat_result_is_always_a_tx_state_when_input_is);
     RUN_TEST(test_display_count_matches_captured_total);
     RUN_TEST(test_recording_total_includes_full_and_partial_flushes);
+    RUN_TEST(test_sd_queue_full_retries_are_bounded);
+    RUN_TEST(test_sd_write_success_stops_retrying_immediately);
     RUN_TEST(test_display_count_tracks_every_flush);
     RUN_TEST(test_cursor_advances_for_rssi_or_captured_edges);
     RUN_TEST(test_stop_drains_multiple_pending_chunks);

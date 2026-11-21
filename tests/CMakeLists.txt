@@ -4845,3 +4845,14 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_modem_profile PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_modem_profile COMMAND test_subghz_modem_profile)
+
+add_executable(test_ring_buffer
+    test_ring_buffer.c
+    ${M1_ROOT}/m1_csrc/m1_ring_buffer.c
+)
+target_include_directories(test_ring_buffer PRIVATE ${STUBS_DIR} ${M1_ROOT}/m1_csrc)
+target_link_libraries(test_ring_buffer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ring_buffer PRIVATE sanitizers)
+endif()
+add_test(NAME ring_buffer COMMAND test_ring_buffer)

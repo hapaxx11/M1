@@ -13,6 +13,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -41,6 +42,7 @@ void m1_ringbuffer_reset(S_M1_RingBuffer *prb_handle);
 uint16_t m1_ringbuffer_write(S_M1_RingBuffer *prb_handle, uint8_t *indata, uint16_t n_slots);
 uint16_t m1_ringbuffer_insert(S_M1_RingBuffer *prb_handle, uint8_t *indata);
 uint16_t m1_ringbuffer_read(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots);
+uint16_t m1_ringbuffer_peek(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots);
 uint8_t m1_ringbuffer_check_empty_state(S_M1_RingBuffer *prb_handle);
 uint32_t ringbuffer_get_empty_slots(S_M1_RingBuffer *prb_handle);
 uint32_t ringbuffer_get_data_slots(S_M1_RingBuffer *prb_handle);
@@ -269,12 +271,38 @@ uint16_t m1_ringbuffer_read(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint1
         memcpy(outdata, padd_r, n_linear*prb_handle->data_size); // Read first linear part
         m1_ringbuffer_advance_read(prb_handle, n_linear); // Update read index
         padd_r = m1_ringbuffer_get_read_address(prb_handle); // Get new read address
-        memcpy(&outdata[n_linear], padd_r, (n_read - n_linear)*prb_handle->data_size); // Read second linear part
+        memcpy(&outdata[n_linear*prb_handle->data_size], padd_r, (n_read - n_linear)*prb_handle->data_size); // Read second linear part
         m1_ringbuffer_advance_read(prb_handle, n_read - n_linear); // Update read index
     } while(0);
 
     return n_read;
 } // uint16_t m1_ringbuffer_read(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots)
+
+
+uint16_t m1_ringbuffer_peek(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots)
+{
+	uint32_t n_read, n_linear;
+	uint8_t *padd_r;
+
+	if ( !IS_BUFFER_VALID(prb_handle) )
+		return 0;
+
+	assert(outdata != NULL);
+	n_read = GET_MIN_NUM(n_slots, ringbuffer_get_data_slots(prb_handle));
+	if ( n_read==0 )
+		return 0;
+
+	n_linear = GET_MIN_NUM(n_read, m1_ringbuffer_get_read_len(prb_handle));
+	padd_r = m1_ringbuffer_get_read_address(prb_handle);
+	memcpy(outdata, padd_r, n_linear*prb_handle->data_size);
+	if ( n_linear < n_read )
+	{
+		memcpy(&outdata[n_linear*prb_handle->data_size], prb_handle->pdata,
+		       (n_read - n_linear)*prb_handle->data_size);
+	}
+
+	return n_read;
+} // uint16_t m1_ringbuffer_peek(S_M1_RingBuffer *prb_handle, uint8_t *outdata, uint16_t n_slots)
 
 
 
