@@ -377,32 +377,52 @@ def run_subghz_read_raw_start(client: M1Hil, artifacts: Path) -> str:
     return "fresh entry and re-entry both open in Start/REC mode"
 
 
+def restore_subghz_modulation(client: M1Hil, artifacts: Path,
+                              original_crc: int, location: str) -> None:
+    if location == "config":
+        click(client, "back")
+        location = "read"
+    if location == "read":
+        click(client, "back")
+        location = "menu"
+    if location == "tuner":
+        click(client, "back", 3)
+        location = "menu"
+    if location == "menu":
+        click(client, "back")
+    open_subghz_read(client)
+    click(client, "left")
+    click(client, "down", 3)
+    config_set_modulation(client, artifacts, "subghz-restore-mod", original_crc)
+    click(client, "back")
+    click(client, "back")
+
+
 def run_subghz_fsk_tuner_stability(client: M1Hil, artifacts: Path) -> str:
     open_subghz_read(client)
     click(client, "left")
     click(client, "down", 3)
+    location = "config"
     original = capture(client, artifacts, "fsk-original-mod")
     original_crc = config_modulation_crc(original)
-    config_set_modulation(client, artifacts, "fsk-select-fm238", 0x36647CD5)
-    click(client, "back")
-    click(client, "back")
-    click(client, "down", 4)
-    click(client, "ok")
-    click(client, "down", 5)
-    click(client, "ok")
-    click(client, "down", 2)
-    click(client, "ok")
-    time.sleep(3)
-    capture(client, artifacts, "fsk-tuner-stable")
-    client.info()
-    click(client, "back", 3)
-    click(client, "back")
-    open_subghz_read(client)
-    click(client, "left")
-    click(client, "down", 3)
-    config_set_modulation(client, artifacts, "fsk-restore-mod", original_crc)
-    click(client, "back")
-    click(client, "back")
+    try:
+        config_set_modulation(client, artifacts, "fsk-select-fm238", 0x36647CD5)
+        click(client, "back")
+        location = "read"
+        click(client, "back")
+        location = "menu"
+        click(client, "down", 4)
+        click(client, "ok")
+        click(client, "down", 5)
+        click(client, "ok")
+        click(client, "down", 2)
+        click(client, "ok")
+        location = "tuner"
+        time.sleep(3)
+        capture(client, artifacts, "fsk-tuner-stable")
+        client.info()
+    finally:
+        restore_subghz_modulation(client, artifacts, original_crc, location)
     return "FM238 tuner remained responsive; original modulation restored"
 
 
@@ -411,23 +431,23 @@ def run_subghz_profile_stability(client: M1Hil, artifacts: Path, profile_index: 
     open_subghz_read(client)
     click(client, "left")
     click(client, "down", 3)
+    location = "config"
     original = capture(client, artifacts, "profile-original-mod")
     original_crc = config_modulation_crc(original)
-    config_set_modulation(client, artifacts, "profile-select-am270", 0x7F90BE40)
-    if profile_index:
-        click(client, "right", profile_index)
-    configured = capture(client, artifacts, "profile-config")
-    if profile_index and config_modulation_crc(configured) == 0x7F90BE40:
-        raise AssertionError("profile did not advance from AM270")
-    click(client, "back")
-    time.sleep(1)
-    capture(client, artifacts, "profile-read-stable")
-    client.info()
-    click(client, "left")
-    click(client, "down", 3)
-    config_set_modulation(client, artifacts, "profile-restore-mod", original_crc)
-    click(client, "back")
-    click(client, "back")
+    try:
+        config_set_modulation(client, artifacts, "profile-select-am270", 0x7F90BE40)
+        if profile_index:
+            click(client, "right", profile_index)
+        configured = capture(client, artifacts, "profile-config")
+        if profile_index and config_modulation_crc(configured) == 0x7F90BE40:
+            raise AssertionError("profile did not advance from AM270")
+        click(client, "back")
+        location = "read"
+        time.sleep(1)
+        capture(client, artifacts, "profile-read-stable")
+        client.info()
+    finally:
+        restore_subghz_modulation(client, artifacts, original_crc, location)
     return f"{labels[profile_index]} Read remained responsive; original modulation restored"
 
 
@@ -467,14 +487,16 @@ def run_subghz_read_hopper(client: M1Hil, artifacts: Path) -> str:
             click(client, "back")
             location = "read"
 
+        active_baseline = capture(client, artifacts, "hopper-active-baseline")
         current = capture_until_title_change(
-            client, artifacts, "hopper-active", second, 3.5
+            client, artifacts, "hopper-active", active_baseline, 3.5
         )
         click(client, "back")
         location = "menu"
         click(client, "ok")
         location = "read"
-        capture_until_title_change(client, artifacts, "hopper-reentry", current, 3.5)
+        reentry_baseline = capture(client, artifacts, "hopper-reentry-baseline")
+        capture_until_title_change(client, artifacts, "hopper-reentry", reentry_baseline, 3.5)
         click(client, "back")
         location = "menu"
         client.info()

@@ -18,10 +18,10 @@
 
 ### Phase 3 — HIL failure safety and hop assertions
 - **Description**: Restore modulation on every HIL path and require fresh post-transition hopper baselines; add injected-failure unit coverage.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Harden Sub-GHz HIL cleanup and hop checks`
 
 ### Phase 4 — Verification and review responses
 - **Description**: Update docs/changelog, run host/firmware/HIL verification, remove this checklist, push, and reply to reviewers.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: `Finalize Sub-GHz review verification`

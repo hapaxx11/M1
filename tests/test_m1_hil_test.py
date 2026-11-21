@@ -661,6 +661,61 @@ class TestScreenTransitions(unittest.TestCase):
         self.assertEqual(actual, b"new")
         self.assertEqual(capture.call_count, 3)
 
+    def test_profile_read_failure_restores_original_modulation(self):
+        client = mock.MagicMock()
+        client.info.side_effect = RuntimeError("injected RPC failure")
+        with (
+            mock.patch.object(hil, "open_subghz_read") as open_read,
+            mock.patch.object(hil, "click"),
+            mock.patch.object(hil, "capture", side_effect=[b"original", b"configured", b"stable"]),
+            mock.patch.object(hil, "config_modulation_crc", return_value=1234),
+            mock.patch.object(hil, "config_set_modulation") as set_modulation,
+            mock.patch.object(hil.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected RPC failure"):
+                hil.run_subghz_profile_stability(client, pathlib.Path("."), 0)
+        self.assertEqual(2, open_read.call_count)
+        self.assertEqual(2, set_modulation.call_count)
+        self.assertEqual(1234, set_modulation.call_args_list[-1].args[3])
+
+    def test_tuner_failure_leaves_tuner_and_restores_original_modulation(self):
+        client = mock.MagicMock()
+        client.info.side_effect = RuntimeError("injected RPC failure")
+        with (
+            mock.patch.object(hil, "open_subghz_read") as open_read,
+            mock.patch.object(hil, "click") as click,
+            mock.patch.object(hil, "capture", side_effect=[b"original", b"stable"]),
+            mock.patch.object(hil, "config_modulation_crc", return_value=5678),
+            mock.patch.object(hil, "config_set_modulation") as set_modulation,
+            mock.patch.object(hil.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected RPC failure"):
+                hil.run_subghz_fsk_tuner_stability(client, pathlib.Path("."))
+        self.assertEqual(2, open_read.call_count)
+        self.assertEqual(5678, set_modulation.call_args_list[-1].args[3])
+        self.assertIn(mock.call(client, "back", 3), click.call_args_list)
+
+    def test_hopper_uses_fresh_baselines_after_enable_and_reentry(self):
+        client = mock.MagicMock()
+        frames = [
+            b"initial", b"initial-later", b"active-baseline",
+            b"reentry-baseline",
+        ]
+        with (
+            mock.patch.object(hil, "open_subghz_read"),
+            mock.patch.object(hil, "click"),
+            mock.patch.object(hil, "capture", side_effect=frames),
+            mock.patch.object(hil, "title_crc", side_effect=[10, 10]),
+            mock.patch.object(hil, "capture_until_title_change",
+                              side_effect=[b"active-next", b"reentry-next"]) as wait_change,
+            mock.patch.object(hil.time, "sleep"),
+        ):
+            hil.run_subghz_read_hopper(client, pathlib.Path("."))
+        self.assertEqual([
+            mock.call(client, pathlib.Path("."), "hopper-active", b"active-baseline", 3.5),
+            mock.call(client, pathlib.Path("."), "hopper-reentry", b"reentry-baseline", 3.5),
+        ], wait_change.call_args_list)
+
     def test_bottom_crc_isolates_action_bar(self):
         framebuffer = bytearray(1024)
         expected = hil.bottom_crc(framebuffer)
