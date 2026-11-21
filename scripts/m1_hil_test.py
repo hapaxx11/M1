@@ -377,8 +377,8 @@ def run_subghz_read_raw_start(client: M1Hil, artifacts: Path) -> str:
     return "fresh entry and re-entry both open in Start/REC mode"
 
 
-def restore_subghz_modulation(client: M1Hil, artifacts: Path,
-                              original_crc: int, location: str) -> None:
+def restore_subghz_modulation_from_location(client: M1Hil, artifacts: Path,
+                                            original_crc: int, location: str) -> None:
     if location == "config":
         click(client, "back")
         location = "read"
@@ -396,6 +396,26 @@ def restore_subghz_modulation(client: M1Hil, artifacts: Path,
     config_set_modulation(client, artifacts, "subghz-restore-mod", original_crc)
     click(client, "back")
     click(client, "back")
+
+
+def restore_subghz_modulation(client: M1Hil, artifacts: Path,
+                              original_crc: int, location: str) -> None:
+    try:
+        restore_subghz_modulation_from_location(client, artifacts, original_crc, location)
+    except (AssertionError, OSError, RuntimeError, TimeoutError, ValueError):
+        port = client.port.port
+        baud = client.port.baudrate
+        try:
+            client.request(0x05, timeout=5)
+        except (OSError, RuntimeError, TimeoutError):
+            pass
+        client.close()
+        time.sleep(BOOT_WAIT_SECONDS)
+        fresh = connect(port, baud, timeout=20)
+        client.port = fresh.port
+        client.sequence = fresh.sequence
+        click(client, "ok")
+        restore_subghz_modulation_from_location(client, artifacts, original_crc, "main")
 
 
 def run_subghz_fsk_tuner_stability(client: M1Hil, artifacts: Path) -> str:

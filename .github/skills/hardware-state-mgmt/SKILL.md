@@ -221,6 +221,9 @@ load + config reset, restoring the radio to a known good state.
    for `SUBGHZ_HOPPER_DWELL_MS` (750 ms). Normal hops retain the lightweight
    synthesizer-only retune; Smart ID-guided hops use
    `subghz_retune_custom_config_ext()` to reconfigure OOK/FSK and re-arm TIM1.
+   Guided retunes discard the queue-length-at-entry set of stale RX events in a
+   critical section and requeue every non-RX event, so old-channel pulses cannot
+   decode under the new channel and keypad/TX/control events survive.
    Never restore the old behavior that skipped hopper entry zero or forced a
    preset's default modulation regardless of `subghz_scan_config.modulation`.
 5. **FSK-family direct RX requires decode-mode edge filtering.** GPIO0 uses
@@ -462,10 +465,12 @@ scene_on_exit
    fast-blink — inline code that omits `m1_led_fast_blink(... OFF)` leaves the
    RGB LED blinking after leaving the scene.
 6. **Displayed sample count must follow actual capture accounting, not RSSI.**
-   Full 512-duration flushes and the final partial flush both increment
-   `subghz_record_total_samples` after each successful write. Stop first drains
-   all full chunks and then every partial chunk; no backlog is counted before
-   it has been written. The waveform cursor advances for captured edges as well as for RSSI above
+   `m1_ringbuffer_peek()` leaves each chunk queued while `m1_sdm_fill_buffer()`
+   is retried at most three times. Only an accepted enqueue advances the ring;
+   a persistent failure propagates out of `sub_ghz_rx_raw_save()` and stops the
+   final drain. Full 512-duration flushes and accepted partial flushes increment
+   `subghz_record_total_samples`; rejected chunks are never counted. Stop first
+   drains all full chunks and then every partial chunk. The waveform cursor advances for captured edges as well as for RSSI above
    threshold; neither the count nor capture activity may be suppressed when
    valid edges arrive below the configured RSSI threshold. Do not gate TIM1
    capture on the scene's RSSI reading; valid FSK edges can be present even

@@ -374,16 +374,20 @@ the scene manager without rewriting each tool.
 ### Smart ID capture handoff and guided hopping
 
 - Smart ID keeps up to eight identified sub-GHz frequency/modulation pairs in a
-  heap-owned, session-lifetime `SubGhzGuidedPlan`. UP/DOWN selects a hit and OK
-  replaces the delegate with `SubGhzSceneRead` at that exact channel; BACK from
-  Read returns to the Analyzer menu. Off-preset frequencies use the Custom slot.
+  heap-owned, session-lifetime `SubGhzGuidedPlan`. UP/DOWN selects a hit. A short
+  OK press becomes pending and replaces the delegate with `SubGhzSceneRead` only
+  after release; long-press OK cancels the pending handoff and clears the report.
+  BACK from Read returns to the Analyzer menu. Off-preset frequencies use the
+  Custom slot.
 - Read Config → **Smart Scan** controls whether hopping uses this cache. It is
   persisted as `subghz_smart_scan=` and defaults ON, but has no effect until
   Smart ID has identified channels and Hopping is enabled. With no cache, Read
   and Proto Pirate Receiver use the normal regional hopper.
 - Normal hopping uses the lightweight retune path. Guided hopping reloads the
-  modem for each entry's measured OOK/FSK family and resets partial decoder
-  state on every hop. Both paths apply the first channel before starting RX.
+  modem for each entry's measured OOK/FSK family, resets partial decoder state,
+  and performs a bounded critical-section drain that discards only queued RX
+  edges from the previous channel while requeueing keypad/TX/control events.
+  Both paths apply the first channel before starting RX.
 - `SUBGHZ_HOPPER_DWELL_MS` is 750 ms so slow automotive preambles and weather
   frames are not truncated by the old 200 ms dwell. Named presets honor the
   requested modulation: FSK on low bands and OOK on 915 use the custom
@@ -514,9 +518,11 @@ it back to the exact profile instead of collapsing GFSK/MSK to generic FSK.
 
 Decode and raw-recording edge thresholds are profile/rate-aware. MSK100K accepts
 single-symbol 10 µs transitions (5 µs cutoff), GFSK10K uses 50 µs for raw
-capture, and slower FSK retains the 20/80 µs limits. Stop drains every pending
-512-duration chunk and increments the displayed total only after each
-successful write.
+capture, and slower FSK retains the 20/80 µs limits. Raw SD writes peek rather
+than consume the capture ring, retry enqueue failure at most three times, and
+advance the ring only after acceptance. Stop drains every pending 512-duration
+chunk, stops on persistent failure, and increments the displayed total only for
+accepted chunks.
 
 ## Weather Station modulation coverage — do not "optimise" FSK away
 

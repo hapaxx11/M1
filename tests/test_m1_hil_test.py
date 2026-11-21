@@ -695,6 +695,39 @@ class TestScreenTransitions(unittest.TestCase):
         self.assertEqual(5678, set_modulation.call_args_list[-1].args[3])
         self.assertIn(mock.call(client, "back", 3), click.call_args_list)
 
+    def test_modulation_cleanup_recovers_navigation_with_reboot_and_reconnect(self):
+        client = mock.MagicMock()
+        client.port.port = "TEST"
+        client.port.baudrate = 115200
+        fresh = mock.MagicMock()
+        click_calls = 0
+
+        def fail_first_click(*_args):
+            nonlocal click_calls
+            click_calls += 1
+            if click_calls == 1:
+                raise RuntimeError("injected navigation failure")
+
+        with (
+            mock.patch.object(hil, "click", side_effect=fail_first_click) as click,
+            mock.patch.object(hil, "open_subghz_read") as open_read,
+            mock.patch.object(hil, "config_set_modulation") as set_modulation,
+            mock.patch.object(hil, "connect", return_value=fresh) as reconnect,
+            mock.patch.object(hil.time, "sleep") as sleep,
+        ):
+            hil.restore_subghz_modulation(client, pathlib.Path("."), 2468, "read")
+        client.request.assert_called_once_with(0x05, timeout=5)
+        client.close.assert_called_once_with()
+        reconnect.assert_called_once_with("TEST", 115200, timeout=20)
+        sleep.assert_called_once_with(hil.BOOT_WAIT_SECONDS)
+        self.assertIs(client.port, fresh.port)
+        self.assertEqual(fresh.sequence, client.sequence)
+        self.assertIn(mock.call(client, "ok"), click.call_args_list)
+        open_read.assert_called_once_with(client)
+        set_modulation.assert_called_once_with(
+            client, pathlib.Path("."), "subghz-restore-mod", 2468
+        )
+
     def test_hopper_uses_fresh_baselines_after_enable_and_reentry(self):
         client = mock.MagicMock()
         frames = [

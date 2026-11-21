@@ -1,0 +1,1 @@
+**Sub-GHz: final capture stability fixes** — preserve raw chunks through bounded SD queue retries, correct the MSK100K 325 kHz WDS profile, prevent long-press Smart ID Clear from opening Read, discard stale guided-hop RX events, and harden HIL restoration and hop assertions.

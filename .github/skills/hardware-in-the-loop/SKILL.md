@@ -202,9 +202,13 @@ Read checks for every other modem profile (`subghz-am270-rx`,
 `subghz-read-hopper` (empty-cache frequency progression, exit/re-entry, and
 original-setting restoration). The recursive `subghz-menu-audit` also covers
 Protocol Filter, which is Config row 12 and must be identity-checked before a
-pass is recorded. The hopper case compares title-region CRCs so RSSI changes
-cannot count as hops; Read Raw uses the action-bar CRC to reject Loaded/Send
-startup regressions.
+pass is recorded. Profile and tuner cases restore the original modulation in a
+`finally` path from Config, Read, or the tuner. A navigation/connection failure
+triggers a bounded reboot/reconnect and retries restoration from Main; injected-
+failure `unittest` coverage exercises both cleanup paths. The hopper case compares title-region CRCs so
+RSSI changes cannot count as hops and captures a fresh baseline after enabling
+hopping and again after re-entry. Read Raw uses the action-bar CRC to reject
+Loaded/Send startup regressions.
 Smart ID handoff and live Honda V1/Kia decoding need an external transmitter
 and must use a bounded guided validation, not an automated single-device case.
 
