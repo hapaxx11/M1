@@ -33,7 +33,7 @@ const SubGhzModemProfile subghz_modem_profiles[SUBGHZ_MOD_PRESET_COUNT] = {
       profile_fm476_commands, sizeof(profile_fm476_commands) },
     { "FM12K",  "FuriHalSubGhzPreset2FSKDev12KAsync",   SCAN_MOD_FSK,  SI446X_MOD_2FSK,  12695, 4798,  270833,
       profile_fm12k_commands, sizeof(profile_fm12k_commands) },
-    { "MSK100K", "FuriHalSubGhzPresetMSK99_97KbAsync",  SCAN_MOD_MSK,  SI446X_MOD_MSK,   47607, 99970, 14509,
+    { "MSK100K", "FuriHalSubGhzPresetMSK99_97KbAsync",  SCAN_MOD_MSK,  SI446X_MOD_MSK,   47607, 99970, 325000,
       profile_msk100k_commands, sizeof(profile_msk100k_commands) },
     { "GFSK10K", "FuriHalSubGhzPresetGFSK9_99KbAsync",  SCAN_MOD_GFSK, SI446X_MOD_2GFSK, 19043, 9996,  101563,
       profile_gfsk10k_commands, sizeof(profile_gfsk10k_commands) },

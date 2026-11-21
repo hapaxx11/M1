@@ -13,12 +13,12 @@
 
 ### Phase 2 — MSK100K WDS profile correction
 - **Description**: Regenerate MSK100K with a 325 kHz receive bandwidth and update the complete stream, metadata, hashes, and tests.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
 - **Commit**: `Correct MSK100K receive bandwidth`
 
 ### Phase 3 — HIL failure safety and hop assertions
 - **Description**: Restore modulation on every HIL path and require fresh post-transition hopper baselines; add injected-failure unit coverage.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: `Harden Sub-GHz HIL cleanup and hop checks`
 
 ### Phase 4 — Verification and review responses

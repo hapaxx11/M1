@@ -22,7 +22,7 @@ void test_all_flipper_presets_have_distinct_si4463_profiles(void)
     };
     static const uint32_t deviations[] = { 0, 0, 2380, 47607, 12695, 47607, 19043 };
     static const uint32_t rates[] = { 3794, 3794, 4798, 4798, 4798, 99970, 9996 };
-    static const uint32_t bandwidths[] = { 270833, 650000, 270833, 270833, 270833, 14509, 101563 };
+    static const uint32_t bandwidths[] = { 270833, 650000, 270833, 270833, 270833, 325000, 101563 };
     static const uint8_t types[] = { 1, 1, 2, 2, 2, 6, 3 };
 
     TEST_ASSERT_EQUAL_UINT8(7, SUBGHZ_MOD_PRESET_COUNT);
@@ -42,7 +42,7 @@ void test_complete_wds_profile_streams_are_preserved(void)
 {
     static const uint32_t hashes[] = {
         0x7229581BUL, 0x8F2BCBEEUL, 0xBCF99C0CUL, 0x6943DA91UL,
-        0x99D313F6UL, 0x9246BC75UL, 0xC428D911UL
+        0x99D313F6UL, 0xDC33DF78UL, 0xC428D911UL
     };
     static const uint8_t rate_scales[] = { 10, 10, 10, 10, 10, 20, 40 };
 

@@ -474,7 +474,7 @@ asynchronous capture model are checked against Momentum's
 | 2 | FM238 | 2FSK | 2.380 kHz | 270.833 kHz | 4.798 ksps |
 | 3 | FM476 | 2FSK | 47.607 kHz | 270.833 kHz | 4.798 ksps |
 | 4 | FM12K | 2FSK | 12.695 kHz | 270.833 kHz | 4.798 ksps |
-| 5 | MSK100K | MSK | 47.607 kHz | 14.509 kHz | 99.97 ksps |
+| 5 | MSK100K | MSK | 47.607 kHz | 325 kHz | 99.97 ksps |
 | 6 | GFSK10K | 2GFSK | 19.043 kHz | 101.563 kHz | 9.996 ksps |
 
 `SI446x_Set_Modem_Profile()` streams the selected preset's complete constant
