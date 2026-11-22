@@ -1728,6 +1728,11 @@ uint8_t flipper_subghz_preset_to_modulation(const char *preset)
 	if (preset == NULL)
 		return (uint8_t)MODULATION_UNKNOWN;
 
+	if (stristr(preset, "MSK"))
+		return (uint8_t)MODULATION_MSK;
+	if (stristr(preset, "GFSK"))
+		return (uint8_t)MODULATION_GFSK;
+
 	/* OOK presets — e.g. FuriHalSubGhzPresetOok650Async */
 	if (stristr(preset, "OOK"))
 		return (uint8_t)MODULATION_OOK;

@@ -128,31 +128,36 @@ static inline bool subghz_raw_tx_should_repeat(bool repeat_toggle, bool ok_held)
     return repeat_toggle || ok_held;
 }
 
-/**
- * @brief  Pure-logic: gate the displayed "N spl." counter by signal-present.
- *
- * The waveform cursor in the Read Raw scene only advances when RSSI is above
- * the user-configured threshold (signal_present == true).  When no signal is
- * detected, the cursor freezes.  The displayed SPL counter must follow the
- * same gating — otherwise it ticks up from ambient RF noise that passes the
- * 80 µs noise filter in the TIM1 input-capture ISR, giving the false
- * impression that a capture is filling up.  See issue
- * "Read Raw is counting SPL when none are being collected".
- *
- * @param  current_displayed     Value currently shown in the status bar.
- * @param  new_total             Total samples written to SD since recording started
- *                               (from sub_ghz_raw_recording_get_total_samples_ext()).
- * @param  signal_seen_in_chunk  true if signal_present was observed at least once
- *                               since the previous Q_EVENT_SUBGHZ_RX flush.
- * @retval  new_total            when signal_seen_in_chunk is true (cursor advanced)
- * @retval  current_displayed    when signal_seen_in_chunk is false (cursor frozen)
- */
-static inline uint32_t subghz_read_raw_display_count_update(
-    uint32_t current_displayed,
-    uint32_t new_total,
-    bool     signal_seen_in_chunk)
+/* The displayed count is the actual number of durations captured, independent
+ * of the RSSI-gated waveform cursor. */
+static inline uint32_t subghz_read_raw_display_count_update(uint32_t new_total)
 {
-    return signal_seen_in_chunk ? new_total : current_displayed;
+    return new_total;
+}
+
+static inline uint32_t subghz_read_raw_recording_total_update(
+    uint32_t current_total, uint32_t flushed)
+{
+    return current_total + flushed;
+}
+
+static inline uint32_t subghz_read_raw_stop_chunk_size(uint32_t remaining,
+                                                        uint32_t chunk_max)
+{
+    return remaining < chunk_max ? remaining : chunk_max;
+}
+
+#define SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS 3U
+
+static inline bool subghz_read_raw_sd_write_retry(uint8_t attempt,
+                                                   uint8_t result)
+{
+    return result != 0U && attempt + 1U < SUBGHZ_READ_RAW_SD_WRITE_ATTEMPTS;
+}
+
+static inline bool subghz_read_raw_capture_active(bool rssi_signal, bool edges_seen)
+{
+    return rssi_signal || edges_seen;
 }
 
 #endif /* M1_SUBGHZ_READ_RAW_STATE_H_ */

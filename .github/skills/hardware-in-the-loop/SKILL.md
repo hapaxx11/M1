@@ -192,6 +192,25 @@ from that guide, including during review-only work. Add the unchecked IDs to
 the PR HIL section when authorized; otherwise put the suggestion in the review.
 Never invent IDs, mark unrun cases as passed, or edit a remote PR without
 permission.
+Sub-GHz has ten registered receiver cases: `subghz-read-raw-start`
+(fresh entry/re-entry in Start/REC mode), `subghz-fsk-tuner-stability`
+(FM238 Timing Tuner with the original setting restored), independent clean-boot
+Read checks for every other modem profile (`subghz-am270-rx`,
+`subghz-am650-rx`, `subghz-fm476-rx`, `subghz-fm12k-rx`,
+`subghz-msk100k-rx`, and `subghz-gfsk10k-rx`),
+`subghz-smart-scan-config` (toggle/restore plus clean Read exit), and
+`subghz-read-hopper` (empty-cache frequency progression, exit/re-entry, and
+original-setting restoration). The recursive `subghz-menu-audit` also covers
+Protocol Filter, which is Config row 12 and must be identity-checked before a
+pass is recorded. Profile and tuner cases restore the original modulation in a
+`finally` path from Config, Read, or the tuner. A navigation/connection failure
+triggers a bounded reboot/reconnect and retries restoration from Main; injected-
+failure `unittest` coverage exercises both cleanup paths. The hopper case compares title-region CRCs so
+RSSI changes cannot count as hops and captures a fresh baseline after enabling
+hopping and again after re-entry. Read Raw uses the action-bar CRC to reject
+Loaded/Send startup regressions.
+Smart ID handoff and live Honda V1/Kia decoding need an external transmitter
+and must use a bounded guided validation, not an automated single-device case.
 
 PR descriptions carry specific unchecked cases between `M1_HIL_RESULTS`
 markers. Before marking a draft ready/non-draft, strongly recommend running the

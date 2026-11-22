@@ -162,13 +162,6 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * (freshly-recorded) or Loaded (pre-existing file). */
 static char tx_unlink_path[RAW_FILEPATH_MAX + 4]; /* "0:" + path + NUL */
 
-/* Tracks whether signal_present (rssi > rssi_threshold) has been observed at
- * least once since the previous Q_EVENT_SUBGHZ_RX flush.  Used to gate the
- * displayed "N spl." counter so it only advances while the waveform cursor
- * is actually scrolling — matches Momentum's behaviour and stops the count
- * from ticking up from ambient RF noise that survives the 80 µs ISR filter. */
-static bool s_signal_seen_in_chunk = false;
-
 /* Timestamp (ms, HAL_GetTick()) of the last RSSI cursor advance.
  * Rate-limits the spectrogram cursor to ~100 ms/step — the same rate
  * as Momentum's 100 ms view-dispatcher tick.  Without this gate, the
@@ -176,6 +169,7 @@ static bool s_signal_seen_in_chunk = false;
  * every Q_EVENT_SUBGHZ_RX (= every captured edge, potentially thousands
  * per second during active recording), making the waveform appear frozen. */
 static uint32_t s_rssi_draw_tick_ms = 0;
+static bool s_edges_seen_in_chunk = false;
 
 /* Error codes returned by start_raw_rx().  Mirrors subghz_read_raw_start_err_t
  * (Sub_Ghz/subghz_read_raw_status.h) so the failure cause — capture OOM, SD/file
@@ -357,7 +351,7 @@ static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail)
 
     app->raw_state = SubGhzReadRawStateRecording;
     app->raw_sample_count = 0;
-    s_signal_seen_in_chunk = false;
+    s_edges_seen_in_chunk = false;
     subghz_raw_rssi_reset_ext();
     /* Prime the rate-limiter so the very first draw() fires immediately. */
     s_rssi_draw_tick_ms = HAL_GetTick() - 100U;
@@ -384,11 +378,8 @@ static void stop_raw_rx(SubGhzApp *app)
     /* Free ring buffers — reclaim ~128 KB of RAM */
     sub_ghz_ring_buffers_deinit_ext();
 
-    /* Keep the signal-gated display count from recording — do NOT replace it
-     * with the full file total here.  The file on SD still contains every
-     * captured pulse (including noise that passed the ISR filter), but the
-     * displayed "N spl." should only reflect chunks where signal was above
-     * the RSSI threshold, matching Momentum behaviour (PR #487). */
+    app->raw_sample_count = subghz_read_raw_display_count_update(
+        sub_ghz_raw_recording_get_total_samples_ext());
 
     /* Remember the auto-generated filepath for Send / Save / Erase */
     const char *fname = sub_ghz_raw_recording_get_filename_ext();
@@ -747,17 +738,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 uint32_t flushed = sub_ghz_raw_recording_flush_ext();
                 if (flushed > 0)
                 {
-                    /* Gate the displayed counter by signal-present, matching
-                     * the waveform cursor's advancement rule.  The file on SD
-                     * still captures every flushed pulse (including noise that
-                     * passed the 80 µs ISR filter) — only the on-screen
-                     * "N spl." display is gated.  See issue: "Read Raw is
-                     * counting SPL when none are being collected". */
                     app->raw_sample_count = subghz_read_raw_display_count_update(
-                        app->raw_sample_count,
-                        sub_ghz_raw_recording_get_total_samples_ext(),
-                        s_signal_seen_in_chunk);
-                    s_signal_seen_in_chunk = false;
+                        sub_ghz_raw_recording_get_total_samples_ext());
+                    s_edges_seen_in_chunk = true;
                 }
 
                 app->need_redraw = true;
@@ -967,9 +950,10 @@ static void draw(SubGhzApp *app)
         uint32_t now_ms = HAL_GetTick();
         if (subghz_rssi_rate_allow(now_ms, s_rssi_draw_tick_ms, 100U))
         {
-            /* Advance cursor when signal is above threshold;
-             * freeze immediately (update current column) when below. */
-            subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
+            /* Advance on RSSI above threshold or on captured edges. */
+            subghz_raw_rssi_push_ext((float)app->rssi,
+                subghz_read_raw_capture_active(signal_present, s_edges_seen_in_chunk));
+            s_edges_seen_in_chunk = false;
             s_rssi_draw_tick_ms = now_ms;
         }
         else
@@ -978,13 +962,6 @@ static void draw(SubGhzApp *app)
             subghz_raw_rssi_set_current_ext((float)app->rssi);
         }
 
-        /* Gate the displayed SPL counter by the same signal_present rule as the
-         * cursor — see SubGhzEventRxData handler.  Latch the flag here on every
-         * draw tick where signal is present; the next flush event consumes and
-         * clears it.  Latching across multiple draw ticks correctly handles a
-         * brief signal burst that ends before the 512-sample chunk completes. */
-        if (signal_present)
-            s_signal_seen_in_chunk = true;
     }
 
     /* Draw the RSSI spectrogram for non-TX states.

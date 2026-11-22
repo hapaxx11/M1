@@ -788,7 +788,11 @@ uint8_t m1_sdm_fill_buffer(uint8_t *src, uint16_t srcSize)
 
 	if ( q_item.cmd_opt & M1_SDM_DATA_READY_MASK )
 	{
-		xQueueSend(sdmtaskqueue, &q_item, 0);
+		if ( xQueueSend(sdmtaskqueue, &q_item, 0) != pdPASS )
+		{
+			M1_LOG_N(M1_LOGDB_TAG, " Full!\r\n");
+			return 1;
+		}
 		M1_LOG_N(M1_LOGDB_TAG, " queued OK!\r\n");
 	} // if ( q_item.cmd_opt & M1_SDM_DATA_READY_MASK )
 

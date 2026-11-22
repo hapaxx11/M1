@@ -1541,18 +1541,17 @@ bool subghz_protocol_is_tpms(uint16_t index)
 /* Registry capability filtering                                               */
 /*============================================================================*/
 
-/* M1 modulation presets (indices 0..3).  Kept in sync with m1_sub_ghz.c:
- *   0 = AM270, 1 = AM650  → OOK
- *   2 = FM238, 3 = FM476  → FSK */
-#define SUBGHZ_MOD_PRESET_COUNT 4
+/* M1 modulation presets (indices 0..6).  Kept in sync with m1_sub_ghz.c:
+ *   0 = AM270, 1 = AM650 → OOK; 2–6 = FSK/GFSK/MSK */
+#include "subghz_modem_profile.h"
 
 /* Map a modulation preset index to the registry modulation flag. */
 static uint32_t mod_idx_to_flag(uint8_t mod_idx)
 {
     if (mod_idx <= 1)
         return SubGhzProtocolFlag_AM;   /* AM270 / AM650 → OOK/AM */
-    if (mod_idx <= 3)
-        return SubGhzProtocolFlag_FM;   /* FM238 / FM476 → FSK/FM */
+    if (mod_idx < SUBGHZ_MOD_PRESET_COUNT)
+        return SubGhzProtocolFlag_FM;   /* FSK/GFSK/MSK variants */
     return 0;
 }
 
@@ -1597,7 +1596,8 @@ uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry
         }
         if (registry[i].flags & SubGhzProtocolFlag_FM)
         {
-            mask |= (1u << 2) | (1u << 3);  /* FM238, FM476 */
+            for (uint8_t mod_idx = 2; mod_idx < SUBGHZ_MOD_PRESET_COUNT; mod_idx++)
+                mask |= 1u << mod_idx;
         }
     }
     return mask;

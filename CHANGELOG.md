@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6.4] - 2026-11-22
+
+### Added
+
+- **Sub-GHz: Flipper modulation profiles** — Added FM12K, MSK100K, and GFSK10K presets and implemented complete WDS-generated SI4463 profiles for all seven Momentum modulations, including exact data-rate/deviation settings, BCR/decimation, raw-data path, AGC, channel filters, and synthesizer configuration, plus Models DB and persistent Config support.
+- **Sub-GHz: Smart ID-guided capture** — Select an identified signal to open Read at its exact frequency and modulation, or enable Smart Scan to guide Read and Proto Pirate hopping with the identified channels.
+
+### Changed
+
+- **Sub-GHz: hardware-in-the-loop coverage** — Added single-device Read Raw startup, FM238 tuner stability, independent clean-boot checks for the other six modem profiles, Smart Scan configuration, and empty-cache hopper lifecycle tests, with guided live-transmitter plans for Smart ID handoff and Honda V1/Kia capture.
+
+### Fixed
+
+- **Sub-GHz: final capture stability fixes** — preserve raw chunks through bounded SD queue retries, correct the MSK100K 325 kHz WDS profile, prevent long-press Smart ID Clear from opening Read, discard stale guided-hop RX events, and harden HIL restoration and hop assertions.
+- **Sub-GHz: follow-up review fixes** — Guard named-band retuning against the end-of-list sentinel, preserve selected band frequency during CUSTOM conversion, select the FSK base for all FSK-family modulations, correct the Protocol Filter HIL destination check, and validate AM650 selection against the AM270 baseline.
+- **Sub-GHz: FSK capture stability** — Route demodulated FSK data to TIM1 and filter only very short noise edges in decode mode, preventing queue-flood watchdog resets without discarding valid 50–71 µs protocol symbols.
+- **Sub-GHz: receiver hopping and modulation** — Apply the first hopper frequency before RX, use a long-frame-safe dwell, reset partial decodes between channels, and honor FSK/OOK selection on every preset so slow automotive and weather signals are not missed.
+- **Sub-GHz: modulation filtering** — Read and Proto Pirate configuration now allow FM12K, MSK100K, and GFSK10K whenever a protocol supports the FM family, instead of restricting selection to FM238 and FM476.
+- **Sub-GHz: direct-RX configuration** — Enabled WDS raw/nonstandard mode and direct asynchronous data sourcing for FM238, and switched FSK-family GPIO0 to `RX_DATA` (`0x14`) to match Silicon Labs' Direct RX demodulated-output example.
+- **Sub-GHz: Read Raw startup** — Zero-initialize heap path storage so fresh Read Raw sessions reliably start in REC mode instead of opening garbage filenames in Loaded/Send mode.
+- **Sub-GHz: Read Raw sample display** — Show the actual captured duration count and advance the waveform whenever edges are captured, even below the RSSI threshold; include the final partial flush so recordings no longer display zero samples while their files contain data.
+- **Sub-GHz: review stability fixes** — Resolve operation-specific modem profiles and named-band retuning, drain the complete Read Raw backlog on Stop, preserve GFSK/MSK presets through recording and replay, and scale edge filters for high-rate GFSK/MSK signals.
+- **Sub-GHz: WDS radio-configuration audit** — Validated the band-specific OOK and FSK/TX headers against fresh Silicon Labs WDS calculations; preserved M1-specific RSSI behavior and corrected the 345 MHz header metadata to match its actual 200 kHz receive bandwidth.
+
 ## [0.9.6.3] - 2026-11-11
 
 ### Changed

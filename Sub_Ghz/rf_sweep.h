@@ -42,6 +42,7 @@ typedef struct {
                                               meaning the protocol decoder identified it directly
                                               at 100% confidence; NULL for fingerprint-scored hits) */
     uint32_t                 freq_hz;    /**< Frequency of the strongest sample (Hz) */
+    rf_mod_family_t          mod;        /**< Modulation of the strongest sample */
     uint16_t                 band;       /**< rf_band_flag_t the signal was seen on */
     rf_category_t            category;   /**< Device category (from sig, or RF_CAT_UNKNOWN) */
     rf_security_t            security;   /**< Security posture (from sig, or RF_SEC_UNKNOWN) */
@@ -121,5 +122,14 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                                  int16_t            rssi_dbm,
                                  const char        *protocol_name,
                                  const rf_protocol_sig_t *confirmed_sig);
+
+/** Variant that also preserves the measured modulation for receiver handoff. */
+bool rf_sweep_report_add_decoded_with_mod(rf_sweep_report_t *rep,
+                                 uint32_t           freq_hz,
+                                 uint16_t           band,
+                                 int16_t            rssi_dbm,
+                                 const char        *protocol_name,
+                                 const rf_protocol_sig_t *confirmed_sig,
+                                 rf_mod_family_t     mod);
 
 #endif /* RF_SWEEP_H */

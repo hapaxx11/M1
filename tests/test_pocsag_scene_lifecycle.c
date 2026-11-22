@@ -65,7 +65,7 @@ void test_recording_stop_drains_and_allocation_failure_cleans_up(void)
     const char *stop = strstr(content, "void sub_ghz_raw_recording_stop_ext(void)");
     TEST_ASSERT_NOT_NULL(stop);
     TEST_ASSERT_NOT_NULL(strstr(stop, "while (sub_ghz_raw_recording_flush_ext() > 0U)"));
-    TEST_ASSERT_NOT_NULL(strstr(stop, "sub_ghz_rx_raw_save(false, true);"));
+    TEST_ASSERT_NOT_NULL(strstr(stop, "sub_ghz_rx_raw_save(false, true) != 0U"));
     TEST_ASSERT_NOT_NULL(strstr(stop, "m1_sdm_task_stop();"));
     TEST_ASSERT_NOT_NULL(strstr(stop, "m1_sdm_task_deinit();"));
 }
