@@ -1,1 +1,0 @@
-**Sub-GHz: follow-up review fixes** — Guard named-band retuning against the end-of-list sentinel, preserve selected band frequency during CUSTOM conversion, select the FSK base for all FSK-family modulations, correct the Protocol Filter HIL destination check, and validate AM650 selection against the AM270 baseline.
